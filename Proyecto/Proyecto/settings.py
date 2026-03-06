@@ -28,9 +28,8 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 SECRET_KEY = 'e^so1o-@k##34g=mxfxa(xbdge$_0!b$mqf&k_6---ty@r-4hy'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
+DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 DUCTO_SQL_SERVER = os.getenv("DUCTO_SQL_SERVER", "")
 DUCTO_SQL_DB = os.getenv("DUCTO_SQL_DB", "")
