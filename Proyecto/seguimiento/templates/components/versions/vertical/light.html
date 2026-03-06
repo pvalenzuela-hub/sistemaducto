@@ -1,0 +1,58 @@
+<!doctype html>
+{% load static%}
+<html lang="en" dir="ltr">
+	<head>
+		<!-- META DATA -->
+		<meta charset="UTF-8">
+		<meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=0'>
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="description" content="BTP – Ducto Sistemas">
+		<meta name="author" content="BTP Solutions">
+		<meta name="keywords" content="ducto">
+
+        {% include 'components/layouts/vertical/styles.html' %}
+		{% block styles %}{% endblock styles %}
+
+	</head>
+
+    <body class="app sidebar-mini">
+
+		<!-- GLOBAL-LOADER -->
+		<div id="global-loader">
+			<img src="{% static ''%}assets/images/loader.svg" class="loader-img" alt="Loader">
+		</div>
+		<!-- /GLOBAL-LOADER -->
+
+		<!-- PAGE -->
+		<div class="page">
+			<div class="page-main">
+
+                {% include 'components/layouts/vertical/app-sidebar.html' %}
+
+                {% include 'components/layouts/vertical/main-header.html' %}
+
+                <!--app-content open-->
+				<div class="app-content">
+					<div class="side-app">
+
+                    {% block body %}{% endblock body %}
+
+                    </div>
+                </div>
+			    <!-- main-content closed -->
+            </div>
+
+            {% include 'components/sidebar-right.html' %}
+
+            {% block modal %}{% endblock modal %}
+
+            {% include 'components/footer.html' %}
+
+        </div>
+		<!-- End Page -->
+
+        {% include 'components/layouts/vertical/scripts.html' %}
+		{% block scripts %}{% endblock scripts %}
+
+    </body>
+</html>

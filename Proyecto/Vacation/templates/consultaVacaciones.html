@@ -1,0 +1,31 @@
+{% extends 'components/base.html' %}
+{% block title %}{{titulo}}{% endblock %}
+{% block body %}
+<div class="row">
+    <div class="col-sm-12 col-md-12 col-lg-12 col-xl-12">
+      
+        
+        <div class="table-responsive">
+            <h1>{{encabezado}}</h1>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Fecha Inicio</th>
+                        <th>Fecha Término</th>
+                        <th>Días Vacaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in registro %}
+                    <tr>
+                        <td>{{c.fecini}}</td>
+                        <td>{{c.fecfin}}</td>
+                        <td>{{c.dias_vacaciones}}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
