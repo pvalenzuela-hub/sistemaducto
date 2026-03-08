@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ducto Proyectos{% endblock %}</title>
+
+    {% include "components/layouts/vertical/styles.html" %}
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="app sidebar-mini ltr light-mode" style="background-color: #ffffff;">
+
+
+    <div id="global-loader">
+        <img src="{% static 'assets/images/loader.svg' %}" class="loader-img" alt="Loader">
+    </div>
+
+    <div class="page">
+        <div class="page-main">
+
+            {% include "components/layouts/vertical/main-header.html" %}
+            {% include "components/layouts/vertical/app-sidebar.html" %}
+
+            <div class="main-content app-content">
+                <div class="side-app">
+                    <div class="main-container container-fluid">
+                        {% block body %}
+                        {% endblock %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    {% include "components/layouts/vertical/scripts.html" %}
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

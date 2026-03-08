@@ -8,28 +8,22 @@
 							<img src="{% static ''%}assets/images/brand/logo-1.png" class="header-brand-img toggle-logo" alt="logo">
 							<img src="{% static ''%}assets/images/brand/logo-2.png" class="header-brand-img light-logo" alt="logo">
 							<img src="{% static ''%}assets/images/brand/logo-3.png" class="header-brand-img light-logo1" alt="logo">
-						</a><!-- LOGO -->
+						</a>
 					</div>
 					<ul class="side-menu">
 						<li><h3>Menu</h3></li>
 						<li class="slide">
-							<a class="side-menu__item"  data-bs-toggle="slide" href="{% url 'vista2' %}"><i class="side-menu__icon fe fe-home"></i><span class="side-menu__label">Resumen</span></a>
+							<a class="side-menu__item"  data-bs-toggle="slide" href="{% url 'home' %}"><i class="side-menu__icon fe fe-home"></i><span class="side-menu__label">Resumen</span></a>
 						</li>
-						<!-- <li><h3>Charts & Tables</h3></li>
+
+						<li><h3>Módulo de Ventas</h3></li>
 						<li class="slide">
-							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-pie-chart"></i><span class="side-menu__label">Charts</span><i class="angle fa fa-angle-right"></i></a>
+							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-pie-chart"></i><span class="side-menu__label">Clientes</span><i class="angle fa fa-angle-right"></i></a>
 							<ul class="slide-menu">
-								<li><a href="chartchartist" class="slide-item">Chart Js</a></li>
-								<li><a href="chartflot" class="slide-item"> Flot Charts</a></li>
-								<li><a href="chartechart" class="slide-item"> ECharts</a></li>
-								<li><a href="chartmorris" class="slide-item"> Morris Charts</a></li>
-								<li><a href="chartnvd3" class="slide-item"> Nvd3 Charts</a></li>
-								<li><a href="charts" class="slide-item"> C3 Bar Charts</a></li>
-								<li><a href="chartline" class="slide-item"> C3 Line Charts</a></li>
-								<li><a href="chartdonut" class="slide-item"> C3 Donut Charts</a></li>
-								<li><a href="chartpie" class="slide-item"> C3 Pie charts</a></li>
+								<li><a href="{% url 'reporte_clientes' %}" class="slide-item">Clientes Principales</a></li>
+								<li><a href="{% url 'reporte_clientes' %}" class="slide-item"> Agenda Clientes</a></li>
 							</ul>
-						</li>  -->
+						</li><h3>proyectos</h3> 
 						<li class="slide">
 							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Seguimiento</span><span class="badge bg-secondary side-badge">2</span></a>
 							<ul class="slide-menu">
@@ -38,6 +32,17 @@
 								<li><a href="{% url 'vista3' %}" class="slide-item"> Proyectos en desarrollo</a></li>
 							</ul>
 						</li>
+
+						<li class="slide">
+							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Administración</span><span class="badge bg-secondary side-badge">2</span></a>
+							<ul class="slide-menu">
+								<li><a href="{% url 'reporte_proyectos' %}" class="slide-item"> Listado de Proyectos</a></li>
+
+
+							</ul>
+						</li>
+
+
 
 						<li><h3>Configuración</h3></li>
 						<li class="slide">

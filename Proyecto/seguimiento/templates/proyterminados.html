@@ -1,143 +1,93 @@
 {% extends 'components/base.html' %}
-{% load static%}
-		{% load humanize %}
-        {% block styles %}
-		<!-- INTERNAL SELECT2 CSS -->
-		<link href="{% static ''%}assets/plugins/select2/select2.min.css" rel="stylesheet"/>
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+{% load humanize %}
+{% block body %}
 
-		<!-- DATA TABLE CSS -->
-		<link href="{% static ''%}assets/plugins/datatable/css/dataTables.bootstrap5.css" rel="stylesheet" />
-		<link href="{% static ''%}assets/plugins/datatable/css/buttons.bootstrap5.min.css"  rel="stylesheet">
-		<link href="{% static ''%}assets/plugins/datatable/responsive.bootstrap5.css" rel="stylesheet" />
+	<!-- PAGE-HEADER -->
+	<div class="page-header">
+		<div>
+			<h1 class="page-title">{{encabezado}}</h1>
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="#">{{menu}}</a></li>
+				<li class="breadcrumb-item active" aria-current="page">{{submenu}}</li>
+			</ol>
+		</div>
 
-
-		{% endblock styles %}
-
-						{% block body %}
-
-						<!-- PAGE-HEADER -->
-						<div class="page-header">
-							<div>
-								<h1 class="page-title">{{encabezado}}</h1>
-								<ol class="breadcrumb">
-									<li class="breadcrumb-item"><a href="#">{{menu}}</a></li>
-									<li class="breadcrumb-item active" aria-current="page">{{submenu}}</li>
-								</ol>
-                                <div class="ms-auto pageheader-btn">
-                                    <a href="{% url 'vista1' %}" class="btn btn-primary btn-icon text-white me-2">
-                                        <span>
-                                            <i class="fe fe-arrow-left"></i>
-                                        </span> Volver a Proyectos Terminados
-                                    </a>
-                                    <a href="{% url 'vista2' %}" class="btn btn-primary btn-icon text-white me-2">
-                                        <span>
-                                            <i class="fe fe-arrow-left"></i>
-                                        </span> Volver a Proyectos con visto bueno
-                                    </a>
-                                    <a href="{% url 'vista3' %}" class="btn btn-primary btn-icon text-white me-2">
-                                        <span>
-                                            <i class="fe fe-arrow-left"></i>
-                                        </span> Volver a Proyectos en Desarrollo
-                                    </a>
-                                </div>
-							</div>
-
-						</div>
+	</div>
 
 
-						<div class="row">
-							<div class="col-12">
-								<div class="card">
-									<div class="table-responsive">
-										<table class="table table-bordered text-nowrap border-bottom" id="basic-datatable">
-										<!-- <table class="table table-hover card-table table-striped table-vcenter table-outline text-nowrap" id="basic-datatable"> -->
-											<thead>
-												<tr align="center">
-												    <th scope="col">Visor </th>
-													<th scope="col">N° Proyecto</th>
-													<th scope="col">Ultimo Seg.</th>
-													<th scope="col">Nombre Proyecto</th>
-													<th scope="col">Forma de Pago</th>
-                                                    <th scope="col">Mandante</th>
-                                                    <th scope="col">Cliente</th>
-                                                    <th scope="col">x Facturar</th>
-                                                    <th scope="col">Estado</th>
-												</tr>
-											</thead>
-											<tbody>
-												{% for c in proyecto %}
-													<tr class="border-bottom">
-                                                        <td align="center" class="">
-                                                            <a class="btn-primary btn" href="{% url 'visor-comentario' pk=c.0 tabla=1 %}"><i class="fa fa-address-card-o fa-2x"></i></a>
-														</td>
-														<td class="text-muted fs-12 fw-semibold">{{c.0}} </td>
-														<td class="mb-0 fs-12 fw-semibold">{{c.33}}</td>
-											            <td class="mb-0 fs-12 fw-semibold">{{c.3}} </td>
-											            <td class="mb-0 fs-12 fw-semibold">{{c.6}} </td>
-											            <td class="mb-0 fs-12 fw-semibold">{{c.10}} </td>
-											            <td class="mb-0 fs-12 fw-semibold">{{c.16}} </td>
-											            <td align="right" class="text-muted fs-12 fw-semibold">{{c.20|floatformat:2|intcomma }}%</td>
-                                                        <td class="fs-11 fw-semibold">{{c.12}}
-													</tr>
-												{% endfor %}
-											</tbody>
-										</table>
-									</div>
-								</div>
-							</div>
-						</div>
-						<!-- ROW-2 CLOSED -->
-						{% endblock body %}
+	<div class="row">
+		<div class="col-12">
+			<div class="card">
+				<div class="table-responsive">
+					<table class="table table-bordered table-striped nowrap w-100" id="basic-datatable">
+						<thead>
+							<tr align="center">
+								<th scope="col">Visor </th>
+								<th scope="col">N° Proyecto</th>
+								<th scope="col">Ultimo Seg.</th>
+								<th scope="col">Nombre Proyecto</th>
+								<th scope="col">Forma de Pago</th>
+								<th scope="col">Mandante</th>
+								<th scope="col">Cliente</th>
+								<th scope="col">x Facturar</th>
+								<th scope="col">Estado</th>
+							</tr>
+						</thead>
+						<tbody>
+							{% for c in proyecto %}
+								<tr class="border-bottom">
+									<td align="center" class="">
+										<a class="btn-primary btn" href="{% url 'visor-comentario' pk=c.0 tabla=1 %}"><i class="fa fa-address-card-o fa-2x"></i></a>
+									</td>
+									<td class="text-muted fs-12 fw-semibold">{{c.0}} </td>
+									<td class="mb-0 fs-12 fw-semibold">{{c.33}}</td>
+									<td class="mb-0 fs-12 fw-semibold">{{c.3}} </td>
+									<td class="mb-0 fs-12 fw-semibold">{{c.6}} </td>
+									<td class="mb-0 fs-12 fw-semibold">{{c.10}} </td>
+									<td class="mb-0 fs-12 fw-semibold">{{c.16}} </td>
+									<td align="right" class="text-muted fs-12 fw-semibold">{{c.20|floatformat:2|intcomma }}%</td>
+									<td class="fs-11 fw-semibold">{{c.12}}
+								</tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- ROW-2 CLOSED -->
+{% endblock body %}
 
-		{% block scripts %}
-		<!-- INTERNAL SELECT2 JS -->
-		<script src="{% static ''%}assets/plugins/select2/select2.full.min.js"></script>
-		<script src="{% static ''%}assets/js/select2.js"></script>
+{% block extra_js %}
+<script>
+	$(document).ready(function()
+	{
+	$("#basic-datatable").dataTable().fnDestroy();
+	$('#basic-datatable').DataTable({
 
-		<!-- DATA TABLE JS-->
-		<script src="{% static ''%}assets/plugins/datatable/js/jquery.dataTables.min.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/js/dataTables.bootstrap5.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/js/dataTables.buttons.min.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/js/buttons.bootstrap5.min.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/js/jszip.min.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/pdfmake/pdfmake.min.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/pdfmake/vfs_fonts.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/js/buttons.html5.min.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/js/buttons.print.min.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/js/buttons.colVis.min.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/dataTables.responsive.min.js"></script>
-		<script src="{% static ''%}assets/plugins/datatable/responsive.bootstrap5.min.js"></script>
-		<script src="{% static ''%}assets/js/table-data.js"></script>
+					language: {
+						"search": "Buscar:",
+						"infoEmpty": "Mostrando 0 to 0 of 0 Entradas",
+						"info": "Mostrando _START_ a _END_ de _TOTAL_ Entradas",
+						"infoFiltered": "(Filtrado de _MAX_ total entradas)",
+						"lengthMenu": "Mostrar _MENU_ Entradas",
+						"loadingRecords": "Cargando...",
+						"processing": "Procesando...",
+						"paginate": {
+							"first": "Primero",
+							"last": "Ultimo",
+							"next": "Siguiente",
+							"previous": "Anterior"
+						},
 
+					},
+				});
 
-		<script>
-			$(document).ready(function()
-			{
-			$("#basic-datatable").dataTable().fnDestroy();
-			$('#basic-datatable').DataTable({
-
-							language: {
-								"search": "Buscar:",
-								"infoEmpty": "Mostrando 0 to 0 of 0 Entradas",
-								"info": "Mostrando _START_ a _END_ de _TOTAL_ Entradas",
-								"infoFiltered": "(Filtrado de _MAX_ total entradas)",
-								"lengthMenu": "Mostrar _MENU_ Entradas",
-								"loadingRecords": "Cargando...",
-								"processing": "Procesando...",
-								"paginate": {
-									"first": "Primero",
-									"last": "Ultimo",
-									"next": "Siguiente",
-									"previous": "Anterior"
-								},
-
-							},
-						});
-
-			})
-		</script>
-
-
-		{% endblock scripts %}
+	})
+</script>
+{% endblock %}	
 
 

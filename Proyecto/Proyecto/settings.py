@@ -20,16 +20,22 @@ load_dotenv(BASE_DIR / ".env")
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+TEMPLATES_DIR = BASE_DIR / 'templates'
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'e^so1o-@k##34g=mxfxa(xbdge$_0!b$mqf&k_6---ty@r-4hy'
+SECRET_KEY =  os.getenv("DJANGO_SECRET_KEY", "insecure-default")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
+DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
+
 
 DUCTO_SQL_SERVER = os.getenv("DUCTO_SQL_SERVER", "")
 DUCTO_SQL_DB = os.getenv("DUCTO_SQL_DB", "")
@@ -73,11 +79,10 @@ ROOT_URLCONF = 'Proyecto.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / "templates"],
+        'DIRS': [TEMPLATES_DIR],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
-                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
@@ -163,6 +168,6 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
-
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 

@@ -1,0 +1,47 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block title %}
+Inicio
+{% endblock %}
+
+{% block body %}
+<br><br>
+<div class="text-center mb-5">
+    <img src="{% static 'assets/images/brand/logoducto.jpeg' %}"
+         alt="Ducto Proyectos"
+         class="img-fluid"
+         style="max-width: 420px;">
+</div>
+
+<div class="row text-center">
+    <div class="col-md-4 mb-4">
+        <h2 class="fw-bold">MISIÓN</h2>
+        <p class="mt-3" style="font-size: 1.1rem; line-height: 1.7;">
+            Contar con la confianza de nuestros clientes. Entregar proyectos
+            de óptima calidad, en los plazos y condiciones acordadas,
+            propiciando en ellos la máxima percepción de profesionalismo,
+            con trabajos garantizados.
+        </p>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <h2 class="fw-bold">VISIÓN</h2>
+        <p class="mt-3" style="font-size: 1.1rem; line-height: 1.7;">
+            Entregar a la comunidad a través de nuestro servicio una
+            experiencia superior, sobrepasando las expectativas de calidad,
+            profesionalismo y confianza de nuestros clientes.
+        </p>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <h2 class="fw-bold">OBJETIVO</h2>
+        <p class="mt-3" style="font-size: 1.1rem; line-height: 1.7;">
+            Que todo cliente nos encargue su siguiente proyecto u obra.
+            Traspasar nuestras mejores condiciones de compra a nuestros
+            clientes finales. Cumplir con los plazos y condiciones
+            establecidas con nuestros clientes.
+        </p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends "components/base.html" %}
+{% load humanize %}
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    #basic-datatable th,
+    #basic-datatable td {
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .estado-badge {
+        display: inline-block;
+        padding: 0.35rem 0.70rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        line-height: 1;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ submenu }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped nowrap w-100" id="basic-datatable">
+                        <thead>
+                            <tr>
+                                <th>Estado Proyecto</th>
+                                <th>Mandante</th>
+                                <th>Cliente</th>
+                                <th>N° Proyecto</th>
+                                <th>Proyecto</th>
+                                <th>Dirección</th>
+                                <th>Destino</th>
+                                <th>Pisos</th>
+                                <th>Edificios</th>
+                                <th>Región</th>
+                                <th>F. Pago</th>
+                                <th>N° CONF</th>
+                                <th>Medio CONF</th>
+                                <th>Fecha CONF</th>
+                                <th>Fecha Primer Envío</th>
+                                <th>Quien Adjudica</th>
+                                <th>Email Adjudicación</th>
+                                <th>Fecha Adjudicación</th>
+                                <th>Con HES</th>
+                                <th>Con EEPP</th>
+                                <th>Con Otro</th>
+                                <th>Moneda</th>
+                                <th>Valor</th>
+                                <th>Ingreso SEREMI</th>
+                                <th>Aprob. SEREMI</th>
+                                <th>N° Cotización</th>
+                                <th>Correlativo</th>
+                                <th>Fecha Cot.</th>
+                                <th>Mt2</th>
+                               
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pro in proyectos %}
+                            <tr>
+                                <td>
+                                    {% if pro.estadoproyecto %}
+                                        <span class="estado-badge"
+                                            style="background-color: {{ pro.estadoproyecto.color }} !important; color: {{ pro.estadoproyecto.forcolor }} !important;">
+                                            {{ pro.estadoproyecto.nombre }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ pro.mandante_texto|default:"" }}</td>
+                                <td>{{ pro.cliente_texto|default:"" }}</td>
+                                <td>{{ pro.idproyecto }}</td>
+                                <td>{{ pro.nombreproyecto|default:"" }}</td>
+                                <td>{{ pro.dirproyecto_texto|default:"" }}</td>
+                                <td>{{ pro.destino_texto|default:"" }}</td>
+                                <td>{{ pro.pisos_texto|default:"" }}</td>
+                                <td>{{ pro.edificios_texto|default:0 }}</td>
+                                <td>{{ pro.region_texto|default:"" }}</td>
+                                <td>{{ pro.fpago_texto|default:"" }}</td>
+                                <td>{{ pro.numconf_texto|default:"" }}</td>
+                                <td>{{ pro.medioconf_texto|default:"" }}</td>
+                                <td>{{ pro.fechaconf|date:"d-m-Y" }}</td>
+                                <td>{{ pro.fechaprimerenvio|date:"d-m-Y" }}</td>
+                                <td>{{ pro.quienadjudica_texto|default:"" }}</td>
+                                <td>{{ pro.emailadjudicacion_texto|default:"" }}</td>
+                                <td>{{ pro.fechaadjudicacion|date:"d-m-Y" }}</td>
+                                <td>{{ pro.conhes_texto|default:"" }}</td>
+                                <td>{{ pro.coneepp_texto|default:"" }}</td>
+                                <td>{{ pro.conotro_texto|default:"" }}</td>
+                                <td>{{ pro.moneda|default:"" }}</td>
+                                <td class="text-end">{{ pro.valor_formateado }}</td>
+                                <td>{{ pro.fechaingresoseremi|date:"d-m-Y" }}</td>
+                                <td>{{ pro.fechaaprobseremi|date:"d-m-Y" }}</td>
+                                <td>{{ pro.numcotizacion_texto|default:"" }}</td>
+                                <td>{{ pro.numcorr_texto|default:"" }}</td>
+                                <td>{{ pro.fechacotizacion|date:"d-m-Y" }}</td>
+                                <td>{{ pro.mt2_texto|default:0 }}</td>
+                              
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function () {
+    if ($.fn.DataTable.isDataTable('#basic-datatable')) {
+        $('#basic-datatable').DataTable().destroy();
+    }
+
+    $('#basic-datatable').DataTable({
+        scrollX: true,
+        autoWidth: false,
+        pageLength: 10,
+        language: {
+            search: "Buscar:",
+            infoEmpty: "Mostrando 0 a 0 de 0 entradas",
+            info: "Mostrando _START_ a _END_ de _TOTAL_ entradas",
+            infoFiltered: "(Filtrado de _MAX_ entradas totales)",
+            lengthMenu: "Mostrar _MENU_ entradas",
+            loadingRecords: "Cargando...",
+            processing: "Procesando...",
+            zeroRecords: "No se encontraron resultados",
+            paginate: {
+                first: "Primero",
+                last: "Último",
+                next: "Siguiente",
+                previous: "Anterior"
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

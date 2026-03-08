@@ -4,7 +4,10 @@ import pyodbc
 from django.conf import settings
 from django.views.generic import TemplateView, ListView, DetailView
 from django.http import HttpResponseNotAllowed
+from collections import defaultdict
+from datetime import date
 
+from django.db.models import Max, Prefetch
 
 def get_sql_conn() -> pyodbc.Connection:
     # Connection string directo (sin DSN)
@@ -33,11 +36,17 @@ def exec_non_query(sql: str, params: tuple = ()) -> None:
         conn.commit()
 
 # Create your views here.
-def home(request):
-    return redirect('vista1')
+class HomeView(TemplateView):
+    template_name = "home.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update({
+            "titulo": "Inicio",
+            "encabezado": "Ducto Proyectos",
+        })
+        return context
     
-
-
 class ListaCategoria(ListView):
     model = T_Categoria
     template_name = 'listacategoria.html'
@@ -49,9 +58,8 @@ class ListaCategoria(ListView):
         contexto = {
             'categorias': self.get_queryset(),
             'encabezado': 'Listado de Categorías',
-            'menu': 'Parámetros',
-            'submenu': 'categorías',
-            'titulo': 'Listado'
+            'submenu': 'Categorías',
+            'titulo': 'Listado Categorías'
             }
 
         return render(request, self.template_name, contexto)
@@ -99,7 +107,7 @@ class Vista2(TemplateView):
             "encabezado": "DUCTO",
             "titulo": "PROYECTOS CON VISTO BUENO",
             "menu": "Proyectos",
-            "submenu": "Listado de Proyectos Con Visto Bueno para Facturar",
+            "submenu": "Listado de Proyectos Con Visto Bueno",
         })
         return contexto
 
@@ -123,7 +131,7 @@ class Vista3(TemplateView):
             "encabezado": "DUCTO",
             "titulo": "PROYECTOS EN DESARROLLO",
             "menu": "Proyectos",
-            "submenu": "Listado de Proyectos en Desarrollo para Facturar",
+            "submenu": "Listado de Proyectos en Desarrollo",
         })
         return contexto
 
@@ -198,3 +206,159 @@ class ListaTipoEntrega(ListView):
             'titulo': 'Listado',
         })
         return context
+    
+FECHA_MINIMA_COTIZACION = date(1900, 1, 1)
+
+def reporte_clientes(request):
+    # 1. Clientes principales activos
+    clientes = list(
+        Cliente.objects.filter(
+            estado='A',
+            esprincipal=True
+        )
+        .select_related('idestadocliente', 'idcomppago')
+        .prefetch_related(
+            Prefetch(
+                'clientecategoria_set',
+                queryset=ClienteCategoria.objects.select_related('idcategoria')
+            )
+        )
+        .order_by('razonsocial')
+    )
+
+    if not clientes:
+        return render(request, 'clientes/reporte_clientes.html', {'clientes': []})
+
+    ids_principales = [c.idcliente for c in clientes]
+
+    # 2. Última fecha de cotización del cliente principal
+    fechas_principal_qs = (
+        Cotizacion.objects
+        .filter(idcliente__in=ids_principales)
+        .values('idcliente')
+        .annotate(ultima_fecha=Max('fecha'))
+    )
+    fechas_principal = {
+        row['idcliente']: row['ultima_fecha']
+        for row in fechas_principal_qs
+    }
+
+    # 3. Obtener hijos de esos clientes principales
+    hijos_qs = (
+        Cliente.objects
+        .filter(idcliente_p__in=ids_principales)
+        .values('idcliente', 'idcliente_p')
+    )
+
+    hijo_a_padre = {}
+    ids_hijos = []
+
+    for row in hijos_qs:
+        hijo_a_padre[row['idcliente']] = row['idcliente_p']
+        ids_hijos.append(row['idcliente'])
+
+    # 4. Última fecha de cotización de los hijos
+    fechas_hijos_por_padre = defaultdict(lambda: FECHA_MINIMA_COTIZACION)
+
+    if ids_hijos:
+        fechas_hijos_qs = (
+            Cotizacion.objects
+            .filter(idcliente__in=ids_hijos)
+            .values('idcliente')
+            .annotate(ultima_fecha=Max('fecha'))
+        )
+
+        for row in fechas_hijos_qs:
+            id_hijo = row['idcliente']
+            fecha_hijo = row['ultima_fecha'] or FECHA_MINIMA_COTIZACION
+            id_padre = hijo_a_padre.get(id_hijo)
+
+            if id_padre and fecha_hijo > fechas_hijos_por_padre[id_padre]:
+                fechas_hijos_por_padre[id_padre] = fecha_hijo
+
+    # 5. Armar datos finales del reporte
+    for cliente in clientes:
+        fecha_cliente = fechas_principal.get(cliente.idcliente) or FECHA_MINIMA_COTIZACION
+        fecha_hijos = fechas_hijos_por_padre.get(cliente.idcliente) or FECHA_MINIMA_COTIZACION
+
+        cliente.fecha_ultima_cotizacion = max(fecha_cliente, fecha_hijos)
+
+        categorias = []
+        for cc in cliente.clientecategoria_set.all():
+            if cc.idcategoria:
+                categorias.append(cc.idcategoria.NombreCat)
+
+        # evita repetir categorías y conserva orden
+        cliente.categorias_texto = ', '.join(dict.fromkeys(categorias))
+
+        # textos para mostrar en la tabla
+        cliente.estado_texto = cliente.idestadocliente.descrip if cliente.idestadocliente_id else ''
+        cliente.comportamiento_pago_texto = cliente.idcomppago.descrip if cliente.idcomppago_id else ''
+
+    return render(request, 'clientes/reporte_clientes.html', {
+        'clientes': clientes,
+        'encabezado': 'Clientes totales',
+        'submenu': 'Lista total de clientes'
+    })
+    
+    
+def formatear_numero_cl(valor):
+    valor = valor or 0
+    return f"{valor:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    
+def proyectos_totales(request):
+    proyectos = list(
+        Proyecto.objects.select_related(
+            'idcotizacion',
+            'idcotizacion__idcliente',
+            'idcliente',
+            'estadoproyecto'
+        ).order_by('idcotizacion__codregion', 'idproyecto')
+    )
+
+    regiones = {
+        r.codregion: r.descrip
+        for r in Tregion.objects.all()
+    }
+
+    for pro in proyectos:
+        cot = pro.idcotizacion
+
+        pro.nombreproyecto = cot.nombreproyecto if cot else ''
+        pro.destino_texto = cot.destino or '' if cot else ''
+        pro.pisos_texto = cot.pisos or '' if cot else ''
+        pro.region_texto = regiones.get(cot.codregion, '') if cot else ''
+        pro.numcotizacion_texto = cot.numcotizacion if cot else ''
+        pro.numcorr_texto = cot.numcorr if cot else ''
+        pro.fechacotizacion = cot.fecha if cot else None
+        pro.dirproyecto_texto = cot.dirproyecto or '' if cot else ''
+        pro.edificios_texto = cot.edificios or 0 if cot else 0
+        pro.valortotal_texto = cot.valortotal or 0 if cot else 0
+        pro.moneda_cotizacion = cot.moneda or '' if cot else ''
+        pro.mt2_texto = cot.mt2 or 0 if cot else 0
+
+        pro.estado_proyecto_texto = pro.estadoproyecto.nombre if pro.estadoproyecto else ''
+        pro.estado_proyecto_color = pro.estadoproyecto.color if pro.estadoproyecto else ''
+        pro.estado_proyecto_forcolor = pro.estadoproyecto.forcolor if pro.estadoproyecto else ''
+
+        pro.mandante_texto = cot.idcliente.razonsocial if cot and cot.idcliente else ''
+        pro.cliente_texto = pro.idcliente.razonsocial if pro.idcliente else ''
+
+        pro.fpago_texto = pro.fpago or ''
+        pro.valor_texto = pro.valor or 0
+        pro.numconf_texto = pro.numconf or ''
+        pro.medioconf_texto = pro.medioconf or ''
+        pro.quienadjudica_texto = pro.quienadjudica or ''
+        pro.emailadjudicacion_texto = pro.emailadjudicacion or ''
+        pro.conhes_texto = pro.conhes or ''
+        pro.coneepp_texto = pro.coneepp or ''
+        pro.conotro_texto = pro.conotro or ''
+        pro.valor_formateado = formatear_numero_cl(pro.valor)
+
+    context = {
+        'titulo': 'Proyectos',
+        'encabezado': 'Proyectos totales',
+        'submenu': 'Lista total de proyectos',
+        'proyectos': proyectos,
+    }
+    return render(request, 'project/proyectos_totales.html', context)

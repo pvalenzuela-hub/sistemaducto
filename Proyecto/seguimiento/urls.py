@@ -1,11 +1,11 @@
 from django.urls import path
 from . import views
-from . views import Vista1, Vista2, Vista3, VisorComentario, guardacomentario, ListaCategoria
+from . views import Vista1, Vista2, Vista3, VisorComentario, guardacomentario, ListaCategoria, HomeView
 
 
 
 urlpatterns = [
-    # path('', views.index,name="index"),
+    path('',  HomeView.as_view(),name="home"),
     path('terminados/', Vista1.as_view(),name='vista1'),
     path('vistobueno/', Vista2.as_view(),name='vista2'),
     path('desarrollo/', Vista3.as_view(),name='vista3'),
@@ -13,6 +13,10 @@ urlpatterns = [
     path('guardacomentario/', views.guardacomentario,name="graba-comentario"),
     path('listadocategorias/', views.ListaCategoria.as_view(),name="lista-categoria"),
     path('tipoentrega/', views.ListaTipoEntrega.as_view(), name='lista-tipo-entrega'),
+    
+    path('clientes/reporte/', views.reporte_clientes, name='reporte_clientes'),
+    
+    path('proyecto/reporte/', views.proyectos_totales, name='reporte_proyectos'),
 
 
 ]
