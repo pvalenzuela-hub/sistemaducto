@@ -17,6 +17,9 @@ urlpatterns = [
     path('clientes/reporte/', views.reporte_clientes, name='reporte_clientes'),
     
     path('proyecto/reporte/', views.proyectos_totales, name='reporte_proyectos'),
+    
+    path('proyecto/calendario/', views.calendario_entregas_proyecto, name='calendario_entregas_proyecto'),
+    path('proyecto/calendario/eventos/', views.eventos_calendario_entregas, name='eventos_calendario_entregas'),
 
 
 ]

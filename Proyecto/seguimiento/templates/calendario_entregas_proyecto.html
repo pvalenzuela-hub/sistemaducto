@@ -1,0 +1,228 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+<style>
+    #modalEntrega .modal-content {
+        border-radius: 10px;
+    }
+
+    #modalEntrega .form-control[readonly] {
+        background-color: #f3f4f8;
+        border-color: #d7d9e0;
+        color: #495057;
+    }
+
+    #modalEntrega .modal-title {
+        color: #495057;
+    }
+
+
+    #calendar {
+        background: #fff;
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    .fc .fc-toolbar-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+
+    .fc-event {
+        border: none !important;
+        padding: 2px 4px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .fc-event,
+    .fc-daygrid-event,
+    .fc-timegrid-event {
+        cursor: pointer !important;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ submenu }}</h5>
+            </div>
+            <div class="card-body">
+                <div id="calendar"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEntrega" tabindex="-1" aria-labelledby="modalEntregaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h4 class="modal-title fw-bold" id="modalEntregaLabel">
+                    Detalles de la entrega
+                    <span id="badgeEstadoEntrega" class="badge bg-success ms-2"></span>
+                </h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body pt-4">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Nombre Proyecto</label>
+                        <input type="text" id="m_nombreproyecto" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tipo de Entrega</label>
+                        <input type="text" id="m_tipoentrega" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tipo de urgencia</label>
+                        <input type="text" id="m_urgencia" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Plazo estimado Desarrollo</label>
+                        <input type="text" id="m_plazo" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Fecha de entrega cliente</label>
+                        <input type="text" id="m_fechaentrega" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Hora de entrega cliente</label>
+                        <input type="text" id="m_horaentrega" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tamaño del proyecto</label>
+                        <input type="text" id="m_tamano" class="form-control" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 pt-0 justify-content-start">
+                <button type="button" id="btnEnviarDesarrollo" class="btn btn-primary">
+                    Enviar a desarrollo
+                </button>
+                <button type="button" id="btnAnularEntrega" class="btn btn-danger">
+                    Anular entrega
+                </button>
+                <button type="button" id="btnCerrarEntrega" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales-all.global.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const calendarEl = document.getElementById('calendar');
+    const modalEntregaEl = document.getElementById('modalEntrega');
+    const modalEntrega = new bootstrap.Modal(modalEntregaEl);
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        locale: 'es',
+        initialView: 'dayGridMonth',
+        height: 'auto',
+        firstDay: 1,
+        eventDisplay: 'block',
+        displayEventTime: false,
+        lazyFetching: false,
+
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+
+        buttonText: {
+            today: 'Hoy',
+            month: 'Mes',
+            week: 'Semana',
+            day: 'Día'
+        },
+
+        events: {
+            url: "{% url 'eventos_calendario_entregas' %}",
+            method: 'GET',
+            failure: function () {
+                alert('No fue posible cargar las entregas.');
+            }
+        },
+
+        eventClick: function(info) {
+            const e = info.event;
+            const p = e.extendedProps;
+
+            document.getElementById('m_nombreproyecto').value =
+                ((p.idproyecto || '') + ' - ' + (p.nombreproyecto || '')).trim();
+
+            document.getElementById('m_tipoentrega').value = p.tipoentrega || '';
+            document.getElementById('m_urgencia').value = p.urgencia || '';
+            document.getElementById('m_plazo').value = p.plazo || '';
+            document.getElementById('m_fechaentrega').value = p.fechaentrega || '';
+            document.getElementById('m_horaentrega').value = p.horaentrega || '';
+            document.getElementById('m_tamano').value = p.tamano || '';
+
+            const badge = document.getElementById('badgeEstadoEntrega');
+            badge.textContent = p.estadoentrega || '';
+
+            if (p.estadoentrega_id === 1) {
+                badge.className = 'badge bg-success ms-2';
+            } else if (p.estadoentrega_id === 5) {
+                badge.className = 'badge bg-secondary ms-2';
+            } else if (p.estadoentrega_id === 6) {
+                badge.className = 'badge bg-danger ms-2';
+            } else {
+                badge.className = 'badge bg-info ms-2';
+            }
+
+            btnEnviarDesarrollo.setAttribute('data-identrega', p.identrega || '');
+            btnAnularEntrega.setAttribute('data-identrega', p.identrega || '');
+
+            const btnCerrarEntrega = document.getElementById('btnCerrarEntrega');
+
+            // Regla final:
+            // solo estado 1 permite acciones
+            // cualquier otro estado, incluido 5, muestra solo Cerrar
+            if (p.estadoentrega_id === 1) {
+                btnEnviarDesarrollo.style.display = 'inline-block';
+                btnAnularEntrega.style.display = 'inline-block';
+                btnEnviarDesarrollo.disabled = false;
+                btnAnularEntrega.disabled = false;
+                btnCerrarEntrega.style.display = 'inline-block';
+            } else {
+                btnEnviarDesarrollo.style.display = 'none';
+                btnAnularEntrega.style.display = 'none';
+                btnCerrarEntrega.style.display = 'inline-block';
+            }
+
+            modalEntrega.show();
+        }
+    });
+
+    calendar.render();
+});
+</script>
+{% endblock %}

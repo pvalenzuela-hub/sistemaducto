@@ -27,6 +27,7 @@
 						<li class="slide">
 							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Seguimiento</span><span class="badge bg-secondary side-badge">2</span></a>
 							<ul class="slide-menu">
+								<li><a href="{% url 'reporte_proyectos' %}" class="slide-item"> Listado de Proyectos</a></li>
 								<li><a href="{% url 'vista1' %}" class="slide-item"> Proyectos terminados</a></li>
 								<li><a href="{% url 'vista2' %}" class="slide-item"> Proyectos visto bueno</a></li>
 								<li><a href="{% url 'vista3' %}" class="slide-item"> Proyectos en desarrollo</a></li>
@@ -34,9 +35,9 @@
 						</li>
 
 						<li class="slide">
-							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Administración</span><span class="badge bg-secondary side-badge">2</span></a>
+							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Productividad</span><span class="badge bg-secondary side-badge">2</span></a>
 							<ul class="slide-menu">
-								<li><a href="{% url 'reporte_proyectos' %}" class="slide-item"> Listado de Proyectos</a></li>
+								<li><a href="{% url 'calendario_entregas_proyecto' %}" class="slide-item"> Calendario entregas</a></li>
 
 
 							</ul>

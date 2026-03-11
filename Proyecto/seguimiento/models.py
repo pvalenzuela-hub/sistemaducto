@@ -352,3 +352,116 @@ class Proyecto(models.Model):
 
     def __str__(self):
         return f"Proyecto {self.idproyecto}"
+    
+class Estadoentrega(models.Model):
+    idestadoentrega = models.AutoField(db_column='IdEstadoEntrega', primary_key=True)
+    descrip = models.CharField(db_column='Descrip', max_length=100, null=True, blank=True)
+    
+    class Meta:
+        managed = False
+        db_table = '[ducto].[T_EstadosEntrega]'
+    
+class Urgencia(models.Model):
+    idurgencia = models.AutoField(db_column='IdUrgencia', primary_key=True)
+    descrip = models.CharField(db_column='Descrip', max_length=50, null=True, blank=True)
+    simbolo = models.CharField(db_column='Simbolo', max_length=1, null=True, blank=True)
+    
+    class Meta:
+        managed = False
+        db_table = '[ducto].[T_Urgencias]'
+        
+class Duracionproyecto(models.Model):
+    idtamano = models.AutoField(db_column='IdTamano', primary_key=True)
+    descripcion = models.CharField(db_column='Descripcion', max_length=50, null=True, blank=True)
+    duracionhoras = models.IntegerField(db_column='DuracionHoras', null=True, blank=True)
+    
+    class Meta:
+        managed = False
+        db_table = '[ducto].[T_DuracionProyecto]'
+        
+
+class tusuario(models.Model):
+    idusuario = models.CharField(db_column='IdUsuario',max_length=15, primary_key=True)
+    nombreusuario = models.CharField(db_column='NombreUsuario', max_length=80, null=True, blank=True)
+    idperfil = models.IntegerField(db_column='IdPerfil', null=True, blank=True)
+    usrclave = models.CharField(db_column='usr_clave', max_length=100, null=True, blank=True)
+    estado = models.CharField(db_column='Estado', max_length=1, null=True, blank=True)
+    operador = models.BooleanField(db_column='Operador', null=True, blank=True)
+    username = models.CharField(db_column='UserName',max_length=50, null=True, blank=True)
+    
+    class Meta:
+        managed = False
+        db_table = 'tUsuario'
+        
+    
+class EntregaProyecto(models.Model):
+    identrega = models.AutoField(db_column='IdEntrega', primary_key=True)
+
+    rutusercreador = models.CharField(db_column='RutUserCreador', max_length=256, null=True, blank=True)
+    fechacreacion = models.DateTimeField(db_column='FechaCreacion', null=True, blank=True)
+    fechacalendario = models.DateTimeField(db_column='FechaCalendario', null=True, blank=True)
+
+    idproyecto = models.ForeignKey(
+        Proyecto,
+        db_column='IdProyecto',
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        db_constraint=False,
+        related_name='entregas'
+    )
+
+    idtipoentrega = models.ForeignKey(
+        TipoEntrega,
+        db_column='IdTipoEntrega',
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        db_constraint=False
+    )
+
+    idurgencia = models.ForeignKey(Urgencia, db_column='IdUrgencia', on_delete=models.DO_NOTHING,
+                                   null=True,
+                                   blank=True,
+                                   db_constraint=False
+                                   )
+
+    fechaentrega = models.DateField(db_column='FechaEntrega', null=True, blank=True)
+    horaentrega = models.CharField(db_column='HoraEntrega', max_length=50, null=True, blank=True)
+    plazoestdesarrollo = models.CharField(db_column='PlazoEstDesarrollo', max_length=50, null=True, blank=True)
+
+    rutuserdesa1 = models.CharField(db_column='RutUserDesa1', max_length=256, null=True, blank=True)
+    fechaasigdesa1 = models.DateTimeField(db_column='FechaAsigDesa1', null=True, blank=True)
+
+    rutuserdesa2 = models.CharField(db_column='RutUserDesa2', max_length=256, null=True, blank=True)
+    fechaasigdesa2 = models.DateTimeField(db_column='FechaAsigDesa2', null=True, blank=True)
+
+    rutuserrev1 = models.CharField(db_column='RutUserRev1', max_length=256, null=True, blank=True)
+    fechaasigrev1 = models.DateTimeField(db_column='FechaAsigRev1', null=True, blank=True)
+
+    rutuserrev2 = models.CharField(db_column='RutUserRev2', max_length=256, null=True, blank=True)
+    fechaasigrev2 = models.DateTimeField(db_column='FechaAsigRev2', null=True, blank=True)
+
+    rutuserdesa3 = models.CharField(db_column='RutUserDesa3', max_length=256, null=True, blank=True)
+    fechaasigdesa3 = models.DateTimeField(db_column='FechaAsigDesa3', null=True, blank=True)
+
+    rutuserrev3 = models.CharField(db_column='RutUserRev3', max_length=256, null=True, blank=True)
+    fechaasigrev3 = models.DateTimeField(db_column='FechaAsigRev3', null=True, blank=True)
+
+    idestadoentrega = models.ForeignKey(Estadoentrega, db_column='IdEstadoEntrega', on_delete=models.DO_NOTHING,
+                                        null=True,
+                                        blank=True,
+                                        db_constraint=False)
+
+    rutuserupdate = models.CharField(db_column='RutUserUpdate', max_length=256, null=True, blank=True)
+    fechaupdate = models.DateTimeField(db_column='FechaUpdate', null=True, blank=True)
+
+    rutuseranula = models.CharField(db_column='RutUserAnula', max_length=256, null=True, blank=True)
+    fechaanulacion = models.DateTimeField(db_column='FechaAnulacion', null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = '[ducto].[EntregaProyecto]'
+
+    def __str__(self):
+        return f"Entrega {self.identrega}"

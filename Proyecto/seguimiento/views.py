@@ -8,6 +8,10 @@ from collections import defaultdict
 from datetime import date
 
 from django.db.models import Max, Prefetch
+from django.http import JsonResponse
+from django.utils.dateparse import parse_datetime
+from django.utils import timezone
+from datetime import timedelta
 
 def get_sql_conn() -> pyodbc.Connection:
     # Connection string directo (sin DSN)
@@ -362,3 +366,101 @@ def proyectos_totales(request):
         'proyectos': proyectos,
     }
     return render(request, 'project/proyectos_totales.html', context)
+
+# Calendario
+
+def _to_local_naive(dt_str):
+    if not dt_str:
+        return None
+
+    dt = parse_datetime(dt_str)
+    if not dt:
+        return None
+
+    if timezone.is_aware(dt):
+        dt = timezone.localtime(dt)
+        dt = timezone.make_naive(dt, timezone.get_current_timezone())
+
+    return dt
+
+def calendario_entregas_proyecto(request):
+    context = {
+        'titulo': 'Calendario de entregas',
+        'encabezado': 'Calendario de entregas de proyectos',
+        'submenu': 'Agenda mensual de entregas',
+    }
+    return render(request, 'calendario_entregas_proyecto.html', context)
+
+
+def eventos_calendario_entregas(request):
+    start = request.GET.get('start')
+    end = request.GET.get('end')
+
+    start_local = _to_local_naive(start)
+    end_local = _to_local_naive(end)
+
+    qs = EntregaProyecto.objects.select_related(
+        'idproyecto',
+        'idproyecto__idcotizacion',
+        'idproyecto__idtamano',
+        'idtipoentrega',
+        'idurgencia',
+        'idestadoentrega',
+    ).filter(
+        fechacalendario__isnull=False
+    ).exclude(
+        idestadoentrega_id=6
+    )
+
+    if start_local:
+        qs = qs.filter(fechacalendario__gte=start_local)
+
+    if end_local:
+        qs = qs.filter(fechacalendario__lt=end_local)
+
+    eventos = []
+
+    for e in qs:
+        proyecto_codigo = ''
+        proyecto_nombre = ''
+
+        if e.idproyecto:
+            proyecto_codigo = str(e.idproyecto.idproyecto)
+            if e.idproyecto.idcotizacion:
+                proyecto_nombre = e.idproyecto.idcotizacion.nombreproyecto or ''
+
+        color = '#6c757d'
+        if e.idestadoentrega_id == 5:
+            color = '#b3ad9f'
+        elif e.idtipoentrega and e.idtipoentrega.color:
+            color = e.idtipoentrega.color
+
+        hora_txt = e.fechacalendario.strftime('%H:%M') if e.fechacalendario else ''
+        titulo = f"{hora_txt} {proyecto_codigo} - {proyecto_nombre}".strip()
+
+        eventos.append({
+            'id': e.identrega,
+            'title': titulo,
+            'start': e.fechacalendario.strftime('%Y-%m-%dT%H:%M:%S') if e.fechacalendario else None,
+            'allDay': False,
+            'display': 'block',
+            'backgroundColor': color,
+            'borderColor': color,
+            'textColor': '#ffffff',
+            'extendedProps': {
+                'identrega': e.identrega,
+                'idproyecto': proyecto_codigo,
+                'nombreproyecto': proyecto_nombre,
+                'tipoentrega': e.idtipoentrega.descripcion if e.idtipoentrega else '',
+                'horaentrega': e.horaentrega or '',
+                'fechaentrega': e.fechaentrega.strftime('%d-%m-%Y') if e.fechaentrega else '',
+                'plazo': e.plazoestdesarrollo or '',
+                'urgencia_id': e.idurgencia_id,
+                'urgencia': e.idurgencia.descrip if e.idurgencia else '',
+                'estadoentrega_id': e.idestadoentrega_id,
+                'estadoentrega': e.idestadoentrega.descrip if e.idestadoentrega else '',
+                'tamano': e.idproyecto.idtamano.descripcion if e.idproyecto and e.idproyecto.idtamano else '',
+            }
+        })
+
+    return JsonResponse(eventos, safe=False)
