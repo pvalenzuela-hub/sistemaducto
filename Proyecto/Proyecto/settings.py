@@ -36,6 +36,10 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
+
 
 DUCTO_SQL_SERVER = os.getenv("DUCTO_SQL_SERVER", "")
 DUCTO_SQL_DB = os.getenv("DUCTO_SQL_DB", "")

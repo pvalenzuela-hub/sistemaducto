@@ -7,22 +7,8 @@
 
 {% block extra_css %}
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+
 <style>
-    #modalEntrega .modal-content {
-        border-radius: 10px;
-    }
-
-    #modalEntrega .form-control[readonly] {
-        background-color: #f3f4f8;
-        border-color: #d7d9e0;
-        color: #495057;
-    }
-
-    #modalEntrega .modal-title {
-        color: #495057;
-    }
-
-
     #calendar {
         background: #fff;
         padding: 15px;
@@ -46,6 +32,29 @@
     .fc-timegrid-event {
         cursor: pointer !important;
     }
+
+    #modalEntrega .modal-content,
+    #modalNuevaEntrega .modal-content,
+    #modalAsignarDesarrollo .modal-content {
+        border-radius: 10px;
+    }
+
+    #modalEntrega .form-control[readonly],
+    #modalNuevaEntrega .form-control[readonly] {
+        background-color: #f3f4f8;
+        border-color: #d7d9e0;
+        color: #495057;
+    }
+
+    #modalEntrega .modal-title,
+    #modalNuevaEntrega .modal-title,
+    #modalAsignarDesarrollo .modal-title {
+        color: #495057;
+    }
+
+    .fc-daygrid-day {
+        cursor: pointer;
+    }
 </style>
 {% endblock %}
 
@@ -65,6 +74,7 @@
     </div>
 </div>
 
+<!-- Modal detalle entrega -->
 <div class="modal fade" id="modalEntrega" tabindex="-1" aria-labelledby="modalEntregaLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
@@ -129,6 +139,119 @@
         </div>
     </div>
 </div>
+
+<!-- Modal asignar a desarrollo -->
+<div class="modal fade" id="modalAsignarDesarrollo" tabindex="-1" aria-labelledby="modalAsignarDesarrolloLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title fw-bold" id="modalAsignarDesarrolloLabel">Asignar entrega a desarrollo</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="selUsuarioDesarrollo" class="form-label fw-semibold">Usuario</label>
+                    <select id="selUsuarioDesarrollo" class="form-select">
+                        <option value="">Selecciona un usuario</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" id="btnAsignarDesarrolloConfirmar" class="btn btn-primary">Asignar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal nueva entrega -->
+<div class="modal fade" id="modalNuevaEntrega" tabindex="-1" aria-labelledby="modalNuevaEntregaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h4 class="modal-title fw-bold" id="modalNuevaEntregaLabel">Nueva entrega</h4>
+                    <span id="badgeFechaCalendarioNueva" class="badge bg-danger-subtle text-danger mt-2"></span>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body pt-4">
+                <input type="hidden" id="nueva_fecha_calendario">
+
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Proyecto</label>
+                        <select id="n_idproyecto" class="form-select">
+                            <option value="">Selecciona un proyecto</option>
+                            {% for p in proyectos %}
+                                <option value="{{ p.idproyecto }}">
+                                    {{ p.idproyecto }} - {% if p.idcotizacion %}{{ p.idcotizacion.nombreproyecto }}{% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tipo de Entrega</label>
+                        <select id="n_idtipoentrega" class="form-select">
+                            <option value="">Selecciona un tipo de entrega</option>
+                            {% for t in tipos_entrega %}
+                                <option value="{{ t.idtipoentrega }}" data-factor="{{ t.factorTiempo|default:'' }}">
+                                    {{ t.descripcion }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tipo de urgencia</label>
+                        <select id="n_idurgencia" class="form-select">
+                            <option value="">Selecciona tipo de urgencia</option>
+                            {% for u in urgencias %}
+                                <option value="{{ u.idurgencia }}">
+                                    {{ u.descrip }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tamaño del proyecto</label>
+                        <select id="n_tamano" class="form-select">
+                            <option value="">Selecciona tamaño</option>
+                            {% for t in tamanos %}
+                                <option value="{{ t.idtamano }}">{{ t.descripcion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Fecha de entrega cliente</label>
+                        <input type="date" id="n_fecha_entrega" class="form-control">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Hora de entrega cliente</label>
+                        <input type="time" id="n_hora_entrega" class="form-control" value="06:00">
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold">Plazo estimado Desarrollo</label>
+                        <input type="text" id="n_plazo" class="form-control">
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" id="btnGuardarNuevaEntrega" class="btn btn-success">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -138,8 +261,89 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const calendarEl = document.getElementById('calendar');
-    const modalEntregaEl = document.getElementById('modalEntrega');
-    const modalEntrega = new bootstrap.Modal(modalEntregaEl);
+
+    const modalEntrega = new bootstrap.Modal(document.getElementById('modalEntrega'));
+    const modalAsignar = new bootstrap.Modal(document.getElementById('modalAsignarDesarrollo'));
+    const modalNuevaEntrega = new bootstrap.Modal(document.getElementById('modalNuevaEntrega'));
+
+    const btnEnviarDesarrollo = document.getElementById('btnEnviarDesarrollo');
+    const btnAnularEntrega = document.getElementById('btnAnularEntrega');
+    const btnCerrarEntrega = document.getElementById('btnCerrarEntrega');
+    const btnAsignarDesarrolloConfirmar = document.getElementById('btnAsignarDesarrolloConfirmar');
+    const btnGuardarNuevaEntrega = document.getElementById('btnGuardarNuevaEntrega');
+
+    const selUsuarioDesarrollo = document.getElementById('selUsuarioDesarrollo');
+
+    const nFechaCalendario = document.getElementById('nueva_fecha_calendario');
+    const badgeFechaCalendarioNueva = document.getElementById('badgeFechaCalendarioNueva');
+    const nIdProyecto = document.getElementById('n_idproyecto');
+    const nIdTipoEntrega = document.getElementById('n_idtipoentrega');
+    const nIdUrgencia = document.getElementById('n_idurgencia');
+    const nTamano = document.getElementById('n_tamano');
+    const nFechaEntrega = document.getElementById('n_fecha_entrega');
+    const nHoraEntrega = document.getElementById('n_hora_entrega');
+    const nPlazo = document.getElementById('n_plazo');
+
+    const urlEventos = "{% url 'eventos_calendario_entregas' %}";
+    const urlUsuarios = "{% url 'usuarios_desarrollo_activos' %}";
+    const urlAnularTemplate = "{% url 'anular_entrega' 0 %}";
+    const urlAsignarTemplate = "{% url 'asignar_entrega_desarrollo' 0 %}";
+    const urlCrearEntrega = "{% url 'crear_entrega_proyecto' %}";
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    const csrftoken = getCookie('csrftoken');
+
+    function resetModalNuevaEntrega() {
+        nFechaCalendario.value = '';
+        badgeFechaCalendarioNueva.textContent = '';
+        nIdProyecto.value = '';
+        nIdTipoEntrega.value = '';
+        nIdUrgencia.value = '';
+        nTamano.value = '';
+        nFechaEntrega.value = '';
+        nHoraEntrega.value = '06:00';
+        nPlazo.value = '';
+    }
+
+    async function cargarUsuariosDesarrollo() {
+        selUsuarioDesarrollo.innerHTML = '<option value="">Selecciona un usuario</option>';
+
+        const response = await fetch(urlUsuarios);
+        if (!response.ok) {
+            throw new Error('No fue posible cargar los usuarios.');
+        }
+
+        const usuarios = await response.json();
+
+        usuarios.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.rut;
+            opt.textContent = `${u.nombrecompleto} (${u.rut})`;
+            selUsuarioDesarrollo.appendChild(opt);
+        });
+    }
+
+    nIdTipoEntrega.addEventListener('change', function () {
+        const opt = this.options[this.selectedIndex];
+        const factor = opt.getAttribute('data-factor') || '';
+        if (factor && !nPlazo.value) {
+            nPlazo.value = factor;
+        }
+    });
 
     const calendar = new FullCalendar.Calendar(calendarEl, {
         locale: 'es',
@@ -164,11 +368,19 @@ document.addEventListener('DOMContentLoaded', function () {
         },
 
         events: {
-            url: "{% url 'eventos_calendario_entregas' %}",
+            url: urlEventos,
             method: 'GET',
             failure: function () {
                 alert('No fue posible cargar las entregas.');
             }
+        },
+
+        dateClick: function(info) {
+            resetModalNuevaEntrega();
+            nFechaCalendario.value = info.dateStr;
+            badgeFechaCalendarioNueva.textContent = 'Fecha calendario: ' + info.dateStr;
+            nFechaEntrega.value = info.dateStr;
+            modalNuevaEntrega.show();
         },
 
         eventClick: function(info) {
@@ -201,11 +413,6 @@ document.addEventListener('DOMContentLoaded', function () {
             btnEnviarDesarrollo.setAttribute('data-identrega', p.identrega || '');
             btnAnularEntrega.setAttribute('data-identrega', p.identrega || '');
 
-            const btnCerrarEntrega = document.getElementById('btnCerrarEntrega');
-
-            // Regla final:
-            // solo estado 1 permite acciones
-            // cualquier otro estado, incluido 5, muestra solo Cerrar
             if (p.estadoentrega_id === 1) {
                 btnEnviarDesarrollo.style.display = 'inline-block';
                 btnAnularEntrega.style.display = 'inline-block';
@@ -223,6 +430,144 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     calendar.render();
+
+    btnAnularEntrega.addEventListener('click', async function () {
+        const idEntrega = this.getAttribute('data-identrega');
+        if (!idEntrega) return;
+
+        const ok = confirm('¿Confirma que desea anular esta entrega?');
+        if (!ok) return;
+
+        const url = urlAnularTemplate.replace('/0/', `/${idEntrega}/`);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                alert(data.mensaje || 'No fue posible anular la entrega.');
+                return;
+            }
+
+            modalEntrega.hide();
+            calendar.refetchEvents();
+            alert(data.mensaje);
+        } catch (err) {
+            alert('Error al anular la entrega.');
+        }
+    });
+
+    btnEnviarDesarrollo.addEventListener('click', async function () {
+        const idEntrega = this.getAttribute('data-identrega');
+        if (!idEntrega) return;
+
+        try {
+            await cargarUsuariosDesarrollo();
+            btnAsignarDesarrolloConfirmar.setAttribute('data-identrega', idEntrega);
+            modalAsignar.show();
+        } catch (err) {
+            alert('No fue posible cargar los usuarios de desarrollo.');
+        }
+    });
+
+   btnAsignarDesarrolloConfirmar.addEventListener('click', async function () {
+        const idEntrega = this.getAttribute('data-identrega');
+        const rutUsuario = selUsuarioDesarrollo.value;
+
+        if (!idEntrega) {
+            alert('No se encontró la entrega.');
+            return;
+        }
+
+        if (!rutUsuario) {
+            alert('Debes seleccionar un usuario.');
+            return;
+        }
+
+        const url = urlAsignarTemplate.replace('/0/', `/${idEntrega}/`);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    rut_usuario: rutUsuario
+                })
+            });
+
+            const contentType = response.headers.get('content-type') || '';
+
+            if (!contentType.includes('application/json')) {
+                const txt = await response.text();
+                console.error('Respuesta no JSON al asignar:', txt);
+                alert('La vista devolvió un error interno. Revisa consola/servidor.');
+                return;
+            }
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                console.error('Error backend asignar:', data);
+                alert(data.mensaje || 'No fue posible asignar la entrega.');
+                return;
+            }
+
+            modalAsignar.hide();
+            modalEntrega.hide();
+            calendar.refetchEvents();
+            alert(data.mensaje);
+        } catch (err) {
+            console.error('Catch asignar desarrollo:', err);
+            alert('Error al asignar la entrega a desarrollo.');
+        }
+    });
+
+    btnGuardarNuevaEntrega.addEventListener('click', async function () {
+        const payload = {
+            fecha_calendario: nFechaCalendario.value,
+            idproyecto: nIdProyecto.value,
+            idtipoentrega: nIdTipoEntrega.value,
+            idurgencia: nIdUrgencia.value,
+            idtamano: nTamano.value,
+            fecha_entrega: nFechaEntrega.value,
+            hora_entrega: nHoraEntrega.value,
+            plazo: nPlazo.value
+        };
+
+        try {
+            const response = await fetch(urlCrearEntrega, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                alert(data.mensaje || 'No fue posible crear la entrega.');
+                return;
+            }
+
+            modalNuevaEntrega.hide();
+            calendar.refetchEvents();
+            alert(data.mensaje);
+        } catch (err) {
+            alert('Error al crear la entrega.');
+        }
+    });
 });
 </script>
 {% endblock %}
