@@ -8,9 +8,25 @@
 
     {% include "components/layouts/vertical/styles.html" %}
     {% block extra_css %}{% endblock %}
+
+    <style>
+        .toast-container {
+            z-index: 2000;
+        }
+
+        #appToast {
+            min-width: 320px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+            border-radius: 10px;
+        }
+
+        #appToast .toast-body {
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+    </style>
 </head>
 <body class="app sidebar-mini ltr light-mode" style="background-color: #ffffff;">
-
 
     <div id="global-loader">
         <img src="{% static 'assets/images/loader.svg' %}" class="loader-img" alt="Loader">
@@ -34,7 +50,108 @@
         </div>
     </div>
 
+    <!-- Toast global -->
+    <div class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3">
+        <div id="appToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div id="appToastBody" class="toast-body">
+                    Mensaje
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+            </div>
+        </div>
+    </div>
+    <!-- modal confirmacion -->
+    <div class="modal fade" id="modalConfirmacion" tabindex="-1" aria-labelledby="modalConfirmacionLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 12px;">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalConfirmacionLabel">Confirmación</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" id="modalConfirmacionTexto">
+                    ¿Desea continuar?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="btnConfirmarAccion">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </div>
     {% include "components/layouts/vertical/scripts.html" %}
+
+    <script>
+        function mostrarMensaje(texto, tipo = 'success') {
+            const toastEl = document.getElementById('appToast');
+            const toastBody = document.getElementById('appToastBody');
+
+            if (!toastEl || !toastBody || typeof bootstrap === 'undefined') {
+                alert(texto);
+                return;
+            }
+
+            toastBody.textContent = texto;
+
+            toastEl.classList.remove(
+                'bg-success',
+                'bg-danger',
+                'bg-warning',
+                'bg-info',
+                'text-dark'
+            );
+
+            if (tipo === 'success') {
+                toastEl.classList.add('bg-success');
+            } else if (tipo === 'error') {
+                toastEl.classList.add('bg-danger');
+            } else if (tipo === 'warning') {
+                toastEl.classList.add('bg-warning', 'text-dark');
+            } else {
+                toastEl.classList.add('bg-info');
+            }
+
+            const toast = bootstrap.Toast.getOrCreateInstance(toastEl, {
+                delay: 3500
+            });
+            toast.show();
+        }
+
+        function confirmarAccion(mensaje, titulo = 'Confirmación', claseBoton = 'btn-danger') {
+            return new Promise((resolve) => {
+                const modalEl = document.getElementById('modalConfirmacion');
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+                const tituloEl = document.getElementById('modalConfirmacionLabel');
+                const textoEl = document.getElementById('modalConfirmacionTexto');
+                const btnConfirmar = document.getElementById('btnConfirmarAccion');
+
+                tituloEl.textContent = titulo;
+                textoEl.textContent = mensaje;
+
+                btnConfirmar.className = 'btn ' + claseBoton;
+
+                let confirmado = false;
+
+                const onConfirm = () => {
+                    confirmado = true;
+                    modal.hide();
+                };
+
+                const onHidden = () => {
+                    btnConfirmar.removeEventListener('click', onConfirm);
+                    modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                    resolve(confirmado);
+                };
+
+                btnConfirmar.addEventListener('click', onConfirm);
+                modalEl.addEventListener('hidden.bs.modal', onHidden);
+
+                modal.show();
+            });
+        }
+    </script>
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>

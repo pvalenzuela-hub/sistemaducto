@@ -1,43 +1,106 @@
-
 {% extends 'components/base.html' %}
-{% block title %}{{titulo}}{% endblock %}
 {% load humanize %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
 {% block body %}
 <div class="row">
-    <div class="col-sm-12 col-md-12 col-lg-12 col-xl-12">
-        <div class="table-responsive">
-            <h1>{{encabezado}}</h1>
+    <div class="col-12">
+        <h1 class="mb-4">{{ encabezado }}</h1>
 
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>Fecha Contrato</th>
-                        <th>Días Utilizados</th>
-                        <th>Días Disponibles</th>
-                        <th>Días Totales</th>
-                        <th>Meses Totales</th>>
-                        <!-- <th colspan="2">Ver Detalle</th> -->
-                        <th>detalle</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for c in personas %}
-                    <tr>
-                        <td>{{c.user_per}}</td>
-                        <td>{{c.feccon}}</td>
-                        <td>{{c.suma_dias_vacaciones|floatformat:2}}</td>
-                        <td>{{c.dias_pendientes|floatformat:2}}</td>
-                        <td>{{c.dias_totales|floatformat:2}}</td>
-                        <td>{{c.meses_totales|floatformat:2}}</td>
-                        <td>
-                            <a class="fa fa-address-card-o fa-2x" href="{% url 'detalle-vacaciones' c.id %}"></a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Listado de Personas</h5>
+            </div>
+
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="tabla-personas" class="table table-bordered table-striped align-middle w-100">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Fecha Contrato</th>
+                                <th class="text-end">Días Utilizados</th>
+                                <th class="text-end">Días Disponibles</th>
+                                <th class="text-end">Días Totales</th>
+                                <th class="text-end">Meses Totales</th>
+                                <th class="text-center">Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in personas %}
+                            <tr>
+                                <td>
+                                    {% if c.user_per.first_name or c.user_per.last_name %}
+                                        {{ c.user_per.first_name }} {{ c.user_per.last_name }}
+                                    {% else %}
+                                        {{ c.user_per.username }}
+                                    {% endif %}
+                                </td>
+                                <td data-order="{{ c.feccon|date:'Y-m-d' }}">
+                                    {{ c.feccon|date:"d-m-Y" }}
+                                </td>
+                                <td class="text-end">{{ c.suma_dias_vacaciones|default:0|floatformat:2 }}</td>
+                                <td class="text-end">{{ c.dias_pendientes|default:0|floatformat:2 }}</td>
+                                <td class="text-end">{{ c.dias_totales|default:0|floatformat:2 }}</td>
+                                <td class="text-end">{{ c.meses_totales|default:0|floatformat:2 }}</td>
+                                <td class="text-center">
+                                    <a href="{% url 'detalle-vacaciones' c.id %}"
+                                       class="btn btn-primary btn-sm"
+                                       title="Ver detalle">
+                                        <i class="fa fa-address-card-o"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">No hay personas registradas.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        if ($.fn.DataTable.isDataTable('#tabla-personas')) {
+            $('#tabla-personas').DataTable().destroy();
+        }
+
+        $('#tabla-personas').DataTable({
+            pageLength: 25,
+            order: [[0, 'asc']],
+            language: {
+                search: "Buscar:",
+                infoEmpty: "Mostrando 0 a 0 de 0 registros",
+                info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+                infoFiltered: "(filtrado de _MAX_ registros totales)",
+                lengthMenu: "Mostrar _MENU_ registros",
+                loadingRecords: "Cargando...",
+                processing: "Procesando...",
+                zeroRecords: "No se encontraron resultados",
+                emptyTable: "No hay datos disponibles",
+                paginate: {
+                    first: "Primero",
+                    last: "Último",
+                    next: "Siguiente",
+                    previous: "Anterior"
+                }
+            },
+            columnDefs: [
+                { orderable: false, targets: 6 },
+                { className: "text-end", targets: [2, 3, 4, 5] },
+                { className: "text-center", targets: [6] }
+            ]
+        });
+    });
+</script>
 {% endblock %}

@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 # Create your models here.
 class T_Categoria(models.Model):
@@ -465,3 +466,62 @@ class EntregaProyecto(models.Model):
 
     def __str__(self):
         return f"Entrega {self.identrega}"
+    
+class Tipoobservacion(models.Model):
+    id = models.AutoField(db_column='IdTipoObservacion', primary_key=True)
+    nombre = models.CharField(db_column='Descripcion', max_length=100, null=True, blank=True)
+    
+    class Meta:
+        managed = False
+        db_table = '[ducto].[T_TipoObservacion]'
+
+class Calificacion(models.Model):
+    id = models.AutoField(db_column='IdCalificaciones', primary_key=True)
+    nombre = models.CharField(db_column='Descripcion', max_length=100)
+    
+    class Meta:
+        managed = False
+        db_table = '[ducto].[T_Calificaciones]'
+
+class Observacion(models.Model):
+    id = models.AutoField(db_column='IdObservacion', primary_key=True)
+    tipoobservacion = models.ForeignKey(Tipoobservacion, db_column='IdTipoObservacion',
+                                        on_delete=models.DO_NOTHING,
+                                        null=True,
+                                        blank=True,
+                                        db_constraint=False)
+    nombre = models.CharField(db_column='Descrip', max_length=300, null=True, blank=True)
+    calificacion = models.ForeignKey(Calificacion, db_column='IdCalificaciones',
+                                     on_delete=models.DO_NOTHING,
+                                     null=True,
+                                     blank=True,
+                                     db_constraint=False)
+    
+    class Meta:
+        managed = False
+        db_table = '[ducto].[T_Observaciones]'
+    
+class Entregaobservacion(models.Model):
+    id = models.AutoField(db_column='IdObservEntrega', primary_key=True)
+    entrega = models.ForeignKey(EntregaProyecto, db_column='IdEntrega',
+                                on_delete=models.DO_NOTHING,
+                                null=True,
+                                blank=True,
+                                db_constraint=False
+                                )
+    observacion = models.ForeignKey(Observacion, db_column='IdObservacion',
+                                    on_delete=models.DO_NOTHING,
+                                    null=True,
+                                    blank=True,
+                                    db_constraint=False)
+    fecha = models.DateTimeField(auto_now=True, db_column='Fecha')
+    username = models.ForeignKey(User, db_column='UserName', on_delete=models.DO_NOTHING,
+                                 null=True,
+                                 blank=True,
+                                 db_constraint=False)
+    estado = models.IntegerField(db_column='Estado', null=True, blank=True)
+    
+    class Meta:
+        managed = False
+        db_table = '[ducto].[Entrega_Observacion]'
+    

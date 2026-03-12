@@ -1,0 +1,287 @@
+{% extends 'components/base.html' %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    #tabla-entregas-revision {
+        font-size: 0.65rem;
+    }
+
+    #tabla-entregas-revision thead th {
+        font-size: 0.60rem;
+        vertical-align: middle;
+    }
+
+    #tabla-entregas-revision tbody td {
+        padding: 0.35rem 0.45rem;
+        vertical-align: middle;
+    }
+
+    div.dataTables_wrapper div.dataTables_length,
+    div.dataTables_wrapper div.dataTables_filter,
+    div.dataTables_wrapper div.dataTables_info,
+    div.dataTables_wrapper div.dataTables_paginate {
+        font-size: 0.74rem;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ submenu }}</h5>
+            </div>
+
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="tabla-entregas-revision" class="table table-bordered table-striped align-middle w-100">
+                        <thead>
+                            <tr>
+                                <th>Símbolo</th>
+                                <th>N° Proyecto</th>
+                                <th>Nombre Proyecto</th>
+                                <th>Tipo de Entrega</th>
+                                <th>Desarrollador Actual</th>
+                                <th>Fecha Asignación Desarrollador Actual</th>
+                                <th>Plazo Estimado Desarrollo</th>
+                                <th>Fecha Entrega Cliente</th>
+                                <th>Hora Entrega Cliente</th>
+                                <th>Observaciones</th>
+                                <th>Estado Entrega</th>
+                                <th>Ver</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for e in entregas %}
+                            <tr>
+                                <td class="text-center">{{ e.idurgencia.simbolo|default:"" }}</td>
+                                <td class="text-center">{{ e.idproyecto_id }}</td>
+                                <td>{{ e.nombre_proyecto|default:"" }}</td>
+                                <td>{{ e.descripcion_tipo_entrega|default:"" }}</td>
+                                <td>{{ e.nombre_desarrollador_actual|default:"" }}</td>
+                                <td data-order="{{ e.fecha_asignacion|date:'Y-m-d H:i:s' }}">
+                                    {{ e.fecha_asignacion|date:"d-m-Y H:i" }}
+                                </td>
+                                <td class="text-center">{{ e.plazoestdesarrollo|default:"" }}</td>
+                                <td data-order="{{ e.fechaentrega|date:'Y-m-d' }}">
+                                    {{ e.fechaentrega|date:"d-m-Y" }}
+                                </td>
+                                <td class="text-center">{{ e.horaentrega|default:"" }}</td>
+                                <td class="text-end">{{ e.observaciones|default:0 }}</td>
+                                <td>{{ e.descripcion_estado_entrega|default:"" }}</td>
+                                <td class="text-center">
+                                    <button type="button"
+                                            class="btn btn-primary btn-sm btn-ver-entrega"
+                                            data-identrega="{{ e.identrega }}">
+                                        Ver
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="12" class="text-center text-muted">No hay entregas disponibles.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalVisorEntrega" tabindex="-1" aria-labelledby="modalVisorEntregaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h4 class="modal-title fw-bold" id="modalVisorEntregaLabel">Visor Entrega</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body pt-4">
+                <div class="row g-4 mb-4">
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">N° Proyecto</label>
+                        <input type="text" id="v_idproyecto" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Nombre Proyecto</label>
+                        <input type="text" id="v_nombreproyecto" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Tipo de Entrega</label>
+                        <input type="text" id="v_tipoentrega" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Fecha Entrega</label>
+                        <input type="text" id="v_fechaentrega" class="form-control" readonly>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="tabla-visor-entrega" class="table table-bordered table-striped align-middle w-100">
+                        <thead>
+                            <tr>
+                                <th>Nro</th>
+                                <th>Tipo</th>
+                                <th>Descripción</th>
+                                <th>Calificación</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="visor-entrega-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        const modalEl = document.getElementById('modalVisorEntrega');
+        const modalVisorEntrega = modalEl ? new bootstrap.Modal(modalEl) : null;
+
+        if ($.fn.DataTable.isDataTable('#tabla-entregas-revision')) {
+            $('#tabla-entregas-revision').DataTable().destroy();
+        }
+
+        $('#tabla-entregas-revision').DataTable({
+            pageLength: 10,
+            order: [[5, 'desc']],
+            language: {
+                search: "Buscar:",
+                infoEmpty: "Mostrando 0 a 0 de 0 registros",
+                info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+                infoFiltered: "(filtrado de _MAX_ registros totales)",
+                lengthMenu: "Mostrar _MENU_ registros",
+                loadingRecords: "Cargando...",
+                processing: "Procesando...",
+                zeroRecords: "No se encontraron resultados",
+                emptyTable: "No hay datos disponibles",
+                paginate: {
+                    first: "Primero",
+                    last: "Último",
+                    next: "Siguiente",
+                    previous: "Anterior"
+                }
+            },
+            columnDefs: [
+                { className: "text-center", targets: [0, 1, 6, 8] },
+                { className: "text-end", targets: [9] }
+            ]
+        });
+
+        let tablaVisor = null;
+
+        function obtenerTablaVisor() {
+            if (tablaVisor) {
+                return tablaVisor;
+            }
+
+            tablaVisor = $('#tabla-visor-entrega').DataTable({
+                pageLength: 10,
+                order: [[0, 'asc']],
+                destroy: true,
+                language: {
+                    search: "Buscar:",
+                    infoEmpty: "Mostrando 0 a 0 de 0 registros",
+                    info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+                    infoFiltered: "(filtrado de _MAX_ registros totales)",
+                    lengthMenu: "Mostrar _MENU_ registros",
+                    loadingRecords: "Cargando...",
+                    processing: "Procesando...",
+                    zeroRecords: "No se encontraron resultados",
+                    emptyTable: "No hay observaciones disponibles",
+                    paginate: {
+                        first: "Primero",
+                        last: "Último",
+                        next: "Siguiente",
+                        previous: "Anterior"
+                    }
+                }
+            });
+
+            return tablaVisor;
+        }
+
+        $(document).on('click', '.btn-ver-entrega', async function () {
+            const idEntrega = $(this).data('identrega');
+            const url = "{% url 'visor_entrega' 0 %}".replace('/0/', `/${idEntrega}/`);
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+
+                if (!response.ok) {
+                    const txt = await response.text();
+                    console.error('Error HTTP visor_entrega:', response.status, txt);
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                if (!contentType.includes('application/json')) {
+                    const txt = await response.text();
+                    console.error('La vista no devolvió JSON:', txt);
+                    throw new Error('La vista no devolvió JSON');
+                }
+
+                const data = await response.json();
+
+                document.getElementById('v_idproyecto').value = data.idproyecto || '';
+                document.getElementById('v_nombreproyecto').value = data.nombreproyecto || '';
+                document.getElementById('v_tipoentrega').value = data.tipoentrega || '';
+                document.getElementById('v_fechaentrega').value = data.fechaentrega || '';
+
+                const tabla = obtenerTablaVisor();
+                tabla.clear();
+
+                if (data.observaciones && data.observaciones.length > 0) {
+                    const filas = data.observaciones.map(o => [
+                        o.nro ?? '',
+                        o.tipo ?? '',
+                        o.descripcion ?? '',
+                        o.calificacion ?? '',
+                        `<span class="text-success fw-semibold">${o.estado ?? ''}</span>`
+                    ]);
+
+                    tabla.rows.add(filas);
+                }
+
+                tabla.draw();
+
+                if (!modalVisorEntrega) {
+                    throw new Error('No existe el modal #modalVisorEntrega.');
+                }
+
+                modalVisorEntrega.show();
+
+            } catch (error) {
+                console.error('Error visor_entrega:', error);
+                mostrarMensaje('No fue posible cargar el visor de la entrega.', 'error');
+            }
+        });
+    });
+</script>
+{% endblock %}

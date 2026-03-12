@@ -1,29 +1,91 @@
 {% extends 'components/base.html' %}
-{% block title %}{{titulo}}{% endblock %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
 {% block body %}
 <div class="row">
-    <div class="col-sm-12 col-md-12 col-lg-12 col-xl-12">
-        <div class="table-responsive">
-            <h1>{{encabezado}}</h1>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Fecha Inicio</th>
-                        <th>Fecha Término</th>
-                        <th>Días Vacaciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for c in registro %}
-                    <tr>
-                        <td>{{c.fecini}}</td>
-                        <td>{{c.fecfin}}</td>
-                        <td>{{c.dias_vacaciones}}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="col-12">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Detalle de Vacaciones</h5>
+            </div>
+
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="tabla-detalle-vacaciones" class="table table-bordered table-striped align-middle w-100">
+                        <thead>
+                            <tr>
+                                <th>Fecha Inicio</th>
+                                <th>Fecha Término</th>
+                                <th class="text-end">Días Vacaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in registro %}
+                            <tr>
+                                <td data-order="{{ c.fecini|date:'Y-m-d' }}">
+                                    {{ c.fecini|date:"d-m-Y" }}
+                                </td>
+                                <td data-order="{{ c.fecfin|date:'Y-m-d' }}">
+                                    {{ c.fecfin|date:"d-m-Y" }}
+                                </td>
+                                <td class="text-end">{{ c.dias_vacaciones|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">No hay registros de vacaciones.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-3">
+                    <a href="javascript:history.back()" class="btn btn-secondary btn-sm">
+                        Volver
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        if ($.fn.DataTable.isDataTable('#tabla-detalle-vacaciones')) {
+            $('#tabla-detalle-vacaciones').DataTable().destroy();
+        }
+
+        $('#tabla-detalle-vacaciones').DataTable({
+            pageLength: 10,
+            order: [[0, 'desc']],
+            language: {
+                search: "Buscar:",
+                infoEmpty: "Mostrando 0 a 0 de 0 registros",
+                info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+                infoFiltered: "(filtrado de _MAX_ registros totales)",
+                lengthMenu: "Mostrar _MENU_ registros",
+                loadingRecords: "Cargando...",
+                processing: "Procesando...",
+                zeroRecords: "No se encontraron resultados",
+                emptyTable: "No hay datos disponibles",
+                paginate: {
+                    first: "Primero",
+                    last: "Último",
+                    next: "Siguiente",
+                    previous: "Anterior"
+                }
+            },
+            columnDefs: [
+                { className: "text-end", targets: [2] }
+            ]
+        });
+    });
+</script>
 {% endblock %}

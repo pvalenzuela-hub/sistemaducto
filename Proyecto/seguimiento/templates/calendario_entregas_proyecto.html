@@ -7,8 +7,13 @@
 
 {% block extra_css %}
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
-
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
+    #badgeEstadoEntrega {
+        white-space: normal;
+        text-align: left;
+    }
+
     #calendar {
         background: #fff;
         padding: 15px;
@@ -54,6 +59,36 @@
 
     .fc-daygrid-day {
         cursor: pointer;
+    }
+
+    .select2-container .select2-selection--single {
+        height: 38px !important;
+        border: 1px solid #d7d9e0 !important;
+        border-radius: 6px !important;
+        padding: 4px 8px !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 28px !important;
+        color: #495057 !important;
+        padding-left: 2px !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px !important;
+    }
+
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-dropdown {
+        border: 1px solid #d7d9e0 !important;
+        border-radius: 6px !important;
+    }
+
+    .select2-search__field {
+        border-radius: 4px !important;
     }
 </style>
 {% endblock %}
@@ -185,7 +220,7 @@
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Proyecto</label>
                         <select id="n_idproyecto" class="form-select">
-                            <option value="">Selecciona un proyecto</option>
+                            <option value=""></option>
                             {% for p in proyectos %}
                                 <option value="{{ p.idproyecto }}">
                                     {{ p.idproyecto }} - {% if p.idcotizacion %}{{ p.idcotizacion.nombreproyecto }}{% endif %}
@@ -257,6 +292,7 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales-all.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -289,6 +325,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const urlAnularTemplate = "{% url 'anular_entrega' 0 %}";
     const urlAsignarTemplate = "{% url 'asignar_entrega_desarrollo' 0 %}";
     const urlCrearEntrega = "{% url 'crear_entrega_proyecto' %}";
+    const urlMoverTemplate = "{% url 'mover_entrega_calendario' 0 %}";
 
     function getCookie(name) {
         let cookieValue = null;
@@ -307,10 +344,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const csrftoken = getCookie('csrftoken');
 
+    $('#n_idproyecto').select2({
+        placeholder: 'Selecciona un proyecto',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#modalNuevaEntrega')
+    });
+
+    $('#n_idproyecto').on('select2:open', function () {
+        setTimeout(function () {
+            document.querySelector('.select2-container--open .select2-search__field')?.focus();
+        }, 0);
+    });
+
     function resetModalNuevaEntrega() {
         nFechaCalendario.value = '';
         badgeFechaCalendarioNueva.textContent = '';
-        nIdProyecto.value = '';
+        $('#n_idproyecto').val(null).trigger('change');
         nIdTipoEntrega.value = '';
         nIdUrgencia.value = '';
         nTamano.value = '';
@@ -353,6 +403,22 @@ document.addEventListener('DOMContentLoaded', function () {
         eventDisplay: 'block',
         displayEventTime: false,
         lazyFetching: false,
+        editable: true,
+        eventStartEditable: true,
+        eventDurationEditable: false,
+
+        eventAllow: function(dropInfo, draggedEvent) {
+            return draggedEvent.extendedProps.estadoentrega_id !== 5;
+        },
+
+        eventDidMount: function(info) {
+            if (info.event.extendedProps.estadoentrega_id === 5) {
+                info.el.style.cursor = 'not-allowed';
+                info.el.style.opacity = '0.85';
+            } else {
+                info.el.style.cursor = 'move';
+            }
+        },
 
         headerToolbar: {
             left: 'prev,next today',
@@ -371,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function () {
             url: urlEventos,
             method: 'GET',
             failure: function () {
-                alert('No fue posible cargar las entregas.');
+                mostrarMensaje('No fue posible cargar las entregas.', 'error');
             }
         },
 
@@ -398,7 +464,11 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('m_tamano').value = p.tamano || '';
 
             const badge = document.getElementById('badgeEstadoEntrega');
-            badge.textContent = p.estadoentrega || '';
+            if (p.estadoentrega_id === 2 && p.asignado_a) {
+                badge.textContent = `${p.estadoentrega} - Asignado a: ${p.asignado_a}`;
+            } else {
+                badge.textContent = p.estadoentrega || '';
+            }
 
             if (p.estadoentrega_id === 1) {
                 badge.className = 'badge bg-success ms-2';
@@ -426,6 +496,73 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             modalEntrega.show();
+        },
+
+        eventDrop: async function(info) {
+            const idEntrega = info.event.id;
+
+            if (!idEntrega) {
+                info.revert();
+                mostrarMensaje('No se encontró el identificador de la entrega.', 'error');
+                return;
+            }
+
+            const fecha = info.event.start;
+            const yyyy = fecha.getFullYear();
+            const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+            const dd = String(fecha.getDate()).padStart(2, '0');
+            const nuevaFecha = `${yyyy}-${mm}-${dd}`;
+
+            const ok = await confirmarAccion(
+                '¿Confirma que desea mover esta entrega a la nueva fecha?',
+                'Mover entrega',
+                'btn-primary'
+            );
+
+            if (!ok) {
+                info.revert();
+                return;
+            }
+
+            const url = urlMoverTemplate.replace('/0/', `/${idEntrega}/`);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        nueva_fecha: nuevaFecha
+                    })
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+
+                if (!contentType.includes('application/json')) {
+                    const txt = await response.text();
+                    console.error('Respuesta no JSON al mover:', txt);
+                    info.revert();
+                    mostrarMensaje('La vista devolvió un error interno.', 'error');
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    info.revert();
+                    mostrarMensaje(data.mensaje || 'No fue posible mover la entrega.', 'error');
+                    return;
+                }
+
+                mostrarMensaje(data.mensaje, 'success');
+                calendar.refetchEvents();
+            } catch (err) {
+                console.error('Error al mover entrega:', err);
+                info.revert();
+                mostrarMensaje('Error al mover la entrega.', 'error');
+            }
         }
     });
 
@@ -435,7 +572,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const idEntrega = this.getAttribute('data-identrega');
         if (!idEntrega) return;
 
-        const ok = confirm('¿Confirma que desea anular esta entrega?');
+        const ok = await confirmarAccion(
+            '¿Confirma que desea anular esta entrega?',
+            'Anular entrega',
+            'btn-danger'
+        );
         if (!ok) return;
 
         const url = urlAnularTemplate.replace('/0/', `/${idEntrega}/`);
@@ -452,15 +593,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
 
             if (!response.ok || !data.ok) {
-                alert(data.mensaje || 'No fue posible anular la entrega.');
+                mostrarMensaje(data.mensaje || 'No fue posible asignar la entrega.', 'error');
                 return;
             }
 
             modalEntrega.hide();
             calendar.refetchEvents();
-            alert(data.mensaje);
+            mostrarMensaje(data.mensaje, 'success');
         } catch (err) {
-            alert('Error al anular la entrega.');
+            mostrarMensaje('Error al anular la entrega.', 'error');
         }
     });
 
@@ -473,21 +614,21 @@ document.addEventListener('DOMContentLoaded', function () {
             btnAsignarDesarrolloConfirmar.setAttribute('data-identrega', idEntrega);
             modalAsignar.show();
         } catch (err) {
-            alert('No fue posible cargar los usuarios de desarrollo.');
+            mostrarMensaje('No fue posible cargar los usuarios de desarrollo.', 'error');
         }
     });
 
-   btnAsignarDesarrolloConfirmar.addEventListener('click', async function () {
+    btnAsignarDesarrolloConfirmar.addEventListener('click', async function () {
         const idEntrega = this.getAttribute('data-identrega');
         const rutUsuario = selUsuarioDesarrollo.value;
 
         if (!idEntrega) {
-            alert('No se encontró la entrega.');
+            mostrarMensaje('No se encontró la entrega.', 'error');
             return;
         }
 
         if (!rutUsuario) {
-            alert('Debes seleccionar un usuario.');
+            mostrarMensaje('Debes seleccionar un usuario.', 'warning');
             return;
         }
 
@@ -510,7 +651,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!contentType.includes('application/json')) {
                 const txt = await response.text();
                 console.error('Respuesta no JSON al asignar:', txt);
-                alert('La vista devolvió un error interno. Revisa consola/servidor.');
+                mostrarMensaje('La vista devolvió un error interno. Revisa consola/servidor.', 'error');
                 return;
             }
 
@@ -518,24 +659,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!response.ok || !data.ok) {
                 console.error('Error backend asignar:', data);
-                alert(data.mensaje || 'No fue posible asignar la entrega.');
+                mostrarMensaje('No fue posible asignar la entrega.', 'error');
                 return;
             }
 
             modalAsignar.hide();
             modalEntrega.hide();
             calendar.refetchEvents();
-            alert(data.mensaje);
+            mostrarMensaje(data.mensaje, 'success');
         } catch (err) {
             console.error('Catch asignar desarrollo:', err);
-            alert('Error al asignar la entrega a desarrollo.');
+            mostrarMensaje('Error al asignar la entrega a desarrollo.', 'error');
         }
     });
 
     btnGuardarNuevaEntrega.addEventListener('click', async function () {
         const payload = {
             fecha_calendario: nFechaCalendario.value,
-            idproyecto: nIdProyecto.value,
+            idproyecto: $('#n_idproyecto').val(),
             idtipoentrega: nIdTipoEntrega.value,
             idurgencia: nIdUrgencia.value,
             idtamano: nTamano.value,
@@ -557,15 +698,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
 
             if (!response.ok || !data.ok) {
-                alert(data.mensaje || 'No fue posible crear la entrega.');
+                mostrarMensaje(data.mensaje || 'No fue posible crear la entrega.', 'error');
                 return;
             }
 
             modalNuevaEntrega.hide();
             calendar.refetchEvents();
-            alert(data.mensaje);
+            mostrarMensaje(data.mensaje, 'success');
         } catch (err) {
-            alert('Error al crear la entrega.');
+            mostrarMensaje('Error al crear la entrega.', 'error');
         }
     });
 });

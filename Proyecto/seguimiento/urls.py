@@ -23,5 +23,14 @@ urlpatterns = [
     path('proyecto/calendario/usuarios-desarrollo/', views.usuarios_desarrollo_activos, name='usuarios_desarrollo_activos'),
     path('proyecto/calendario/entrega/<int:identrega>/anular/', views.anular_entrega, name='anular_entrega'),
     path('proyecto/calendario/entrega/<int:identrega>/asignar-desarrollo/', views.asignar_entrega_desarrollo, name='asignar_entrega_desarrollo'),
-
+    path(
+        'proyecto/calendario/entrega/<int:identrega>/mover/',
+        views.mover_entrega_calendario,
+        name='mover_entrega_calendario'
+    ),
+    path('proyecto/entregas-general/', views.entregas_general, name='entregas_general'),
+    path('proyecto/entregas-revision/', views.entregas_revision, name='entregas_revsion'),
+    
+    path('proyecto/entrega/<int:identrega>/visor/', views.visor_entrega, name='visor_entrega'),
+    
 ]

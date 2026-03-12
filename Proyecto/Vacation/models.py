@@ -45,7 +45,6 @@ class Persona(models.Model):
     def __str__(self):
         return str(self.user_per)
 
-
 class Registrovac(models.Model):
     user_vac = models.ForeignKey(Persona, on_delete=models.CASCADE,verbose_name="Usuario")
     fecini = models.DateField(verbose_name="Fecha inicio")

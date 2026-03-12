@@ -9,7 +9,7 @@ from django.http import HttpResponseNotAllowed
 from collections import defaultdict
 from datetime import date
 
-from django.db.models import Max, Prefetch
+from django.db.models import Max, Prefetch, F, OuterRef, Subquery, Count, IntegerField, CharField, Value
 from django.db import transaction
 from django.http import JsonResponse
 from django.utils.dateparse import parse_datetime
@@ -19,6 +19,9 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import User
+from django.db.models.functions import Coalesce
+
 
 
 def get_sql_conn() -> pyodbc.Connection:
@@ -448,6 +451,17 @@ def eventos_calendario_entregas(request):
     if end_local:
         qs = qs.filter(fechacalendario__lt=end_local)
 
+    usernames_desarrollo = {
+        e.rutuserdesa1
+        for e in qs
+        if e.rutuserdesa1
+    }
+
+    mapa_usuarios = {
+        u.username: (u.get_full_name().strip() or u.username)
+        for u in User.objects.filter(username__in=usernames_desarrollo)
+    }
+
     eventos = []
 
     for e in qs:
@@ -467,6 +481,8 @@ def eventos_calendario_entregas(request):
 
         hora_txt = e.fechacalendario.strftime('%H:%M') if e.fechacalendario else ''
         titulo = f"{hora_txt} {proyecto_codigo} - {proyecto_nombre}".strip()
+        
+        nombre_desarrollador = mapa_usuarios.get(e.rutuserdesa1, e.rutuserdesa1 or '')
 
         eventos.append({
             'id': e.identrega,
@@ -490,6 +506,7 @@ def eventos_calendario_entregas(request):
                 'estadoentrega_id': e.idestadoentrega_id,
                 'estadoentrega': e.idestadoentrega.descrip if e.idestadoentrega else '',
                 'tamano': e.idproyecto.idtamano.descripcion if e.idproyecto and e.idproyecto.idtamano else '',
+                'asignado_a': nombre_desarrollador,
             }
         })
 
@@ -741,3 +758,282 @@ def asignar_entrega_desarrollo(request, identrega):
         'ok': True,
         'mensaje': 'Entrega enviada a desarrollo correctamente.'
     })
+    
+@login_required
+@require_POST
+def mover_entrega_calendario(request, identrega):
+    rut_user = obtener_rut_usuario(request)
+    
+    if not rut_user:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'No fue posible determinar el usuario.'
+        }, status=400)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'Datos inválidos.'
+        }, status=400)
+
+    nueva_fecha = payload.get('nueva_fecha')
+    if not nueva_fecha:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'Falta la nueva fecha.'
+        }, status=400)
+
+    try:
+        fecha_nueva = datetime.strptime(nueva_fecha, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'Formato de fecha inválido.'
+        }, status=400)
+
+    with transaction.atomic():
+        entrega = get_object_or_404(
+            EntregaProyecto.objects.select_for_update(),
+            pk=identrega
+        )
+
+        if entrega.idestadoentrega_id == 5:
+            return JsonResponse({
+                'ok': False,
+                'mensaje': 'No se puede mover una entrega con estado 5.'
+            }, status=400)
+
+        if not entrega.fechacalendario:
+            return JsonResponse({
+                'ok': False,
+                'mensaje': 'La entrega no tiene fecha calendario.'
+            }, status=400)
+
+        fecha_actual = entrega.fechacalendario
+
+        # conserva hora/minuto/segundo, cambia solo el día
+        fecha_actualizada = fecha_actual.replace(
+            year=fecha_nueva.year,
+            month=fecha_nueva.month,
+            day=fecha_nueva.day
+        )
+
+        entrega.fechacalendario = fecha_actualizada
+        entrega.rutuserupdate = rut_user
+        entrega.fechaupdate = timezone.now()
+        entrega.save()
+
+    return JsonResponse({
+        'ok': True,
+        'mensaje': 'Fecha de calendario actualizada correctamente.'
+    })    
+    
+@login_required
+def entregas_general(request):
+    observaciones_qs = (
+        Entregaobservacion.objects
+        .filter(entrega_id=OuterRef('pk'), estado=1)
+        .values('entrega_id')
+        .annotate(total=Count('id'))
+        .values('total')[:1]
+    )
+
+    creador_qs = (
+        tusuario.objects
+        .filter(idusuario=OuterRef('rutusercreador'))
+        .values('nombreusuario')[:1]
+    )
+
+    entregas = (
+        EntregaProyecto.objects
+        .exclude(idestadoentrega_id=6)
+        .select_related(
+            'idproyecto',
+            'idproyecto__idcotizacion',
+            'idproyecto__idcliente',
+            'idproyecto__idtamano',
+            'idtipoentrega',
+            'idurgencia',
+            'idestadoentrega',
+        )
+        .annotate(
+            rut_cliente=F('idproyecto__idcliente__rut'),
+            fecha_adjudicacion=F('idproyecto__fechaadjudicacion'),
+            descripcion_urgencia=F('idurgencia__descrip'),
+            simbolo_urgencia=F('idurgencia__simbolo'),
+            nombre_usuario_creador=Subquery(
+                creador_qs,
+                output_field=CharField()
+            ),
+            nombre_proyecto=F('idproyecto__idcotizacion__nombreproyecto'),
+            descripcion_tipo_entrega=F('idtipoentrega__descripcion'),
+            descripcion_estado_entrega=F('idestadoentrega__descrip'),
+            estado_proyecto=F('idproyecto__estado'),
+            color_tipo_entrega=F('idtipoentrega__color'),
+            descripcion_tamanio_proyecto=F('idproyecto__idtamano__descripcion'),
+            fecha_asignacion=F('fechaasigdesa1'),
+            observaciones=Coalesce(
+                Subquery(observaciones_qs, output_field=IntegerField()),
+                Value(0)
+            ),
+        )
+        .order_by('-fechacalendario', '-identrega')
+    )
+
+    # Nombre desarrollador actual desde auth_user.username = rutuserdesa1
+    usernames = {
+        e.rutuserdesa1
+        for e in entregas
+        if e.rutuserdesa1
+    }
+
+    mapa_usuarios = {
+        u.username: (u.get_full_name().strip() or u.username)
+        for u in User.objects.filter(username__in=usernames)
+    }
+
+    for e in entregas:
+        e.nombre_desarrollador_actual = mapa_usuarios.get(
+            e.rutuserdesa1,
+            e.rutuserdesa1 or ''
+        )
+        e.nombre_usuario_creador = e.nombre_usuario_creador or e.rutusercreador or ''
+
+    context = {
+        'titulo': 'Entregas General',
+        'encabezado': 'Entregas General',
+        'submenu': 'Listado general de entregas',
+        'entregas': entregas,
+    }
+    return render(request, 'entregas_general.html', context)
+
+@login_required
+def visor_entrega(request, identrega):
+    entrega = get_object_or_404(
+        EntregaProyecto.objects.select_related(
+            'idproyecto',
+            'idproyecto__idcotizacion',
+            'idtipoentrega',
+        ),
+        pk=identrega
+    )
+
+    observaciones_qs = (
+        Entregaobservacion.objects
+        .filter(entrega_id=identrega, estado=1)
+        .select_related(
+            'observacion',
+            'observacion__tipoobservacion',
+            'observacion__calificacion',
+        )
+        .order_by('id')
+    )
+
+    data = {
+        'ok': True,
+        'identrega': entrega.identrega,
+        'idproyecto': str(entrega.idproyecto_id or ''),
+        'nombreproyecto': '',
+        'tipoentrega': '',
+        'fechaentrega': entrega.fechaentrega.strftime('%d-%m-%Y') if entrega.fechaentrega else '',
+        'observaciones': []
+    }
+
+    if entrega.idproyecto and entrega.idproyecto.idcotizacion:
+        data['nombreproyecto'] = entrega.idproyecto.idcotizacion.nombreproyecto or ''
+
+    if entrega.idtipoentrega:
+        data['tipoentrega'] = entrega.idtipoentrega.descripcion or ''
+
+    for eo in observaciones_qs:
+        obs = eo.observacion
+        data['observaciones'].append({
+            'nro': obs.id if obs else '',
+            'tipo': obs.tipoobservacion.nombre if obs and obs.tipoobservacion else '',
+            'descripcion': obs.nombre if obs else '',
+            'calificacion': obs.calificacion.nombre if obs and obs.calificacion else '',
+            'estado': 'CORREGIDA'
+        })
+
+    return JsonResponse(data)
+
+@login_required
+def entregas_revision(request):
+    observaciones_qs = (
+        Entregaobservacion.objects
+        .filter(entrega_id=OuterRef('pk'), estado=1)
+        .values('entrega_id')
+        .annotate(total=Count('id'))
+        .values('total')[:1]
+    )
+
+    creador_qs = (
+        tusuario.objects
+        .filter(idusuario=OuterRef('rutusercreador'))
+        .values('nombreusuario')[:1]
+    )
+
+    entregas = (
+        EntregaProyecto.objects
+        .filter(idestadoentrega_id__in=[3, 4])
+        .select_related(
+            'idproyecto',
+            'idproyecto__idcotizacion',
+            'idproyecto__idcliente',
+            'idproyecto__idtamano',
+            'idtipoentrega',
+            'idurgencia',
+            'idestadoentrega',
+        )
+        .annotate(
+            rut_cliente=F('idproyecto__idcliente__rut'),
+            fecha_adjudicacion=F('idproyecto__fechaadjudicacion'),
+            descripcion_urgencia=F('idurgencia__descrip'),
+            simbolo_urgencia=F('idurgencia__simbolo'),
+            nombre_usuario_creador=Subquery(
+                creador_qs,
+                output_field=CharField()
+            ),
+            nombre_proyecto=F('idproyecto__idcotizacion__nombreproyecto'),
+            descripcion_tipo_entrega=F('idtipoentrega__descripcion'),
+            descripcion_estado_entrega=F('idestadoentrega__descrip'),
+            estado_proyecto=F('idproyecto__estado'),
+            color_tipo_entrega=F('idtipoentrega__color'),
+            descripcion_tamanio_proyecto=F('idproyecto__idtamano__descripcion'),
+            fecha_asignacion=F('fechaasigdesa1'),
+            observaciones=Coalesce(
+                Subquery(observaciones_qs, output_field=IntegerField()),
+                Value(0)
+            ),
+        )
+        .order_by('-fechacalendario', '-identrega')
+    )
+
+    # Nombre desarrollador actual desde auth_user.username = rutuserdesa1
+    usernames = {
+        e.rutuserdesa1
+        for e in entregas
+        if e.rutuserdesa1
+    }
+
+    mapa_usuarios = {
+        u.username: (u.get_full_name().strip() or u.username)
+        for u in User.objects.filter(username__in=usernames)
+    }
+
+    for e in entregas:
+        e.nombre_desarrollador_actual = mapa_usuarios.get(
+            e.rutuserdesa1,
+            e.rutuserdesa1 or ''
+        )
+        e.nombre_usuario_creador = e.nombre_usuario_creador or e.rutusercreador or ''
+
+    context = {
+        'titulo': 'Entregas Revisión',
+        'encabezado': 'Entregas en Revisión',
+        'submenu': 'Listado entregas en revisión',
+        'entregas': entregas,
+    }
+    return render(request, 'entregas_revision.html', context)

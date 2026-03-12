@@ -48,8 +48,6 @@ class DetalleVacaciones(DetailView):
         }
         return render(request, self.template_name, contexto)
 
-
-
 def Registrovacaciones(request):
     form = UserForm
     mydict = {
@@ -64,16 +62,4 @@ def Registrovacaciones(request):
         mydict["form"] = formulario
     return render(request,'vacaciones.html', context=mydict)
 
-    # data = {
-    #     'form': UserForm()
-    # }
 
-    # if request.method == 'POST':
-    #     formulario = UserForm(data=request.POST)
-    #     if formulario.is_valid():
-    #         formulario.save()
-    #         # messages.success(request,'Usuario creado exitosamente!')
-    #         return redirect(to="personal")
-    #     data["form"] = formulario
-
-    # return render(request, 'vacaciones.html', data)
