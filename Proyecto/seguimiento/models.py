@@ -525,3 +525,27 @@ class Entregaobservacion(models.Model):
         managed = False
         db_table = '[ducto].[Entrega_Observacion]'
     
+class Tipoevento(models.Model):
+    idtipoevento = models.AutoField(db_column='IdTipoEvento', primary_key=True)
+    nombre = models.CharField(db_column='Evento', max_length=50, null=True, blank=True)
+    
+    class Meta:
+        managed = False
+        db_table = '[ducto].[T_TipoEvento]'
+        
+class Entregaevento(models.Model):
+    identregaevento = models.AutoField(db_column='IdEntregaEvento', primary_key=True)
+    entrega = models.ForeignKey(EntregaProyecto, db_column='IdEntrega', on_delete=models.DO_NOTHING,
+                                null=True,
+                                blank=True,
+                                db_constraint=False)
+    tipoevento = models.ForeignKey(Tipoevento, db_column='IdTipoEvento', on_delete=models.DO_NOTHING,
+                                   null=True,
+                                   blank=True)
+    rutorigen = models.CharField(db_column='RutOrigen', max_length=12, null=True, blank=True)
+    rutdestino = models.CharField(db_column='RutDestino', max_length=12, null=True, blank=True)
+    fechahora = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        managed = False
+        db_table = '[ducto].[EntregaEvento]'

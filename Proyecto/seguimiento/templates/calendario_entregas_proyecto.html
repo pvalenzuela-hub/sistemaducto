@@ -464,17 +464,21 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('m_tamano').value = p.tamano || '';
 
             const badge = document.getElementById('badgeEstadoEntrega');
-            if (p.estadoentrega_id === 2 && p.asignado_a) {
-                badge.textContent = `${p.estadoentrega} - Asignado a: ${p.asignado_a}`;
+            const estadoId = parseInt(p.estadoentrega_id || 0, 10);
+            const estadoTexto = (p.estadoentrega || '').trim();
+            const asignadoA = (p.asignado_a || '').trim();
+
+            if ([2, 3, 4].includes(estadoId) && asignadoA) {
+                badge.textContent = `${estadoTexto} - Asignado a: ${asignadoA}`;
             } else {
-                badge.textContent = p.estadoentrega || '';
+                badge.textContent = estadoTexto;
             }
 
-            if (p.estadoentrega_id === 1) {
+            if (estadoId === 1) {
                 badge.className = 'badge bg-success ms-2';
-            } else if (p.estadoentrega_id === 5) {
+            } else if (estadoId === 5) {
                 badge.className = 'badge bg-secondary ms-2';
-            } else if (p.estadoentrega_id === 6) {
+            } else if (estadoId === 6) {
                 badge.className = 'badge bg-danger ms-2';
             } else {
                 badge.className = 'badge bg-info ms-2';
@@ -483,7 +487,7 @@ document.addEventListener('DOMContentLoaded', function () {
             btnEnviarDesarrollo.setAttribute('data-identrega', p.identrega || '');
             btnAnularEntrega.setAttribute('data-identrega', p.identrega || '');
 
-            if (p.estadoentrega_id === 1) {
+            if (estadoId === 1) {
                 btnEnviarDesarrollo.style.display = 'inline-block';
                 btnAnularEntrega.style.display = 'inline-block';
                 btnEnviarDesarrollo.disabled = false;

@@ -6,17 +6,17 @@
 
 {% block extra_css %}
 <style>
-    #tabla-entregas-general {
+    #tabla-entregas-desarrollo {
         font-size: 0.70rem;
     }
 
-    #tabla-entregas-general thead th {
+    #tabla-entregas-desarrollo thead th {
         font-size: 0.65rem;
         vertical-align: middle;
 
     }
 
-    #tabla-entregas-general tbody td {
+    #tabla-entregas-desarrollo tbody td {
         padding: 0.35rem 0.45rem;
         vertical-align: middle;
     }
@@ -28,33 +28,43 @@
         font-size: 0.74rem;
     }
 
-    #tabla-visor-entrega {
+    #modalVisorEntregaDesarrollo .form-label,
+    #modalAsignarRevision .form-label {
+        font-size: 0.95rem;
+    }
+
+    #tabla-visor-entrega-desarrollo {
         font-size: 0.86rem;
     }
 
-    #tabla-visor-entrega thead th {
+    #tabla-visor-entrega-desarrollo thead th {
         white-space: nowrap;
         vertical-align: middle;
     }
 
-    #tabla-visor-entrega tbody td {
+    #tabla-visor-entrega-desarrollo tbody td {
         vertical-align: middle;
     }
 
-    .modal-asignar-desarrollo-general {
+    .btn-accion-modal {
+        min-width: 315px;
+    }
+
+    .modal-footer-left {
+        justify-content: flex-start !important;
+    }
+
+    .modal-xl-custom {
+        max-width: 1120px;
+    }
+
+    .modal-asignar-revision {
         max-width: 460px;
     }
 
-    .acciones-entrega .acciones-wrap {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        flex-wrap: nowrap;
-    }
-    
-    .acciones-entrega .btn-ver-entrega {
-    min-width: 48px;
+    #btnConfirmarAsignarRevision,
+    #btnCerrarAsignarRevision {
+        min-width: 110px;
     }
 </style>
 {% endblock %}
@@ -71,7 +81,7 @@
 
             <div class="card-body">
                 <div class="table-responsive">
-                    <table id="tabla-entregas-general" class="table table-bordered table-striped align-middle w-100">
+                    <table id="tabla-entregas-desarrollo" class="table table-bordered table-striped align-middle w-100">
                         <thead>
                             <tr>
                                 <th>Símbolo</th>
@@ -85,7 +95,7 @@
                                 <th>Hora Entrega Cliente</th>
                                 <th>Observaciones</th>
                                 <th>Estado Entrega</th>
-                                <th>Acciones</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -106,22 +116,12 @@
                                 <td class="text-center">{{ e.horaentrega|default:"" }}</td>
                                 <td class="text-end">{{ e.observaciones|default:0 }}</td>
                                 <td>{{ e.descripcion_estado_entrega|default:"" }}</td>
-                                <td class="text-center acciones-entrega">
-                                    <div class="acciones-wrap">
-                                        {% if e.idestadoentrega_id == 1 %}
-                                            <button type="button"
-                                                    class="btn btn-primary btn-sm btn-enviar-desarrollo"
-                                                    data-identrega="{{ e.identrega }}">
-                                                Enviar a desarrollo
-                                            </button>
-                                        {% endif %}
-
-                                        <button type="button"
-                                                class="btn btn-primary btn-sm btn-ver-entrega"
-                                                data-identrega="{{ e.identrega }}">
-                                            Ver
-                                        </button>
-                                    </div>
+                                <td class="text-center">
+                                    <button type="button"
+                                            class="btn btn-primary btn-sm btn-ver-entrega"
+                                            data-identrega="{{ e.identrega }}">
+                                        Detalle
+                                    </button>
                                 </td>
                             </tr>
                             {% empty %}
@@ -138,11 +138,12 @@
 </div>
 
 
-<div class="modal fade" id="modalVisorEntrega" tabindex="-1" aria-labelledby="modalVisorEntregaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
+<!-- Modal visor detalle -->
+<div class="modal fade" id="modalVisorEntregaDesarrollo" tabindex="-1" aria-labelledby="modalVisorEntregaDesarrolloLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-xl-custom">
         <div class="modal-content">
             <div class="modal-header border-0 pb-0">
-                <h4 class="modal-title fw-bold" id="modalVisorEntregaLabel">Visor Entrega</h4>
+                <h4 class="modal-title fw-bold" id="modalVisorEntregaDesarrolloLabel">Visor Entregas en desarrollo</h4>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
 
@@ -170,34 +171,37 @@
                 </div>
 
                 <div class="table-responsive">
-                    <table id="tabla-visor-entrega" class="table table-bordered table-striped align-middle w-100">
+                    <table id="tabla-visor-entrega-desarrollo" class="table table-bordered table-striped align-middle w-100">
                         <thead>
                             <tr>
-                                <th>Nro</th>
-                                <th>Tipo</th>
-                                <th>Descripción</th>
-                                <th>Calificación</th>
-                                <th>Estado</th>
+                                <th>NRO</th>
+                                <th>TIPO</th>
+                                <th>DESCRIPCIÓN</th>
+                                <th>CALIFICACIÓN</th>
+                                <th>ESTADO</th>
                             </tr>
                         </thead>
-                        <tbody id="visor-entrega-body"></tbody>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
 
-            <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            <div class="modal-footer border-0 pt-3 modal-footer-left">
+                <button type="button" id="btnAbrirAsignarRevision" class="btn btn-primary btn-accion-modal">
+                    ENVIAR A REVISIÓN
+                </button>
             </div>
         </div>
     </div>
 </div>
 
 
-<div class="modal fade" id="modalAsignarDesarrolloGeneral" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-asignar-desarrollo-general">
+<!-- Modal asignar revisión -->
+<div class="modal fade" id="modalAsignarRevision" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-asignar-revision">
         <div class="modal-content">
             <div class="modal-header border-0 pb-0 justify-content-center position-relative">
-                <h4 class="modal-title fw-bold text-center w-100">Asignar entrega a desarrollo</h4>
+                <h4 class="modal-title fw-bold text-center w-100">Asignar entrega a revisión</h4>
                 <button type="button"
                         class="btn-close position-absolute end-0 me-3"
                         data-bs-dismiss="modal"
@@ -205,16 +209,16 @@
             </div>
 
             <div class="modal-body pt-3 px-4">
-                <select id="selUsuarioDesarrolloGeneral" class="form-select">
+                <select id="selUsuarioRevision" class="form-select">
                     <option value="">Selecciona un usuario</option>
                 </select>
             </div>
 
             <div class="modal-footer border-0 pt-2 justify-content-center gap-2">
-                <button type="button" id="btnConfirmarAsignarDesarrolloGeneral" class="btn btn-primary">
+                <button type="button" id="btnConfirmarAsignarRevision" class="btn btn-primary">
                     Asignar
                 </button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <button type="button" id="btnCerrarAsignarRevision" class="btn btn-secondary" data-bs-dismiss="modal">
                     Cerrar
                 </button>
             </div>
@@ -226,16 +230,14 @@
 {% block extra_js %}
 <script>
     $(document).ready(function () {
-        const modalEl = document.getElementById('modalVisorEntrega');
-        const modalVisorEntrega = modalEl ? new bootstrap.Modal(modalEl) : null;
+        const modalDetalleEl = document.getElementById('modalVisorEntregaDesarrollo');
+        const modalAsignarRevisionEl = document.getElementById('modalAsignarRevision');
 
-        const modalAsignarDesarrolloEl = document.getElementById('modalAsignarDesarrolloGeneral');
-        const modalAsignarDesarrollo = modalAsignarDesarrolloEl
-            ? new bootstrap.Modal(modalAsignarDesarrolloEl)
-            : null;
+        const modalVisorEntregaDesarrollo = modalDetalleEl ? new bootstrap.Modal(modalDetalleEl) : null;
+        const modalAsignarRevision = modalAsignarRevisionEl ? new bootstrap.Modal(modalAsignarRevisionEl) : null;
 
+        let identregaActual = null;
         let tablaVisor = null;
-        let identregaAsignar = null;
 
         function notificar(msg, tipo = 'info') {
             if (typeof mostrarMensaje === 'function') {
@@ -266,11 +268,11 @@
 
         const csrftoken = getCookie('csrftoken');
 
-        if ($.fn.DataTable.isDataTable('#tabla-entregas-general')) {
-            $('#tabla-entregas-general').DataTable().destroy();
+        if ($.fn.DataTable.isDataTable('#tabla-entregas-desarrollo')) {
+            $('#tabla-entregas-desarrollo').DataTable().destroy();
         }
 
-        $('#tabla-entregas-general').DataTable({
+        $('#tabla-entregas-desarrollo').DataTable({
             pageLength: 10,
             order: [[5, 'desc']],
             language: {
@@ -301,7 +303,7 @@
                 return tablaVisor;
             }
 
-            tablaVisor = $('#tabla-visor-entrega').DataTable({
+            tablaVisor = $('#tabla-visor-entrega-desarrollo').DataTable({
                 pageLength: 10,
                 order: [[0, 'asc']],
                 destroy: true,
@@ -327,8 +329,62 @@
             return tablaVisor;
         }
 
-        async function cargarUsuariosDesarrolloActivos() {
-            const url = "{% url 'usuarios_desarrollo_activos' %}";
+        async function cargarDetalleEntrega(idEntrega) {
+            const url = "{% url 'visor_entrega' 0 %}".replace('/0/', `/${idEntrega}/`);
+
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            const contentType = response.headers.get('content-type') || '';
+
+            if (!response.ok) {
+                const txt = await response.text();
+                console.error('Error HTTP visor_entrega:', response.status, txt);
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            if (!contentType.includes('application/json')) {
+                const txt = await response.text();
+                console.error('La vista no devolvió JSON:', txt);
+                throw new Error('La vista no devolvió JSON');
+            }
+
+            const data = await response.json();
+
+            identregaActual = data.identrega || idEntrega;
+
+            $('#v_idproyecto').val(data.idproyecto || '');
+            $('#v_nombreproyecto').val(data.nombreproyecto || '');
+            $('#v_tipoentrega').val(data.tipoentrega || '');
+            $('#v_fechaentrega').val(data.fechaentrega || '');
+
+            const tabla = obtenerTablaVisor();
+            tabla.clear();
+
+            if (data.observaciones && data.observaciones.length > 0) {
+                const filas = data.observaciones.map(o => [
+                    o.nro ?? '',
+                    o.tipo ?? '',
+                    o.descripcion ?? '',
+                    o.calificacion ?? '',
+                    o.estado ?? ''
+                ]);
+
+                tabla.rows.add(filas);
+            }
+
+            tabla.draw();
+
+            const estadoEntregaId = parseInt(data.estadoentrega_id || 0, 10);
+            $('#btnAbrirAsignarRevision').toggle([2, 3].includes(estadoEntregaId));
+        }
+
+        async function cargarUsuariosRevisionActivos() {
+            const url = "{% url 'usuarios_revision_activos' %}";
+
             const response = await fetch(url, {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest'
@@ -337,119 +393,75 @@
 
             if (!response.ok) {
                 const txt = await response.text();
-                console.error('Error usuarios_desarrollo_activos:', response.status, txt);
+                console.error('Error usuarios_revision_activos:', response.status, txt);
                 throw new Error(`HTTP ${response.status}`);
             }
 
-            const usuarios = await response.json();
-            const $sel = $('#selUsuarioDesarrolloGeneral');
+            const data = await response.json();
+            const $sel = $('#selUsuarioRevision');
 
             $sel.empty();
             $sel.append('<option value="">Selecciona un usuario</option>');
 
-            usuarios.forEach(function (u) {
-                $sel.append(`<option value="${u.rut}">${u.nombrecompleto}</option>`);
-            });
+            if (data.usuarios && data.usuarios.length > 0) {
+                data.usuarios.forEach(function (u) {
+                    $sel.append(`<option value="${u.rut}">${u.nombrecompleto}</option>`);
+                });
+            }
         }
 
         $(document).on('click', '.btn-ver-entrega', async function () {
             const idEntrega = $(this).data('identrega');
-            const url = "{% url 'visor_entrega' 0 %}".replace('/0/', `/${idEntrega}/`);
 
             try {
-                const response = await fetch(url, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
+                await cargarDetalleEntrega(idEntrega);
 
-                const contentType = response.headers.get('content-type') || '';
-
-                if (!response.ok) {
-                    const txt = await response.text();
-                    console.error('Error HTTP visor_entrega:', response.status, txt);
-                    throw new Error(`HTTP ${response.status}`);
+                if (!modalVisorEntregaDesarrollo) {
+                    throw new Error('No existe el modal #modalVisorEntregaDesarrollo.');
                 }
 
-                if (!contentType.includes('application/json')) {
-                    const txt = await response.text();
-                    console.error('La vista no devolvió JSON:', txt);
-                    throw new Error('La vista no devolvió JSON');
-                }
-
-                const data = await response.json();
-
-                document.getElementById('v_idproyecto').value = data.idproyecto || '';
-                document.getElementById('v_nombreproyecto').value = data.nombreproyecto || '';
-                document.getElementById('v_tipoentrega').value = data.tipoentrega || '';
-                document.getElementById('v_fechaentrega').value = data.fechaentrega || '';
-
-                const tabla = obtenerTablaVisor();
-                tabla.clear();
-
-                if (data.observaciones && data.observaciones.length > 0) {
-                    const filas = data.observaciones.map(o => [
-                        o.nro ?? '',
-                        o.tipo ?? '',
-                        o.descripcion ?? '',
-                        o.calificacion ?? '',
-                        `<span class="text-success fw-semibold">${o.estado ?? ''}</span>`
-                    ]);
-
-                    tabla.rows.add(filas);
-                }
-
-                tabla.draw();
-
-                if (!modalVisorEntrega) {
-                    throw new Error('No existe el modal #modalVisorEntrega.');
-                }
-
-                modalVisorEntrega.show();
-
+                modalVisorEntregaDesarrollo.show();
             } catch (error) {
-                console.error('Error visor_entrega:', error);
-                notificar('No fue posible cargar el visor de la entrega.', 'error');
+                console.error('Error cargarDetalleEntrega:', error);
+                notificar('No fue posible cargar el detalle de la entrega.', 'error');
             }
         });
 
-        $(document).on('click', '.btn-enviar-desarrollo', async function () {
-            identregaAsignar = $(this).data('identrega');
-
-            if (!identregaAsignar) {
-                notificar('No se encontró la entrega.', 'error');
+        $('#btnAbrirAsignarRevision').on('click', async function () {
+            if (!identregaActual) {
+                notificar('No hay una entrega seleccionada.', 'error');
                 return;
             }
 
             try {
-                $('#selUsuarioDesarrolloGeneral').val('');
-                await cargarUsuariosDesarrolloActivos();
+                $('#selUsuarioRevision').val('');
+                await cargarUsuariosRevisionActivos();
 
-                if (!modalAsignarDesarrollo) {
-                    throw new Error('No existe el modal #modalAsignarDesarrolloGeneral.');
+                if (!modalAsignarRevision) {
+                    throw new Error('No existe el modal #modalAsignarRevision.');
                 }
 
-                modalAsignarDesarrollo.show();
+                modalAsignarRevision.show();
             } catch (error) {
-                console.error('Error cargarUsuariosDesarrolloActivos:', error);
-                notificar('No fue posible cargar la lista de usuarios de desarrollo.', 'error');
+                console.error('Error cargarUsuariosRevisionActivos:', error);
+                notificar('No fue posible cargar la lista de usuarios activos.', 'error');
             }
         });
 
-        $('#btnConfirmarAsignarDesarrolloGeneral').on('click', async function () {
-            if (!identregaAsignar) {
-                notificar('No se encontró la entrega.', 'error');
+        $('#btnConfirmarAsignarRevision').on('click', async function () {
+            if (!identregaActual) {
+                notificar('No hay una entrega seleccionada.', 'error');
                 return;
             }
 
-            const rutUsuario = $('#selUsuarioDesarrolloGeneral').val();
+            const rutUsuario = $('#selUsuarioRevision').val();
 
             if (!rutUsuario) {
                 notificar('Debes seleccionar un usuario.', 'warning');
                 return;
             }
 
-            const url = "{% url 'asignar_entrega_desarrollo' 0 %}".replace('/0/', `/${identregaAsignar}/`);
+            const url = "{% url 'enviar_entrega_revision' 0 %}".replace('/0/', `/${identregaActual}/`);
 
             try {
                 const response = await fetch(url, {
@@ -470,18 +482,19 @@
                     throw new Error(data.mensaje || 'No fue posible asignar la entrega.');
                 }
 
-                modalAsignarDesarrollo.hide();
+                modalAsignarRevision.hide();
+                modalVisorEntregaDesarrollo.hide();
                 notificar(data.mensaje, 'success');
                 location.reload();
 
             } catch (error) {
-                console.error('Error asignar_entrega_desarrollo:', error);
-                notificar(error.message || 'No fue posible enviar la entrega a desarrollo.', 'error');
+                console.error('Error enviar_entrega_revision:', error);
+                notificar(error.message || 'No fue posible enviar la entrega a revisión.', 'error');
             }
         });
 
-        if (modalEl) {
-            modalEl.addEventListener('shown.bs.modal', function () {
+        if (modalDetalleEl) {
+            modalDetalleEl.addEventListener('shown.bs.modal', function () {
                 if (tablaVisor) {
                     tablaVisor.columns.adjust().draw(false);
                 }

@@ -7,12 +7,13 @@
 {% block extra_css %}
 <style>
     #tabla-entregas-revision {
-        font-size: 0.65rem;
+        font-size: 0.70rem;
     }
 
     #tabla-entregas-revision thead th {
-        font-size: 0.60rem;
+        font-size: 0.65rem;
         vertical-align: middle;
+        
     }
 
     #tabla-entregas-revision tbody td {
@@ -25,6 +26,51 @@
     div.dataTables_wrapper div.dataTables_info,
     div.dataTables_wrapper div.dataTables_paginate {
         font-size: 0.74rem;
+    }
+
+    #modalVisorEntrega .form-label,
+    #modalSeleccionarObservacion .form-label,
+    #modalNuevaObservacion .form-label {
+        font-size: 0.95rem;
+    }
+
+    #tabla-visor-observaciones,
+    #tabla-visor-eventos,
+    #tabla-catalogo-observaciones {
+        font-size: 0.86rem;
+    }
+
+    #tabla-visor-observaciones thead th,
+    #tabla-visor-eventos thead th,
+    #tabla-catalogo-observaciones thead th {
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    #tabla-visor-observaciones tbody td,
+    #tabla-visor-eventos tbody td,
+    #tabla-catalogo-observaciones tbody td {
+        vertical-align: middle;
+    }
+
+    .btn-accion-modal {
+        min-width: 260px;
+    }
+
+    .btn-seleccionar-observacion {
+        min-width: 90px;
+    }
+
+    .modal-xl-custom {
+        max-width: 1240px;
+    }
+
+    .modal-observacion-catalogo {
+        max-width: 1040px;
+    }
+
+    .modal-nueva-observacion {
+        max-width: 560px;
     }
 </style>
 {% endblock %}
@@ -55,7 +101,7 @@
                                 <th>Hora Entrega Cliente</th>
                                 <th>Observaciones</th>
                                 <th>Estado Entrega</th>
-                                <th>Ver</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -80,7 +126,7 @@
                                     <button type="button"
                                             class="btn btn-primary btn-sm btn-ver-entrega"
                                             data-identrega="{{ e.identrega }}">
-                                        Ver
+                                        Detalle
                                     </button>
                                 </td>
                             </tr>
@@ -97,11 +143,13 @@
     </div>
 </div>
 
+
+<!-- Modal principal -->
 <div class="modal fade" id="modalVisorEntrega" tabindex="-1" aria-labelledby="modalVisorEntregaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-xl-custom">
         <div class="modal-content">
             <div class="modal-header border-0 pb-0">
-                <h4 class="modal-title fw-bold" id="modalVisorEntregaLabel">Visor Entrega</h4>
+                <h4 class="modal-title fw-bold" id="modalVisorEntregaLabel">Visor Entregas en Revisión</h4>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
 
@@ -128,8 +176,15 @@
                     </div>
                 </div>
 
-                <div class="table-responsive">
-                    <table id="tabla-visor-entrega" class="table table-bordered table-striped align-middle w-100">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold d-block">Observaciones</label>
+                    <button type="button" id="btnBuscarObservacion" class="btn btn-primary">
+                        Buscar Observación
+                    </button>
+                </div>
+
+                <div class="table-responsive mb-5">
+                    <table id="tabla-visor-observaciones" class="table table-bordered table-striped align-middle w-100">
                         <thead>
                             <tr>
                                 <th>Nro</th>
@@ -139,14 +194,134 @@
                                 <th>Estado</th>
                             </tr>
                         </thead>
-                        <tbody id="visor-entrega-body">
-                        </tbody>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label fw-semibold d-block">Eventos entrega</label>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="tabla-visor-eventos" class="table table-bordered table-striped align-middle w-100">
+                        <thead>
+                            <tr>
+                                <th>Evento</th>
+                                <th>Origen</th>
+                                <th>Destino</th>
+                                <th>Fecha Entrega Evento</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
 
-            <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            <div class="modal-footer border-0 pt-0 justify-content-end gap-2">
+                <button type="button" id="btnEnviarADesarrollo" class="btn btn-primary btn-accion-modal">
+                    ENVIAR A DESARROLLO
+                </button>
+                <button type="button" id="btnEntregaOk" class="btn btn-primary btn-accion-modal">
+                    ENTREGA OK
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal catálogo observaciones -->
+<div class="modal fade" id="modalSeleccionarObservacion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-observacion-catalogo">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h4 class="modal-title fw-bold">Seleccionar observación</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body pt-4">
+                <div class="table-responsive">
+                    <table id="tabla-catalogo-observaciones" class="table table-bordered table-striped align-middle w-100">
+                        <thead>
+                            <tr>
+                                <th>Tipo observación</th>
+                                <th>Descripción</th>
+                                <th>Calificación</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0">
+                <button type="button" id="btnAbrirNuevaObservacion" class="btn btn-primary btn-accion-modal">+</button>
+                <button type="button" class="btn btn-primary btn-accion-modal" data-bs-dismiss="modal">CERRAR</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal nueva observación -->
+<div class="modal fade" id="modalNuevaObservacion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-nueva-observacion">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h4 class="modal-title fw-bold">Nueva observación</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body pt-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tipo</label>
+                        <select id="nueva_obs_tipo" class="form-select">
+                            <option value="">Seleccione...</option>
+                            {% for t in tipos_observacion %}
+                                <option value="{{ t.id }}">{{ t.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Calificación</label>
+                        <select id="nueva_obs_calificacion" class="form-select">
+                            <option value="">Seleccione...</option>
+                            {% for c in calificaciones %}
+                                <option value="{{ c.id }}">{{ c.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Descripción</label>
+                        <input type="text" id="nueva_obs_descripcion" class="form-control">
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0">
+                <button type="button" id="btnCrearNuevaObservacion" class="btn btn-primary btn-accion-modal">CREAR</button>
+                <button type="button" id="btnCerrarNuevaObservacion" class="btn btn-primary btn-accion-modal">CERRAR</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="modalConfirmacionAccion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h4 class="modal-title fw-bold" id="modalConfirmacionTitulo">Confirmar acción</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body pt-3">
+                <p id="modalConfirmacionMensaje" class="mb-0"></p>
+            </div>
+
+            <div class="modal-footer border-0 pt-2">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btnConfirmarAccionModal" class="btn btn-primary">Aceptar</button>
             </div>
         </div>
     </div>
@@ -156,8 +331,83 @@
 {% block extra_js %}
 <script>
     $(document).ready(function () {
-        const modalEl = document.getElementById('modalVisorEntrega');
-        const modalVisorEntrega = modalEl ? new bootstrap.Modal(modalEl) : null;
+        const modalEntregaEl = document.getElementById('modalVisorEntrega');
+        const modalObsEl = document.getElementById('modalSeleccionarObservacion');
+        const modalNuevaObsEl = document.getElementById('modalNuevaObservacion');
+
+        const modalVisorEntrega = modalEntregaEl ? new bootstrap.Modal(modalEntregaEl) : null;
+        const modalSeleccionarObservacion = modalObsEl ? new bootstrap.Modal(modalObsEl) : null;
+        const modalNuevaObservacion = modalNuevaObsEl ? new bootstrap.Modal(modalNuevaObsEl) : null;
+
+        const modalConfirmacionEl = document.getElementById('modalConfirmacionAccion');
+        const modalConfirmacion = modalConfirmacionEl ? new bootstrap.Modal(modalConfirmacionEl) : null;
+
+        let identregaActual = null;
+        let tablaVisorObs = null;
+        let tablaVisorEventos = null;
+        let tablaCatalogoObs = null;
+        let volverAModalCatalogo = false;
+
+        function confirmarAccionPersonalizada(titulo, mensaje) {
+            return new Promise((resolve) => {
+                $('#modalConfirmacionTitulo').text(titulo);
+                $('#modalConfirmacionMensaje').text(mensaje);
+
+                const $btn = $('#btnConfirmarAccionModal');
+
+                function limpiar() {
+                    $btn.off('click', onAceptar);
+                    $(modalConfirmacionEl).off('hidden.bs.modal', onCerrar);
+                }
+
+                function onAceptar() {
+                    limpiar();
+                    modalConfirmacion.hide();
+                    resolve(true);
+                }
+
+                function onCerrar() {
+                    limpiar();
+                    resolve(false);
+                }
+
+                $btn.on('click', onAceptar);
+                $(modalConfirmacionEl).on('hidden.bs.modal', onCerrar);
+
+                modalConfirmacion.show();
+            });
+        }
+
+
+
+        function notificar(msg, tipo = 'info') {
+            if (typeof mostrarMensaje === 'function') {
+                mostrarMensaje(msg, tipo);
+            } else {
+                alert(msg);
+            }
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+
+            return cookieValue;
+        }
+
+        const csrftoken = getCookie('csrftoken');
 
         if ($.fn.DataTable.isDataTable('#tabla-entregas-revision')) {
             $('#tabla-entregas-revision').DataTable().destroy();
@@ -189,99 +439,389 @@
             ]
         });
 
-        let tablaVisor = null;
+        function obtenerTablaVisorObs() {
+            if (tablaVisorObs) return tablaVisorObs;
 
-        function obtenerTablaVisor() {
-            if (tablaVisor) {
-                return tablaVisor;
-            }
-
-            tablaVisor = $('#tabla-visor-entrega').DataTable({
+            tablaVisorObs = $('#tabla-visor-observaciones').DataTable({
                 pageLength: 10,
-                order: [[0, 'asc']],
                 destroy: true,
+                order: [[0, 'asc']],
                 language: {
                     search: "Buscar:",
                     infoEmpty: "Mostrando 0 a 0 de 0 registros",
                     info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
                     infoFiltered: "(filtrado de _MAX_ registros totales)",
                     lengthMenu: "Mostrar _MENU_ registros",
-                    loadingRecords: "Cargando...",
-                    processing: "Procesando...",
                     zeroRecords: "No se encontraron resultados",
-                    emptyTable: "No hay observaciones disponibles",
+                    emptyTable: "Ningún dato disponible en esta tabla",
                     paginate: {
-                        first: "Primero",
-                        last: "Último",
                         next: "Siguiente",
                         previous: "Anterior"
                     }
                 }
             });
 
-            return tablaVisor;
+            return tablaVisorObs;
+        }
+
+        function obtenerTablaVisorEventos() {
+            if (tablaVisorEventos) return tablaVisorEventos;
+
+            tablaVisorEventos = $('#tabla-visor-eventos').DataTable({
+                pageLength: 10,
+                destroy: true,
+                order: [[3, 'asc']],
+                language: {
+                    search: "Buscar:",
+                    infoEmpty: "Mostrando 0 a 0 de 0 registros",
+                    info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+                    infoFiltered: "(filtrado de _MAX_ registros totales)",
+                    lengthMenu: "Mostrar _MENU_ registros",
+                    zeroRecords: "No se encontraron resultados",
+                    emptyTable: "Ningún dato disponible en esta tabla",
+                    paginate: {
+                        next: "Siguiente",
+                        previous: "Anterior"
+                    }
+                }
+            });
+
+            return tablaVisorEventos;
+        }
+
+        function obtenerTablaCatalogoObs() {
+            if (tablaCatalogoObs) return tablaCatalogoObs;
+
+            tablaCatalogoObs = $('#tabla-catalogo-observaciones').DataTable({
+                pageLength: 10,
+                destroy: true,
+                order: [[0, 'asc']],
+                language: {
+                    search: "Buscar:",
+                    infoEmpty: "Mostrando 0 a 0 de 0 registros",
+                    info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+                    infoFiltered: "(filtrado de _MAX_ registros totales)",
+                    lengthMenu: "Mostrar _MENU_ registros",
+                    zeroRecords: "No se encontraron resultados",
+                    emptyTable: "Ningún dato disponible en esta tabla",
+                    paginate: {
+                        next: "Siguiente",
+                        previous: "Anterior"
+                    }
+                },
+                columnDefs: [
+                    { className: "text-center", targets: [3] }
+                ]
+            });
+
+            return tablaCatalogoObs;
+        }
+
+        async function cargarDetalleEntrega(idEntrega) {
+            const url = "{% url 'visor_entrega' 0 %}".replace('/0/', `/${idEntrega}/`);
+
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            identregaActual = data.identrega;
+
+            $('#v_idproyecto').val(data.idproyecto || '');
+            $('#v_nombreproyecto').val(data.nombreproyecto || '');
+            $('#v_tipoentrega').val(data.tipoentrega || '');
+            $('#v_fechaentrega').val(data.fechaentrega || '');
+
+            const tablaObs = obtenerTablaVisorObs();
+            tablaObs.clear();
+
+            if (data.observaciones && data.observaciones.length > 0) {
+                const filasObs = data.observaciones.map(o => [
+                    o.nro ?? '',
+                    o.tipo ?? '',
+                    o.descripcion ?? '',
+                    o.calificacion ?? '',
+                    o.estado ?? ''
+                ]);
+
+                tablaObs.rows.add(filasObs);
+            }
+
+            tablaObs.draw();
+
+            const tablaEvt = obtenerTablaVisorEventos();
+            tablaEvt.clear();
+
+            if (data.eventos && data.eventos.length > 0) {
+                const filasEvt = data.eventos.map(e => [
+                    e.evento ?? '',
+                    e.origen ?? '',
+                    e.destino ?? '',
+                    e.fecha ?? ''
+                ]);
+
+                tablaEvt.rows.add(filasEvt);
+            }
+
+            tablaEvt.draw();
+
+            const mostrarBotonesRevision = [3, 4].includes(parseInt(data.estadoentrega_id || 0));
+            $('#btnBuscarObservacion').toggle(mostrarBotonesRevision);
+            $('#btnEnviarADesarrollo').toggle(mostrarBotonesRevision);
+            $('#btnEntregaOk').toggle(mostrarBotonesRevision);
+        }
+
+        async function cargarCatalogoObservaciones() {
+            const url = "{% url 'listar_observaciones_catalogo' %}";
+
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            const tabla = obtenerTablaCatalogoObs();
+            tabla.clear();
+
+            if (data.observaciones && data.observaciones.length > 0) {
+                const filas = data.observaciones.map(o => [
+                    o.tipo ?? '',
+                    o.descripcion ?? '',
+                    o.calificacion ?? '',
+                    `<button type="button" class="btn btn-primary btn-sm btn-seleccionar-observacion" data-idobservacion="${o.id}">Seleccionar</button>`
+                ]);
+
+                tabla.rows.add(filas);
+            }
+
+            tabla.draw();
         }
 
         $(document).on('click', '.btn-ver-entrega', async function () {
             const idEntrega = $(this).data('identrega');
-            const url = "{% url 'visor_entrega' 0 %}".replace('/0/', `/${idEntrega}/`);
+
+            try {
+                await cargarDetalleEntrega(idEntrega);
+                modalVisorEntrega.show();
+            } catch (error) {
+                console.error('Error cargarDetalleEntrega:', error);
+                notificar('No fue posible cargar el detalle de la entrega.', 'error');
+            }
+        });
+
+        $('#btnBuscarObservacion').on('click', async function () {
+            if (!identregaActual) return;
+
+            try {
+                await cargarCatalogoObservaciones();
+                modalSeleccionarObservacion.show();
+            } catch (error) {
+                console.error('Error cargarCatalogoObservaciones:', error);
+                notificar('No fue posible cargar el catálogo de observaciones.', 'error');
+            }
+        });
+
+        $(document).on('click', '.btn-seleccionar-observacion', async function () {
+            const idobservacion = $(this).data('idobservacion');
+            if (!identregaActual) return;
+
+            const url = "{% url 'agregar_observacion_entrega' 0 %}".replace('/0/', `/${identregaActual}/`);
+
+            const formData = new FormData();
+            formData.append('idobservacion', idobservacion);
 
             try {
                 const response = await fetch(url, {
+                    method: 'POST',
                     headers: {
+                        'X-CSRFToken': csrftoken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.mensaje || 'Error al agregar observación.');
+                }
+
+                await cargarDetalleEntrega(identregaActual);
+                modalSeleccionarObservacion.hide();
+                notificar(data.mensaje, 'success');
+            } catch (error) {
+                console.error('Error agregar_observacion_entrega:', error);
+                notificar(error.message || 'No fue posible agregar la observación.', 'error');
+            }
+        });
+
+        $('#btnAbrirNuevaObservacion').on('click', function () {
+            $('#nueva_obs_tipo').val('');
+            $('#nueva_obs_calificacion').val('');
+            $('#nueva_obs_descripcion').val('');
+            volverAModalCatalogo = true;
+            modalSeleccionarObservacion.hide();
+            setTimeout(function () {
+                modalNuevaObservacion.show();
+            }, 200);
+        });
+
+        $('#btnCerrarNuevaObservacion').on('click', function () {
+            volverAModalCatalogo = true;
+            modalNuevaObservacion.hide();
+        });
+
+        $('#btnCrearNuevaObservacion').on('click', async function () {
+            if (!identregaActual) return;
+
+            const url = "{% url 'crear_observacion_catalogo' 0 %}".replace('/0/', `/${identregaActual}/`);
+
+            const formData = new FormData();
+            formData.append('idtipoobservacion', $('#nueva_obs_tipo').val());
+            formData.append('idcalificacion', $('#nueva_obs_calificacion').val());
+            formData.append('descripcion', $('#nueva_obs_descripcion').val());
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.mensaje || 'Error al crear observación.');
+                }
+
+                await cargarDetalleEntrega(identregaActual);
+                await cargarCatalogoObservaciones();
+
+                volverAModalCatalogo = true;
+                modalNuevaObservacion.hide();
+                notificar(data.mensaje, 'success');
+            } catch (error) {
+                console.error('Error crear_observacion_catalogo:', error);
+                notificar(error.message || 'No fue posible crear la observación.', 'error');
+            }
+        });
+
+        $('#btnEnviarADesarrollo').on('click', async function () {
+            if (!identregaActual) return;
+
+            const ok = await confirmarAccionPersonalizada(
+                'Enviar a desarrollo',
+                '¿Deseas enviar esta entrega nuevamente a desarrollo?'
+            );
+
+            if (!ok) return;
+
+            const url = "{% url 'entrega_revision_enviar_desarrollo' 0 %}".replace('/0/', `/${identregaActual}/`);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken,
                         'X-Requested-With': 'XMLHttpRequest'
                     }
                 });
 
-                const contentType = response.headers.get('content-type') || '';
+                const data = await response.json();
 
-                if (!response.ok) {
-                    const txt = await response.text();
-                    console.error('Error HTTP visor_entrega:', response.status, txt);
-                    throw new Error(`HTTP ${response.status}`);
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.mensaje || 'Error al enviar a desarrollo.');
                 }
 
-                if (!contentType.includes('application/json')) {
-                    const txt = await response.text();
-                    console.error('La vista no devolvió JSON:', txt);
-                    throw new Error('La vista no devolvió JSON');
-                }
+                modalVisorEntrega.hide();
+                notificar(data.mensaje, 'success');
+                location.reload();
+            } catch (error) {
+                console.error('Error entrega_revision_enviar_desarrollo:', error);
+                notificar(error.message || 'No fue posible enviar la entrega a desarrollo.', 'error');
+            }
+        });
+
+        $('#btnEntregaOk').on('click', async function () {
+            if (!identregaActual) return;
+
+            const ok = await confirmarAccionPersonalizada(
+                'Entrega OK',
+                '¿Confirmas que la entrega está OK?'
+            );
+            if (!ok) return;
+
+            const url = "{% url 'entrega_revision_ok' 0 %}".replace('/0/', `/${identregaActual}/`);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
 
                 const data = await response.json();
 
-                document.getElementById('v_idproyecto').value = data.idproyecto || '';
-                document.getElementById('v_nombreproyecto').value = data.nombreproyecto || '';
-                document.getElementById('v_tipoentrega').value = data.tipoentrega || '';
-                document.getElementById('v_fechaentrega').value = data.fechaentrega || '';
-
-                const tabla = obtenerTablaVisor();
-                tabla.clear();
-
-                if (data.observaciones && data.observaciones.length > 0) {
-                    const filas = data.observaciones.map(o => [
-                        o.nro ?? '',
-                        o.tipo ?? '',
-                        o.descripcion ?? '',
-                        o.calificacion ?? '',
-                        `<span class="text-success fw-semibold">${o.estado ?? ''}</span>`
-                    ]);
-
-                    tabla.rows.add(filas);
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.mensaje || 'Error al marcar entrega OK.');
                 }
 
-                tabla.draw();
-
-                if (!modalVisorEntrega) {
-                    throw new Error('No existe el modal #modalVisorEntrega.');
-                }
-
-                modalVisorEntrega.show();
-
+                modalVisorEntrega.hide();
+                notificar(data.mensaje, 'success');
+                location.reload();
             } catch (error) {
-                console.error('Error visor_entrega:', error);
-                mostrarMensaje('No fue posible cargar el visor de la entrega.', 'error');
+                console.error('Error entrega_revision_ok:', error);
+                notificar(error.message || 'No fue posible marcar la entrega como OK.', 'error');
             }
         });
+
+        if (modalEntregaEl) {
+            modalEntregaEl.addEventListener('shown.bs.modal', function () {
+                if (tablaVisorObs) {
+                    tablaVisorObs.columns.adjust().draw(false);
+                }
+                if (tablaVisorEventos) {
+                    tablaVisorEventos.columns.adjust().draw(false);
+                }
+            });
+        }
+
+        if (modalObsEl) {
+            modalObsEl.addEventListener('shown.bs.modal', function () {
+                if (tablaCatalogoObs) {
+                    tablaCatalogoObs.columns.adjust().draw(false);
+                }
+            });
+        }
+
+        if (modalNuevaObsEl) {
+            modalNuevaObsEl.addEventListener('hidden.bs.modal', function () {
+                if (volverAModalCatalogo) {
+                    volverAModalCatalogo = false;
+                    setTimeout(function () {
+                        modalSeleccionarObservacion.show();
+                    }, 150);
+                }
+            });
+        }
     });
 </script>
 {% endblock %}
