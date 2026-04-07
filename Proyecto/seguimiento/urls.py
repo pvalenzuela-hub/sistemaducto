@@ -12,9 +12,14 @@ urlpatterns = [
 
     path('listadocategorias/', views.ListaCategoria.as_view(), name='lista-categoria'),
     path('tipoentrega/', views.ListaTipoEntrega.as_view(), name='lista-tipo-entrega'),
+    path('tipoentrega/crear/', views.tipo_entrega_create, name='crear-tipo-entrega'),
+    path('tipoentrega/modificar/<int:pk>/', views.tipo_entrega_update, name='editar-tipo-entrega'),
+    path('tipoentrega/eliminar/<int:pk>/', views.tipo_entrega_delete, name='eliminar-tipo-entrega'),
 
-    path('clientes/reporte/', views.reporte_clientes, name='reporte_clientes'),
     path('proyecto/reporte/', views.proyectos_totales, name='reporte_proyectos'),
+    path('clientes/reporte/', views.reporte_clientes, name='reporte_clientes'),
+    path('clientes/modificar/<int:pk>/', views.cliente_update, name='cliente_update'),
+    path('clientes/eliminar/<int:pk>/', views.cliente_delete, name='cliente_delete'),
 
     # Calendario entregas
     path('proyecto/calendario/', views.calendario_entregas_proyecto, name='calendario_entregas_proyecto'),

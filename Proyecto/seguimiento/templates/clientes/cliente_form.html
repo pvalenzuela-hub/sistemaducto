@@ -1,0 +1,305 @@
+{% extends "components/base.html" %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-lg-12">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ submenu }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="row">
+                        {% for field in form %}
+                            {% if field.name == 'rut' %}
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">{{ form.rut.label }}</label>
+                                    <div class="row">
+                                        <div class="col-9">
+                                            {{ form.rut }}
+                                            {% if form.rut.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {{ form.rut.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-3">
+                                            {{ form.dvrut }}
+                                            {% if form.dvrut.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {{ form.dvrut.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+
+                            {% elif field.name == 'dvrut' %}
+                                {# ya renderizado junto a rut #}
+
+                            {% elif field.name == 'categorias' %}
+                                {# se renderiza en sección aparte #}
+
+                            {% else %}
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ field.id_for_label }}" class="form-label">
+                                        {{ field.label }}
+                                    </label>
+
+                                    {% if field.field.widget.input_type == "checkbox" %}
+                                        <div class="form-check">
+                                            {{ field }}
+                                        </div>
+                                    {% else %}
+                                        {{ field }}
+                                    {% endif %}
+
+                                    {% if field.errors %}
+                                        <div class="text-danger small mt-1">
+                                            {{ field.errors }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="row">
+                        <div class="col-12 mb-4">
+                            <label for="{{ form.categorias.id_for_label }}" class="form-label">
+                                {{ form.categorias.label }}
+                            </label>
+                            {{ form.categorias }}
+                            {% if form.categorias.errors %}
+                                <div class="text-danger small mt-1">
+                                    {{ form.categorias.errors }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                Mantén presionada la tecla Ctrl para seleccionar más de una categoría.
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Contactos</h5>
+                        <button type="button" id="btn-agregar-contacto" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-plus-circle"></i> Agregar contacto
+                        </button>
+                    </div>
+
+                    {% if formset_contactos.non_form_errors %}
+                        <div class="alert alert-danger">
+                            {{ formset_contactos.non_form_errors }}
+                        </div>
+                    {% endif %}
+
+                    {{ formset_contactos.management_form }}
+
+                    <div id="contactos-container" class="table-responsive">
+                        <table class="table table-bordered table-sm align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 15%;">Tipo</th>
+                                    <th style="width: 25%;">Contacto</th>
+                                    <th style="width: 20%;">Cargo</th>
+                                    <th style="width: 20%;">Teléfonos</th>
+                                    <th style="width: 15%;">eMail</th>
+                                    <th style="width: 5%;">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="contactos-tbody">
+                                {% for contacto_form in formset_contactos %}
+                                    <tr class="contacto-form">
+                                        {% for hidden in contacto_form.hidden_fields %}
+                                            {{ hidden }}
+                                        {% endfor %}
+
+                                        <td>
+                                            {{ contacto_form.tipocontacto }}
+                                            {% if contacto_form.tipocontacto.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {{ contacto_form.tipocontacto.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            {{ contacto_form.nombrecontacto }}
+                                            {% if contacto_form.nombrecontacto.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {{ contacto_form.nombrecontacto.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            {{ contacto_form.cargo }}
+                                            {% if contacto_form.cargo.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {{ contacto_form.cargo.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            {{ contacto_form.telefono }}
+                                            {% if contacto_form.telefono.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {{ contacto_form.telefono.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            {{ contacto_form.email }}
+                                            {% if contacto_form.email.errors %}
+                                                <div class="text-danger small mt-1">
+                                                    {{ contacto_form.email.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+
+                                        <td class="text-center">
+                                            {% if contacto_form.instance.pk %}
+                                                <button type="button"
+                                                        class="btn btn-outline-danger btn-sm btn-anular-contacto"
+                                                        title="Anular contacto">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                                <div class="d-none">
+                                                    {{ contacto_form.DELETE }}
+                                                </div>
+                                            {% else %}
+                                                <button type="button"
+                                                        class="btn btn-outline-secondary btn-sm btn-quitar-contacto"
+                                                        title="Quitar fila">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+
+                                    {% if contacto_form.non_field_errors %}
+                                        <tr class="contacto-form-error">
+                                            <td colspan="6">
+                                                <div class="text-danger small">
+                                                    {{ contacto_form.non_field_errors }}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="empty-form-template" class="d-none">
+                        {% with contacto_form=formset_contactos.empty_form %}
+                            <tr class="contacto-form">
+                                {% for hidden in contacto_form.hidden_fields %}
+                                    {{ hidden }}
+                                {% endfor %}
+
+                                <td>{{ contacto_form.tipocontacto }}</td>
+                                <td>{{ contacto_form.nombrecontacto }}</td>
+                                <td>{{ contacto_form.cargo }}</td>
+                                <td>{{ contacto_form.telefono }}</td>
+                                <td>{{ contacto_form.email }}</td>
+                                <td class="text-center">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary btn-sm btn-quitar-contacto"
+                                            title="Quitar fila">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endwith %}
+                    </div>
+
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> Guardar cambios
+                        </button>
+                        <a href="{% url 'reporte_clientes' %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Volver
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        const $esprincipal = $('#id_esprincipal');
+        const $idclienteP = $('#id_idcliente_p');
+
+        function toggleClientePrincipal() {
+            const valor = $esprincipal.val();
+
+            if (valor === 'True') {
+                $idclienteP.val('');
+                $idclienteP.prop('disabled', true);
+                $idclienteP.removeAttr('required');
+            } else if (valor === 'False') {
+                $idclienteP.prop('disabled', false);
+                $idclienteP.attr('required', 'required');
+            } else {
+                $idclienteP.val('');
+                $idclienteP.prop('disabled', true);
+                $idclienteP.removeAttr('required');
+            }
+        }
+
+        toggleClientePrincipal();
+        $esprincipal.on('change', toggleClientePrincipal);
+
+        const $totalForms = $('#id_contactos-TOTAL_FORMS');
+        const $tbody = $('#contactos-tbody');
+        const templateHtml = $('#empty-form-template').html();
+
+        $('#btn-agregar-contacto').on('click', function () {
+            const formIndex = parseInt($totalForms.val(), 10);
+            const newFormHtml = templateHtml.replace(/__prefix__/g, formIndex);
+            $tbody.append(newFormHtml);
+            $totalForms.val(formIndex + 1);
+        });
+
+        $(document).on('click', '.btn-quitar-contacto', function () {
+            $(this).closest('tr').remove();
+        });
+
+        $(document).on('click', '.btn-anular-contacto', function () {
+            const $row = $(this).closest('tr');
+            const $deleteCheckbox = $row.find('input[type="checkbox"][name$="-DELETE"]');
+
+            if ($deleteCheckbox.length) {
+                $deleteCheckbox.prop('checked', true);
+                $row.hide();
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import date
 
 from django.db.models import Max, Prefetch, F, OuterRef, Subquery, Count, IntegerField, CharField, Value
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.http import JsonResponse
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
@@ -20,7 +20,12 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
+from django.contrib import messages
 from django.db.models.functions import Coalesce
+from .forms import ClienteForm, ClienteContactoFormSet, TipoEntregaForm
+
+
+
 
 ESTADO_ENTREGA_NUEVA = 1
 ESTADO_ENTREGA_DESARROLLO = 2
@@ -28,6 +33,9 @@ ESTADO_ENTREGA_CORRECCIONES = 3
 ESTADO_ENTREGA_REVISION = 4
 ESTADO_ENTREGA_ENTREGADO = 5
 ESTADO_ENTREGA_NULA = 6
+
+FECHA_MINIMA_COTIZACION = None
+ESTADO_CLIENTE_ELIMINADO = 5
 
 User = get_user_model()
 
@@ -228,23 +236,93 @@ class ListaTipoEntrega(LoginRequiredMixin,ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update({
-            'encabezado': 'Listado de Tipos de Entrega',
+            'encabezado': 'Tipos de Entrega',
             'menu': 'Parámetros',
             'submenu': 'Tipos de Entrega',
-            'titulo': 'Listado',
+            'titulo': 'Tipos de Entrega',
         })
         return context
+
+
+@login_required
+def tipo_entrega_create(request):
+    if request.method == 'POST':
+        form = TipoEntregaForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('lista-tipo-entrega')
+    else:
+        form = TipoEntregaForm()
+
+    context = {
+        'titulo': 'Crear tipo de entrega',
+        'encabezado': 'Crear tipo de entrega',
+        'submenu': 'Nuevo registro',
+        'form': form,
+        'texto_boton': 'Guardar registro',
+    }
+    return render(request, 'tipoentrega_form.html', context)
+
+
+@login_required
+def tipo_entrega_update(request, pk):
+    tipo_entrega = get_object_or_404(TipoEntrega, pk=pk)
+
+    if request.method == 'POST':
+        form = TipoEntregaForm(request.POST, instance=tipo_entrega)
+        if form.is_valid():
+            form.save()
+            return redirect('lista-tipo-entrega')
+    else:
+        form = TipoEntregaForm(instance=tipo_entrega)
+
+    context = {
+        'titulo': 'Modificar tipo de entrega',
+        'encabezado': 'Modificar tipo de entrega',
+        'submenu': 'Edicion de registro',
+        'form': form,
+        'tipo_entrega': tipo_entrega,
+        'texto_boton': 'Guardar cambios',
+    }
+    return render(request, 'tipoentrega_form.html', context)
+
+
+@login_required
+def tipo_entrega_delete(request, pk):
+    tipo_entrega = get_object_or_404(TipoEntrega, pk=pk)
+    entregas_asociadas = EntregaProyecto.objects.filter(idtipoentrega=tipo_entrega).count()
+    error_eliminacion = None
+
+    if request.method == 'POST':
+        if entregas_asociadas:
+            error_eliminacion = 'No se puede eliminar el tipo de entrega porque tiene entregas asociadas.'
+        else:
+            try:
+                tipo_entrega.delete()
+                return redirect('lista-tipo-entrega')
+            except IntegrityError:
+                error_eliminacion = 'No se puede eliminar el tipo de entrega porque esta siendo utilizado por otros registros.'
+
+    context = {
+        'titulo': 'Eliminar tipo de entrega',
+        'encabezado': 'Eliminar tipo de entrega',
+        'submenu': 'Confirmacion de eliminacion',
+        'tipo_entrega': tipo_entrega,
+        'entregas_asociadas': entregas_asociadas,
+        'error_eliminacion': error_eliminacion,
+    }
+    return render(request, 'tipoentrega_confirm_delete.html', context)
     
 FECHA_MINIMA_COTIZACION = date(1900, 1, 1)
 
 @login_required
 def reporte_clientes(request):
-    # 1. Clientes principales activos
+    # 1. Clientes principales no eliminados lógicamente
     clientes = list(
         Cliente.objects.filter(
-            estado='A',
             esprincipal=True
         )
+        .exclude(idestadocliente_id=ESTADO_CLIENTE_ELIMINADO)
         .select_related('idestadocliente', 'idcomppago')
         .prefetch_related(
             Prefetch(
@@ -256,7 +334,11 @@ def reporte_clientes(request):
     )
 
     if not clientes:
-        return render(request, 'clientes/reporte_clientes.html', {'clientes': []})
+        return render(request, 'clientes/reporte_clientes.html', {
+            'clientes': [],
+            'encabezado': 'Clientes totales',
+            'submenu': 'Lista total de clientes'
+        })
 
     ids_principales = [c.idcliente for c in clientes]
 
@@ -272,10 +354,11 @@ def reporte_clientes(request):
         for row in fechas_principal_qs
     }
 
-    # 3. Obtener hijos de esos clientes principales
+    # 3. Obtener hijos de esos clientes principales, excluyendo eliminados
     hijos_qs = (
         Cliente.objects
         .filter(idcliente_p__in=ids_principales)
+        .exclude(idestadocliente_id=ESTADO_CLIENTE_ELIMINADO)
         .values('idcliente', 'idcliente_p')
     )
 
@@ -302,7 +385,12 @@ def reporte_clientes(request):
             fecha_hijo = row['ultima_fecha'] or FECHA_MINIMA_COTIZACION
             id_padre = hijo_a_padre.get(id_hijo)
 
-            if id_padre and fecha_hijo > fechas_hijos_por_padre[id_padre]:
+            fecha_actual_padre = fechas_hijos_por_padre[id_padre]
+
+            if id_padre and (
+                fecha_actual_padre is None or
+                (fecha_hijo is not None and fecha_hijo > fecha_actual_padre)
+            ):
                 fechas_hijos_por_padre[id_padre] = fecha_hijo
 
     # 5. Armar datos finales del reporte
@@ -310,17 +398,18 @@ def reporte_clientes(request):
         fecha_cliente = fechas_principal.get(cliente.idcliente) or FECHA_MINIMA_COTIZACION
         fecha_hijos = fechas_hijos_por_padre.get(cliente.idcliente) or FECHA_MINIMA_COTIZACION
 
-        cliente.fecha_ultima_cotizacion = max(fecha_cliente, fecha_hijos)
+        if fecha_cliente and fecha_hijos:
+            cliente.fecha_ultima_cotizacion = max(fecha_cliente, fecha_hijos)
+        else:
+            cliente.fecha_ultima_cotizacion = fecha_cliente or fecha_hijos
 
         categorias = []
         for cc in cliente.clientecategoria_set.all():
             if cc.idcategoria:
                 categorias.append(cc.idcategoria.NombreCat)
 
-        # evita repetir categorías y conserva orden
         cliente.categorias_texto = ', '.join(dict.fromkeys(categorias))
 
-        # textos para mostrar en la tabla
         cliente.estado_texto = cliente.idestadocliente.descrip if cliente.idestadocliente_id else ''
         cliente.comportamiento_pago_texto = cliente.idcomppago.descrip if cliente.idcomppago_id else ''
 
@@ -330,6 +419,92 @@ def reporte_clientes(request):
         'submenu': 'Lista total de clientes'
     })
     
+@login_required
+@transaction.atomic
+def cliente_update(request, pk):
+    cliente = get_object_or_404(Cliente, pk=pk)
+
+    if request.method == 'POST':
+        form = ClienteForm(request.POST, instance=cliente)
+        formset_contactos = ClienteContactoFormSet(
+            request.POST,
+            instance=cliente,
+            prefix='contactos'
+        )
+
+        if form.is_valid() and formset_contactos.is_valid():
+            cliente = form.save()
+
+            # Guardar contactos
+            contactos = formset_contactos.save(commit=False)
+
+            # Eliminar los marcados como DELETE
+            for obj in formset_contactos.deleted_objects:
+                obj.delete()
+
+            for contacto in contactos:
+                contacto.idcliente = cliente
+
+                if not contacto.fecharegistro:
+                    contacto.fecharegistro = timezone.now()
+
+                contacto.save()
+
+            # Guardar categorías
+            categorias = list(dict.fromkeys(form.cleaned_data.get('categorias', [])))
+
+            ClienteCategoria.objects.filter(idcliente=cliente).delete()
+
+            nuevas_categorias = [
+                ClienteCategoria(idcliente=cliente, idcategoria=categoria)
+                for categoria in categorias
+            ]
+
+            if nuevas_categorias:
+                ClienteCategoria.objects.bulk_create(nuevas_categorias)
+
+            messages.success(request, 'Cliente modificado correctamente.')
+            return redirect('reporte_clientes')
+
+        messages.error(request, 'Corrige los errores del formulario.')
+
+    else:
+        form = ClienteForm(instance=cliente)
+        formset_contactos = ClienteContactoFormSet(
+            instance=cliente,
+            prefix='contactos'
+        )
+
+    context = {
+        'titulo': 'Modificar cliente',
+        'encabezado': 'Modificar cliente',
+        'submenu': 'Edición de cliente',
+        'form': form,
+        'formset_contactos': formset_contactos,
+        'cliente': cliente,
+    }
+    return render(request, 'clientes/cliente_form.html', context)
+    
+@login_required
+def cliente_delete(request, pk):
+    cliente = get_object_or_404(Cliente, pk=pk)
+
+    if request.method == 'POST':
+        estado_eliminado = get_object_or_404(Testadocliente, pk=5)
+
+        cliente.idestadocliente = estado_eliminado
+        cliente.save(update_fields=['idestadocliente'])
+
+        messages.success(request, 'Cliente marcado como eliminado correctamente.')
+        return redirect('reporte_clientes')
+
+    context = {
+        'titulo': 'Eliminar cliente',
+        'encabezado': 'Eliminar cliente',
+        'submenu': 'Confirmación de eliminación',
+        'cliente': cliente,
+    }
+    return render(request, 'clientes/cliente_confirm_delete.html', context)
     
 def formatear_numero_cl(valor):
     valor = valor or 0

@@ -15,17 +15,31 @@
 					<ul class="side-menu">
 						<li><h3>Menu</h3></li>
 						<li class="slide">
-							<a class="side-menu__item"  data-bs-toggle="slide" href="{% url 'home' %}"><i class="side-menu__icon fe fe-home"></i><span class="side-menu__label">Resumen</span></a>
+							<a class="side-menu__item"  data-bs-toggle="slide" href="{% url 'home' %}"><i class="side-menu__icon fe fe-home"></i><span class="side-menu__label">Inicio</span></a>
 						</li>
-
-						<li><h3>Módulo de Ventas</h3></li>
+						</li><h3>Clientes</h3> 
 						<li class="slide">
-							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-pie-chart"></i><span class="side-menu__label">Clientes</span><i class="angle fa fa-angle-right"></i></a>
+							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-pie-chart"></i><span class="side-menu__label">Módulo de Ventas</span><i class="angle fa fa-angle-right"></i></a>
 							<ul class="slide-menu">
 								<li><a href="{% url 'reporte_clientes' %}" class="slide-item">Clientes Principales</a></li>
-								<li><a href="{% url 'reporte_clientes' %}" class="slide-item"> Agenda Clientes</a></li>
+								<li><a href="{% url 'reporte_clientes' %}" class="slide-item">Agenda Clientes</a></li>
 							</ul>
-						</li><h3>proyectos</h3> 
+							
+						</li>
+						<li class="slide">
+							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Clientes</span><span class="badge bg-secondary side-badge">2</span></a>
+							<ul class="slide-menu">
+								<li><a href="{% url 'reporte_clientes' %}" class="slide-item"> Listado Total de Clientes</a></li>
+								<li><a href="{% url 'reporte_clientes' %}" class="slide-item"> Ingeso Clientes</a></li>
+							</ul>
+						</li>
+						<li class="slide">
+							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Proyectos</span><span class="badge bg-secondary side-badge">2</span></a>
+							<ul class="slide-menu">
+								<li><a href="{% url 'reporte_proyectos' %}" class="slide-item"> Listado de Proyectos</a></li>
+								<li><a href="{% url 'vista1' %}" class="slide-item"> Seguimiento</a></li>
+							</ul>
+						</li>						
 						<li class="slide">
 							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Seguimiento</span><span class="badge bg-secondary side-badge">2</span></a>
 							<ul class="slide-menu">
@@ -51,11 +65,11 @@
 							<li><h3>Configuración</h3></li>
 							<li class="slide">
 								<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-file-text"></i><span class="side-menu__label">tablas</span><span class="badge bg-success side-badge">5</span></a>
-								<ul class="slide-menu">
-									<li><a href="{% url 'lista-categoria' %}" class="slide-item"> Categorías</a></li>
-									<li><a href="{% url 'lista-tipo-entrega' %}" class="slide-item"> Tipo de Entrega</a></li>
-								</ul>
-							</li>
+							<ul class="slide-menu">
+								<li><a href="{% url 'lista-categoria' %}" class="slide-item"> Categorías</a></li>
+								<li><a href="{% url 'lista-tipo-entrega' %}" class="slide-item"> Tipos de Entrega</a></li>
+							</ul>
+						</li>
 							<li class="slide">
 								<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-command"></i><span class="side-menu__label">Vacaciones</span><i class="angle fa fa-angle-right"></i></a>
 								<ul class="slide-menu">
