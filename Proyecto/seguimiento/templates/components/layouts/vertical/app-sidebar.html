@@ -22,15 +22,22 @@
 							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-pie-chart"></i><span class="side-menu__label">Módulo de Ventas</span><i class="angle fa fa-angle-right"></i></a>
 							<ul class="slide-menu">
 								<li><a href="{% url 'reporte_clientes' %}" class="slide-item">Clientes Principales</a></li>
-								<li><a href="{% url 'reporte_clientes' %}" class="slide-item">Agenda Clientes</a></li>
+								<li><a href="{% url 'agenda_clientes' %}" class="slide-item">Agenda Clientes</a></li>
 							</ul>
 							
 						</li>
 						<li class="slide">
 							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Clientes</span><span class="badge bg-secondary side-badge">2</span></a>
 							<ul class="slide-menu">
-								<li><a href="{% url 'reporte_clientes' %}" class="slide-item"> Listado Total de Clientes</a></li>
-								<li><a href="{% url 'reporte_clientes' %}" class="slide-item"> Ingeso Clientes</a></li>
+								<li><a href="{% url 'clientes_totales' %}" class="slide-item"> Clientes Totales</a></li>
+								<li><a href="{% url 'cliente_create' %}" class="slide-item"> Ingreso Clientes</a></li>
+							</ul>
+						</li>
+						<li class="slide">
+							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-file-text"></i><span class="side-menu__label">Cotizaciones</span><span class="badge bg-secondary side-badge">2</span></a>
+							<ul class="slide-menu">
+								<li><a href="{% url 'cotizaciones_home' %}" class="slide-item"> Búsqueda de Cotizaciones</a></li>
+								<li><a href="{% url 'cotizaciones_ingreso' %}" class="slide-item"> Ingreso de Cotizaciones</a></li>
 							</ul>
 						</li>
 						<li class="slide">

@@ -26,7 +26,7 @@ TEMPLATES_DIR = BASE_DIR / 'templates'
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY =  os.getenv("DJANGO_SECRET_KEY", "insecure-default")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY") or os.getenv("SECRET_KEY", "insecure-default")
 
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
@@ -173,5 +173,4 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
-
 

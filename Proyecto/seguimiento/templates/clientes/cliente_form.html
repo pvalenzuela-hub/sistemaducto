@@ -4,6 +4,21 @@
     {{ titulo }}
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    .nota-activa {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .nota-pendiente-item {
+        border-left: 3px solid #0d6efd;
+        background-color: #f8fbff;
+    }
+</style>
+{% endblock %}
+
 {% block body %}
 <div class="row">
     <div class="col-lg-12">
@@ -51,7 +66,7 @@
                             {% elif field.name == 'dvrut' %}
                                 {# ya renderizado junto a rut #}
 
-                            {% elif field.name == 'categorias' %}
+                            {% elif field.name == 'categorias' or field.name == 'comentario' %}
                                 {# se renderiza en sección aparte #}
 
                             {% else %}
@@ -82,6 +97,22 @@
 
                     <div class="row">
                         <div class="col-12 mb-4">
+                            <label for="{{ form.comentario.id_for_label }}" class="form-label">
+                                {{ form.comentario.label }}
+                            </label>
+                            {{ form.comentario }}
+                            {% if form.comentario.errors %}
+                                <div class="text-danger small mt-1">
+                                    {{ form.comentario.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="row">
+                        <div class="col-12 mb-4">
                             <label for="{{ form.categorias.id_for_label }}" class="form-label">
                                 {{ form.categorias.label }}
                             </label>
@@ -93,6 +124,89 @@
                             {% endif %}
                             <div class="form-text">
                                 Mantén presionada la tecla Ctrl para seleccionar más de una categoría.
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Notas de seguimiento</h5>
+                        <button type="button" id="btn-agregar-nota" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-plus-circle"></i> Agregar nota
+                        </button>
+                    </div>
+
+                    <div class="row g-4">
+                        <div class="col-lg-5">
+                            {% if form_nota.non_field_errors %}
+                                <div class="alert alert-danger">
+                                    {{ form_nota.non_field_errors }}
+                                </div>
+                            {% endif %}
+
+                            <label for="{{ form_nota.nota.id_for_label }}" class="form-label">
+                                {{ form_nota.nota.label }}
+                            </label>
+                            {{ form_nota.nota }}
+                            {% if form_nota.nota.errors %}
+                                <div class="text-danger small mt-1">
+                                    {{ form_nota.nota.errors }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                Escribe la nota y presiona `Agregar nota` para incorporarla al listado. Luego usa `Guardar cambios` para grabarla.
+                            </div>
+                        </div>
+
+                        <div class="col-lg-7">
+                            <h5 class="mb-3">Historial de notas</h5>
+
+                            <div id="notas-hidden-container">
+                                {% for nota_pendiente in notas_pendientes %}
+                                    <input type="hidden"
+                                           name="notas_agregadas"
+                                           value="{{ nota_pendiente.nota }}"
+                                           data-nota-pendiente-id="nota-pendiente-{{ forloop.counter0 }}">
+                                {% endfor %}
+                            </div>
+
+                            <div id="notas-lista" class="list-group{% if not notas_cliente and not notas_pendientes %} d-none{% endif %}">
+                                {% for nota_pendiente in notas_pendientes %}
+                                    <div class="list-group-item nota-pendiente-item" data-nota-pendiente-id="nota-pendiente-{{ forloop.counter0 }}">
+                                        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                            <div>
+                                                <strong>{{ nota_pendiente.usuario_nombre }}</strong>
+                                                <span class="badge bg-primary ms-2">Pendiente</span>
+                                            </div>
+                                            <small class="text-muted">Se guardará al confirmar cambios</small>
+                                        </div>
+                                        <div class="mt-2" style="white-space: pre-line;">{{ nota_pendiente.nota }}</div>
+                                        <div class="mt-3">
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary btn-sm btn-quitar-nota-pendiente"
+                                                    data-nota-pendiente-id="nota-pendiente-{{ forloop.counter0 }}">
+                                                <i class="bi bi-x-lg"></i> Quitar
+                                            </button>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+
+                                {% if notas_cliente %}
+                                    {% for nota in notas_cliente %}
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                                <strong>{{ nota.usuario_nombre }}</strong>
+                                                <small class="text-muted">{{ nota.fecha_mostrada|date:"d-m-Y H:i" }}</small>
+                                            </div>
+                                            <div class="mt-2" style="white-space: pre-line;">{{ nota.nota }}</div>
+                                        </div>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+
+                            <div id="notas-empty-state" class="alert alert-light border mb-0{% if notas_cliente or notas_pendientes %} d-none{% endif %}">
+                                Este cliente no tiene notas registradas.
                             </div>
                         </div>
                     </div>
@@ -129,11 +243,12 @@
                             <tbody id="contactos-tbody">
                                 {% for contacto_form in formset_contactos %}
                                     <tr class="contacto-form">
+                                <td>
+                                    <div class="d-none">
                                         {% for hidden in contacto_form.hidden_fields %}
                                             {{ hidden }}
                                         {% endfor %}
-
-                                        <td>
+                                    </div>
                                             {{ contacto_form.tipocontacto }}
                                             {% if contacto_form.tipocontacto.errors %}
                                                 <div class="text-danger small mt-1">
@@ -212,14 +327,17 @@
                         </table>
                     </div>
 
-                    <div id="empty-form-template" class="d-none">
+                    <template id="empty-form-template">
                         {% with contacto_form=formset_contactos.empty_form %}
                             <tr class="contacto-form">
-                                {% for hidden in contacto_form.hidden_fields %}
-                                    {{ hidden }}
-                                {% endfor %}
-
-                                <td>{{ contacto_form.tipocontacto }}</td>
+                                <td>
+                                    <div class="d-none">
+                                        {% for hidden in contacto_form.hidden_fields %}
+                                            {{ hidden }}
+                                        {% endfor %}
+                                    </div>
+                                    {{ contacto_form.tipocontacto }}
+                                </td>
                                 <td>{{ contacto_form.nombrecontacto }}</td>
                                 <td>{{ contacto_form.cargo }}</td>
                                 <td>{{ contacto_form.telefono }}</td>
@@ -233,13 +351,13 @@
                                 </td>
                             </tr>
                         {% endwith %}
-                    </div>
+                    </template>
 
                     <div class="mt-4">
                         <button type="submit" class="btn btn-success">
                             <i class="bi bi-check-circle"></i> Guardar cambios
                         </button>
-                        <a href="{% url 'reporte_clientes' %}" class="btn btn-secondary">
+                        <a href="{% url volver_url_name %}" class="btn btn-secondary">
                             <i class="bi bi-arrow-left"></i> Volver
                         </a>
                     </div>
@@ -255,6 +373,11 @@
     $(document).ready(function () {
         const $esprincipal = $('#id_esprincipal');
         const $idclienteP = $('#id_idcliente_p');
+        const textareaNota = document.getElementById('{{ form_nota.nota.id_for_label }}');
+        const notasLista = document.getElementById('notas-lista');
+        const notasEmptyState = document.getElementById('notas-empty-state');
+        const notasHiddenContainer = document.getElementById('notas-hidden-container');
+        const usuarioNotaActual = '{{ user.get_full_name|escapejs }}'.trim() || '{{ user.username|escapejs }}';
 
         function toggleClientePrincipal() {
             const valor = $esprincipal.val();
@@ -276,14 +399,138 @@
         toggleClientePrincipal();
         $esprincipal.on('change', toggleClientePrincipal);
 
+        function resaltarTextareaNota() {
+            if (!textareaNota) {
+                return;
+            }
+
+            textareaNota.classList.remove('nota-activa');
+
+            requestAnimationFrame(() => {
+                textareaNota.classList.add('nota-activa');
+            });
+
+            window.setTimeout(() => {
+                textareaNota.classList.remove('nota-activa');
+            }, 1800);
+        }
+
+        function toggleNotasEmptyState() {
+            if (!notasLista || !notasEmptyState) {
+                return;
+            }
+
+            const tieneNotas = notasLista.querySelector('.list-group-item') !== null;
+            notasLista.classList.toggle('d-none', !tieneNotas);
+            notasEmptyState.classList.toggle('d-none', tieneNotas);
+        }
+
+        function crearNotaPendienteElemento(texto, pendienteId) {
+            const item = document.createElement('div');
+            item.className = 'list-group-item nota-pendiente-item';
+            item.dataset.notaPendienteId = pendienteId;
+
+            const header = document.createElement('div');
+            header.className = 'd-flex justify-content-between align-items-start gap-3 flex-wrap';
+
+            const autor = document.createElement('div');
+            const autorNombre = document.createElement('strong');
+            autorNombre.textContent = usuarioNotaActual;
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-primary ms-2';
+            badge.textContent = 'Pendiente';
+            autor.appendChild(autorNombre);
+            autor.appendChild(badge);
+
+            const estado = document.createElement('small');
+            estado.className = 'text-muted';
+            estado.textContent = 'Se guardará al confirmar cambios';
+
+            header.appendChild(autor);
+            header.appendChild(estado);
+
+            const cuerpo = document.createElement('div');
+            cuerpo.className = 'mt-2';
+            cuerpo.style.whiteSpace = 'pre-line';
+            cuerpo.textContent = texto;
+
+            const acciones = document.createElement('div');
+            acciones.className = 'mt-3';
+
+            const botonQuitar = document.createElement('button');
+            botonQuitar.type = 'button';
+            botonQuitar.className = 'btn btn-outline-secondary btn-sm btn-quitar-nota-pendiente';
+            botonQuitar.dataset.notaPendienteId = pendienteId;
+            botonQuitar.innerHTML = '<i class="bi bi-x-lg"></i> Quitar';
+            acciones.appendChild(botonQuitar);
+
+            item.appendChild(header);
+            item.appendChild(cuerpo);
+            item.appendChild(acciones);
+
+            return item;
+        }
+
+        $('#btn-agregar-nota').on('click', function () {
+            if (!textareaNota) {
+                return;
+            }
+
+            const textoNota = textareaNota.value.trim();
+
+            if (!textoNota) {
+                textareaNota.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                textareaNota.focus();
+                textareaNota.classList.add('is-invalid');
+                resaltarTextareaNota();
+                mostrarMensaje('Escribe una nota antes de agregarla.', 'warning');
+                return;
+            }
+
+            textareaNota.classList.remove('is-invalid');
+
+            const pendienteId = `nota-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'notas_agregadas';
+            hiddenInput.value = textoNota;
+            hiddenInput.dataset.notaPendienteId = pendienteId;
+            notasHiddenContainer.appendChild(hiddenInput);
+
+            notasLista.prepend(crearNotaPendienteElemento(textoNota, pendienteId));
+            toggleNotasEmptyState();
+
+            textareaNota.value = '';
+            textareaNota.focus();
+            resaltarTextareaNota();
+            mostrarMensaje('Nota agregada al listado. Guarda los cambios para persistirla.', 'info');
+        });
+
+        $(document).on('click', '.btn-quitar-nota-pendiente', function () {
+            const pendienteId = this.dataset.notaPendienteId;
+            const hiddenInput = notasHiddenContainer.querySelector(`[data-nota-pendiente-id="${pendienteId}"]`);
+
+            if (hiddenInput) {
+                hiddenInput.remove();
+            }
+
+            $(this).closest('.nota-pendiente-item').remove();
+            toggleNotasEmptyState();
+        });
+
+        toggleNotasEmptyState();
+
         const $totalForms = $('#id_contactos-TOTAL_FORMS');
         const $tbody = $('#contactos-tbody');
-        const templateHtml = $('#empty-form-template').html();
+        const emptyFormTemplate = document.getElementById('empty-form-template');
 
         $('#btn-agregar-contacto').on('click', function () {
             const formIndex = parseInt($totalForms.val(), 10);
-            const newFormHtml = templateHtml.replace(/__prefix__/g, formIndex);
-            $tbody.append(newFormHtml);
+            const newFormHtml = emptyFormTemplate.innerHTML.replace(/__prefix__/g, formIndex);
+            const tempTbody = document.createElement('tbody');
+
+            tempTbody.innerHTML = newFormHtml.trim();
+            $tbody.append(tempTbody.firstElementChild);
             $totalForms.val(formIndex + 1);
         });
 

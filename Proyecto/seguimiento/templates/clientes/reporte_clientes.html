@@ -36,17 +36,19 @@
                                 <td>{{ cliente.fecha_ultima_cotizacion|date:"d-m-Y" }}</td>
                                 <td>{{ cliente.categorias_texto }}</td>
                                 <td class="text-center">
-                                    <a href="{% url 'cliente_update' cliente.pk %}"
+                                    <a href="{% url url_modificar_name cliente.pk %}"
                                        class="btn btn-warning btn-sm"
                                        title="Modificar">
                                         <i class="bi bi-pencil-square"></i>
                                     </a>
 
-                                    <a href="{% url 'cliente_delete' cliente.pk %}"
-                                       class="btn btn-danger btn-sm"
-                                       title="Eliminar">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
+                                    {% if mostrar_eliminar %}
+                                        <a href="{% url 'cliente_delete' cliente.pk %}"
+                                           class="btn btn-danger btn-sm"
+                                           title="Eliminar">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}

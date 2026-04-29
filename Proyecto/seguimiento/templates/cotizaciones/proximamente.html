@@ -1,0 +1,27 @@
+{% extends "components/base.html" %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-lg-8">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ submenu }}</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-4">{{ descripcion }}</p>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{% url volver_url_name %}" class="btn btn-secondary">Volver</a>
+                    <a href="{% url accion_url_name %}" class="btn btn-primary">Ir a {{ accion_nombre }}</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

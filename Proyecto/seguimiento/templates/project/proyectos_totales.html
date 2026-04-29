@@ -105,8 +105,7 @@
                                 <td class="text-end">{{ pro.valor_formateado }}</td>
                                 <td>{{ pro.fechaingresoseremi|date:"d-m-Y" }}</td>
                                 <td>{{ pro.fechaaprobseremi|date:"d-m-Y" }}</td>
-                                <td>{{ pro.numcotizacion_texto|default:"" }}</td>
-                                <td>{{ pro.numcorr_texto|default:"" }}</td>
+                                <td>{{ pro.numcotizacion_texto|default:"" }}-{{ pro.numcorr_texto|default:"000" }}</td>
                                 <td>{{ pro.fechacotizacion|date:"d-m-Y" }}</td>
                                 <td>{{ pro.mt2_texto|default:0 }}</td>
                               

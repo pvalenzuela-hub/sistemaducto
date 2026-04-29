@@ -44,6 +44,35 @@ class Tcomppago(models.Model):
         managed = False
         db_table = 'T_CompPago'
 
+
+class TFpago(models.Model):
+    idfpago = models.AutoField(db_column='IdFpago', primary_key=True)
+    codfp = models.IntegerField(db_column='CodFP', null=True, blank=True)
+    concepto = models.CharField(db_column='Concepto', max_length=255)
+    regionrm = models.IntegerField(db_column='RegionRM', null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tFpago'
+        ordering = ['codfp']
+
+    def __str__(self):
+        return self.concepto
+
+
+class AspNetUser(models.Model):
+    id = models.CharField(db_column='Id', primary_key=True, max_length=128)
+    nombrecompleto = models.TextField(db_column='NombreCompleto', null=True, blank=True)
+    email = models.CharField(db_column='Email', max_length=256, null=True, blank=True)
+    username = models.CharField(db_column='UserName', max_length=256, null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'AspNetUsers'
+
+    def __str__(self):
+        return (self.nombrecompleto or self.username or self.email or self.id).strip()
+
 class Cliente(models.Model):
     idcliente = models.AutoField(db_column='IdCliente', primary_key=True)
     rut = models.DecimalField(db_column='Rut', max_digits=10, decimal_places=0, null=True, blank=True)
@@ -85,7 +114,54 @@ class ClienteCategoria(models.Model):
     class Meta:
         managed = False
         db_table = 'Cliente_Categoria'
-        
+
+
+class ClienteSeg(models.Model):
+    idsegcliente = models.AutoField(db_column='IdSegCliente', primary_key=True)
+    idcliente = models.ForeignKey(
+        Cliente,
+        db_column='IdCliente',
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name='seguimientos'
+    )
+    fecha = models.DateTimeField(db_column='Fecha', null=True, blank=True)
+    iduser = models.CharField(db_column='IdUser', max_length=128, null=True, blank=True)
+    nota = models.CharField(db_column='Nota', max_length=300, null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'Cliente_Seg'
+        ordering = ['-fecha', '-idsegcliente']
+
+    def __str__(self):
+        return f"Seguimiento cliente {self.idcliente_id}"
+
+
+class ClienteAgenda(models.Model):
+    id = models.AutoField(db_column='Id', primary_key=True)
+    idcliente = models.ForeignKey(
+        Cliente,
+        db_column='IdCliente',
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name='agenda_clientes'
+    )
+    fecha = models.DateTimeField(db_column='Fecha', null=True, blank=True)
+    titulo = models.CharField(db_column='Titulo', max_length=100, null=True, blank=True)
+    descrip = models.CharField(db_column='Descrip', max_length=200, null=True, blank=True)
+    estado = models.IntegerField(db_column='Estado', null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'Cliente_Agenda'
+        ordering = ['-fecha', '-id']
+
+    def __str__(self):
+        return self.titulo or (self.idcliente.razonsocial if self.idcliente else f"Agenda {self.id}")
+          
 class Clientecontacto(models.Model):
     idcontacto = models.AutoField(db_column='IdContacto', primary_key=True)
     idcliente = models.ForeignKey(Cliente,db_column='IdCliente', on_delete=models.DO_NOTHING)
@@ -99,6 +175,9 @@ class Clientecontacto(models.Model):
     class Meta:
         managed = False
         db_table = 'Cliente_Contacto'
+
+    def __str__(self):
+        return self.nombrecontacto or f"Contacto {self.idcontacto}"
         
 
 class Cotizacion(models.Model):
@@ -151,6 +230,104 @@ class Cotizacion(models.Model):
 
     def __str__(self):
         return f"Cotización {self.numcotizacion or self.idcotizacion}"
+
+
+class DestinoCotizacion(models.Model):
+    iddestino = models.AutoField(primary_key=True)
+    nombre = models.CharField(max_length=50)
+
+    class Meta:
+        managed = False
+        db_table = 'DestinoCotizacion'
+        ordering = ['iddestino']
+
+    def __str__(self):
+        return self.nombre
+
+
+class MonedaCotizacion(models.Model):
+    idmoneda = models.AutoField(primary_key=True)
+    nombre = models.CharField(max_length=10)
+
+    class Meta:
+        managed = False
+        db_table = 'MonedaCotizacion'
+        ordering = ['idmoneda']
+
+    def __str__(self):
+        return self.nombre
+
+
+class ItemCotizacion(models.Model):
+    iditem = models.AutoField(primary_key=True)
+    nombre = models.CharField(max_length=255)
+
+    class Meta:
+        managed = False
+        db_table = 'ItemCotizacion'
+        ordering = ['iditem']
+
+    def __str__(self):
+        return self.nombre
+
+
+class NotaCotizacion(models.Model):
+    idnota = models.AutoField(primary_key=True)
+    nota = models.TextField()
+
+    class Meta:
+        managed = False
+        db_table = 'tNotas'
+        ordering = ['idnota']
+
+    def __str__(self):
+        return self.nota
+
+
+class CotizacionValor(models.Model):
+    idcotizacionvalor = models.AutoField(primary_key=True)
+    idcotizacion = models.ForeignKey(Cotizacion, db_column='IdCotizacion', on_delete=models.DO_NOTHING)
+    item = models.IntegerField(db_column='Item')
+    glosa = models.CharField(db_column='Glosa', max_length=255)
+    valor = models.DecimalField(db_column='Valor', max_digits=18, decimal_places=2, null=True, blank=True)
+    opcional = models.CharField(db_column='Opcional', max_length=1, null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'Cotizacion_Valor'
+        ordering = ['item']
+
+    def __str__(self):
+        return f"{self.idcotizacion_id} - {self.glosa}"
+
+
+class CotizacionNota(models.Model):
+    idcotizacionnota = models.AutoField(primary_key=True)
+    idcotizacion = models.ForeignKey(Cotizacion, db_column='IdCotizacion', on_delete=models.DO_NOTHING)
+    idnota = models.ForeignKey(NotaCotizacion, db_column='IdNota', on_delete=models.DO_NOTHING)
+
+    class Meta:
+        managed = False
+        db_table = 'Cotizacion_Notas'
+        ordering = ['idcotizacionnota']
+
+    def __str__(self):
+        return f"{self.idcotizacion_id} - {self.idnota_id}"
+
+
+class CotizacionFpago(models.Model):
+    idcotizacionfpago = models.AutoField(primary_key=True)
+    idcotizacion = models.ForeignKey(Cotizacion, db_column='IdCotizacion', on_delete=models.DO_NOTHING)
+    linea = models.IntegerField(db_column='Linea')
+    concepto = models.TextField(db_column='Concepto')
+
+    class Meta:
+        managed = False
+        db_table = 'Cotizacion_FPago'
+        ordering = ['linea']
+
+    def __str__(self):
+        return f"{self.idcotizacion_id} - {self.linea}"
     
 class Tregion(models.Model):
     codregion = models.IntegerField(db_column='CodRegion', primary_key=True)
@@ -161,6 +338,9 @@ class Tregion(models.Model):
     class Meta:
         managed = False
         db_table = 'tRegion'
+
+    def __str__(self):
+        return self.descrip or str(self.codregion)
         
 class estadoproyecto(models.Model):
     id = models.AutoField(primary_key=True, null=False)

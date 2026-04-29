@@ -1,3 +1,5 @@
+import json
+
 from django import forms
 from django.core.exceptions import ValidationError
 from django.forms import inlineformset_factory
@@ -5,7 +7,16 @@ from django.forms import inlineformset_factory
 from .models import (
     Cliente,
     Clientecontacto,
+    DestinoCotizacion,
     ClienteCategoria,
+    Cotizacion,
+    CotizacionValor,
+    ItemCotizacion,
+    TFpago,
+    NotaCotizacion,
+    CotizacionNota,
+    CotizacionFpago,
+    Tregion,
     T_Categoria,
     Testadocliente,
     Tcomppago,
@@ -38,6 +49,11 @@ class DescripModelChoiceField(forms.ModelChoiceField):
 class ClienteRelacionadoChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
         return obj.razonsocial or f"Cliente {obj.pk}"
+
+
+class ClienteContactoChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return obj.nombrecontacto or f"Contacto {obj.pk}"
 
 
 class CategoriaModelMultipleChoiceField(forms.ModelMultipleChoiceField):
@@ -136,7 +152,26 @@ class ClienteForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.readonly_esprincipal = kwargs.pop('readonly_esprincipal', False)
+        self.hide_parent_client = kwargs.pop('hide_parent_client', False)
+        self.hide_categorias = kwargs.pop('hide_categorias', False)
+        self.hide_comentario = kwargs.pop('hide_comentario', False)
+
         super().__init__(*args, **kwargs)
+
+        if self.hide_parent_client and 'idcliente_p' in self.fields:
+            self.fields.pop('idcliente_p')
+
+        if self.hide_categorias and 'categorias' in self.fields:
+            self.fields.pop('categorias')
+
+        if self.hide_comentario and 'comentario' in self.fields:
+            self.fields.pop('comentario')
+
+        if self.readonly_esprincipal and 'esprincipal' in self.fields:
+            self.fields['esprincipal'].choices = (('True', 'Sí'),)
+            self.fields['esprincipal'].initial = 'True'
+            self.fields['esprincipal'].disabled = True
 
         for _, field in self.fields.items():
             if isinstance(field.widget, forms.SelectMultiple):
@@ -166,11 +201,18 @@ class ClienteForm(forms.ModelForm):
         self.fields['horariorecep'].label = 'Horario de Recepción'
         self.fields['direcretiroch'].label = 'Dirección de Retiro'
         self.fields['horarioretiroch'].label = 'Horario de Retiro CH'
-        self.fields['idcliente_p'].label = 'Cliente Principal'
+
+        if 'idcliente_p' in self.fields:
+            self.fields['idcliente_p'].label = 'Cliente Principal'
+
         self.fields['idestadocliente'].label = 'Estado cliente'
         self.fields['idcomppago'].label = 'Comportamiento pago'
-        self.fields['comentario'].label = 'Notas'
-        self.fields['categorias'].label = 'Categorías'
+
+        if 'comentario' in self.fields:
+            self.fields['comentario'].label = 'Comentario general'
+
+        if 'categorias' in self.fields:
+            self.fields['categorias'].label = 'Categorías'
 
         self.fields['rut'].widget.attrs.update({
             'placeholder': 'Ingrese RUT sin puntos ni guión',
@@ -183,18 +225,25 @@ class ClienteForm(forms.ModelForm):
         })
 
         if self.instance and self.instance.pk:
-            self.fields['idcliente_p'].queryset = Cliente.objects.exclude(
-                pk=self.instance.pk
-            ).order_by('razonsocial')
+            self.fields['idestadocliente'].initial = self.instance.idestadocliente_id
+            self.fields['idcomppago'].initial = self.instance.idcomppago_id
 
-            categorias_ids = ClienteCategoria.objects.filter(
-                idcliente=self.instance
-            ).values_list('idcategoria_id', flat=True)
-            self.fields['categorias'].initial = list(categorias_ids)
+            if 'idcliente_p' in self.fields:
+                self.fields['idcliente_p'].queryset = Cliente.objects.exclude(
+                    pk=self.instance.pk
+                ).order_by('razonsocial')
+
+            if 'categorias' in self.fields:
+                categorias_ids = ClienteCategoria.objects.filter(
+                    idcliente=self.instance
+                ).values_list('idcategoria_id', flat=True)
+                self.fields['categorias'].initial = list(categorias_ids)
 
         esprincipal_actual = None
 
-        if self.is_bound:
+        if self.readonly_esprincipal:
+            esprincipal_actual = True
+        elif self.is_bound:
             valor_post = self.data.get(self.add_prefix('esprincipal'))
             if valor_post == 'True':
                 esprincipal_actual = True
@@ -203,7 +252,7 @@ class ClienteForm(forms.ModelForm):
         elif self.instance and self.instance.pk is not None:
             esprincipal_actual = self.instance.esprincipal
 
-        if esprincipal_actual is True:
+        if esprincipal_actual is True and 'idcliente_p' in self.fields:
             self.fields['idcliente_p'].widget.attrs['disabled'] = 'disabled'
 
     def clean_razonsocial(self):
@@ -225,6 +274,12 @@ class ClienteForm(forms.ModelForm):
         dvrut = cleaned_data.get('dvrut')
         esprincipal = cleaned_data.get('esprincipal')
         idcliente_p = cleaned_data.get('idcliente_p')
+
+        if self.readonly_esprincipal:
+            esprincipal = True
+            cleaned_data['esprincipal'] = True
+            cleaned_data['idcliente_p'] = None
+            idcliente_p = None
 
         if rut not in (None, ''):
             try:
@@ -248,7 +303,7 @@ class ClienteForm(forms.ModelForm):
         if esprincipal not in (True, False):
             self.add_error('esprincipal', 'Debe indicar si el cliente es principal.')
 
-        if esprincipal is False and not idcliente_p:
+        if esprincipal is False and not idcliente_p and 'idcliente_p' in self.fields:
             self.add_error(
                 'idcliente_p',
                 'Debe seleccionar un Cliente Principal cuando "Es principal" es "No".'
@@ -346,6 +401,225 @@ ClienteContactoFormSet = inlineformset_factory(
     Cliente,
     Clientecontacto,
     form=ClienteContactoForm,
-    extra=1,
+    extra=0,
     can_delete=True
 )
+
+
+class ClienteSeguimientoForm(forms.Form):
+    nota = forms.CharField(
+        label='Nueva nota',
+        required=False,
+        max_length=300,
+        widget=forms.Textarea(
+            attrs={
+                'rows': 4,
+                'maxlength': 300,
+                'placeholder': 'Ingrese una nota de seguimiento para este cliente',
+            }
+        )
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['nota'].widget.attrs['class'] = 'form-control'
+
+    def clean_nota(self):
+        return (self.cleaned_data.get('nota') or '').strip()
+
+
+class CotizacionForm(forms.ModelForm):
+    idcliente = ClienteRelacionadoChoiceField(
+        queryset=Cliente.objects.all().order_by('razonsocial'),
+        required=True,
+        label='Mandante',
+        empty_label='Seleccione mandante'
+    )
+
+    idcontacto = ClienteContactoChoiceField(
+        queryset=Clientecontacto.objects.all().order_by('nombrecontacto', 'idcontacto'),
+        required=False,
+        label='Contacto',
+        empty_label='Sin contacto'
+    )
+
+    codregion = forms.ModelChoiceField(
+        queryset=Tregion.objects.all().order_by('descrip'),
+        required=False,
+        label='Región',
+        empty_label='Seleccione región'
+    )
+
+    destino = forms.ChoiceField(
+        required=False,
+        label='Destino',
+        choices=()
+    )
+
+    moneda = forms.ChoiceField(
+        required=False,
+        label='Moneda',
+        choices=()
+    )
+
+    items_json = forms.CharField(required=False, widget=forms.HiddenInput())
+    notas_json = forms.CharField(required=False, widget=forms.HiddenInput())
+    formapago_json = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    class Meta:
+        model = Cotizacion
+        fields = [
+            'idcliente', 'idcontacto', 'fecha', 'nombreproyecto', 'dirproyecto',
+            'codregion', 'destino', 'pisos', 'edificios', 'mt2', 'moneda'
+        ]
+        widgets = {
+            'fecha': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'nombreproyecto': forms.TextInput(attrs={'maxlength': 100}),
+            'dirproyecto': forms.TextInput(attrs={'maxlength': 80}),
+            'pisos': forms.TextInput(attrs={'maxlength': 50}),
+            'edificios': forms.NumberInput(),
+            'mt2': forms.NumberInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.SelectMultiple):
+                field.widget.attrs['class'] = 'form-select'
+            elif isinstance(field.widget, forms.Select):
+                field.widget.attrs['class'] = 'form-select'
+            else:
+                field.widget.attrs['class'] = 'form-control'
+
+        self.fields['idcliente'].label = 'Mandante'
+        self.fields['idcontacto'].label = 'Contacto'
+        self.fields['codregion'].label = 'Región'
+        self.fields['destino'].label = 'Destino'
+        self.fields['idcliente'].queryset = Cliente.objects.all().order_by('razonsocial')
+        self.fields['idcontacto'].queryset = Clientecontacto.objects.all().order_by('nombrecontacto', 'idcontacto')
+        self.fields['codregion'].queryset = Tregion.objects.all().order_by('descrip')
+        self.fields['destino'].choices = [('', 'Seleccione destino')] + [
+            (destino.nombre, destino.nombre)
+            for destino in DestinoCotizacion.objects.all().order_by('iddestino')
+        ]
+        self.fields['moneda'].choices = [('', 'Seleccione moneda'), ('$','$'), ('UF','UF')]
+        self.fields['items_json'].required = False
+        self.fields['notas_json'].required = False
+        self.fields['formapago_json'].required = False
+        self.fields['fecha'].input_formats = ['%Y-%m-%d']
+        self.fields['idcliente'].widget.attrs.update({'data-autocomplete': 'mandante'})
+        self.fields['idcontacto'].widget.attrs.update({'data-autocomplete': 'contacto'})
+        self.fields['codregion'].widget.attrs.update({'data-autocomplete': 'region'})
+        self.fields['destino'].widget.attrs.update({'data-autocomplete': 'destino'})
+        self.fields['moneda'].widget.attrs.update({'data-autocomplete': 'moneda'})
+        self.fields['moneda'].required = False
+
+    def clean_codregion(self):
+        valor = self.cleaned_data.get('codregion')
+        if valor in (None, ''):
+            return None
+        return valor.pk
+
+    def clean_destino(self):
+        valor = self.cleaned_data.get('destino')
+        if valor in (None, ''):
+            return None
+        return valor
+
+    def clean_moneda(self):
+        valor = self.cleaned_data.get('moneda')
+        if valor in (None, ''):
+            return None
+        return valor
+
+    def clean_nombreproyecto(self):
+        return (self.cleaned_data.get('nombreproyecto') or '').strip() or None
+
+    def clean_dirproyecto(self):
+        return (self.cleaned_data.get('dirproyecto') or '').strip() or None
+
+    def clean_pisos(self):
+        return (self.cleaned_data.get('pisos') or '').strip() or None
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        for field_name in ['idcliente', 'idcontacto', 'fecha', 'nombreproyecto', 'dirproyecto', 'codregion', 'destino', 'moneda']:
+            if not cleaned_data.get(field_name):
+                self.add_error(field_name, 'Este campo es obligatorio.')
+
+        items = []
+        try:
+            items = json.loads(cleaned_data.get('items_json') or '[]')
+        except Exception:
+            items = []
+
+        if not any(float(item.get('valor') or 0) > 0 for item in items if isinstance(item, dict)):
+            self.add_error(None, 'Debe agregar al menos un item con valor mayor que 0.')
+
+        return cleaned_data
+
+
+class TFpagoForm(forms.Form):
+    concepto = forms.ChoiceField(required=False, label='Forma de pago', choices=())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['concepto'].choices = [('', 'Seleccione forma de pago')] + [
+            (fp.concepto, fp.concepto)
+            for fp in TFpago.objects.filter(regionrm=0).order_by('codfp')
+        ]
+
+
+class CotizacionValorForm(forms.ModelForm):
+    item = forms.ModelChoiceField(
+        queryset=ItemCotizacion.objects.all().order_by('iditem'),
+        required=True,
+        label='Item'
+    )
+
+    class Meta:
+        model = CotizacionValor
+        fields = ['item', 'glosa', 'valor', 'opcional']
+        widgets = {
+            'glosa': forms.TextInput(attrs={'readonly': True}),
+            'valor': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'opcional': forms.CheckboxInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for _, field in self.fields.items():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs['class'] = 'form-select'
+            elif isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-check-input'
+            else:
+                field.widget.attrs['class'] = 'form-control'
+
+
+class CotizacionNotaForm(forms.ModelForm):
+    idnota = forms.ModelChoiceField(
+        queryset=NotaCotizacion.objects.all().order_by('idnota'),
+        required=False,
+        label='Nota'
+    )
+
+    class Meta:
+        model = CotizacionNota
+        fields = ['idnota']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['idnota'].widget.attrs['class'] = 'form-select'
+
+
+class CotizacionFpagoForm(forms.ModelForm):
+    class Meta:
+        model = CotizacionFpago
+        fields = ['linea', 'concepto']
+        widgets = {
+            'linea': forms.HiddenInput(),
+            'concepto': forms.Textarea(attrs={'rows': 2}),
+        }

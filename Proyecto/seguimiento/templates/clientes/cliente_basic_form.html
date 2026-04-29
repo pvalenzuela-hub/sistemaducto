@@ -1,0 +1,191 @@
+{% extends "components/base.html" %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-container .select2-selection--single {
+        height: 38px !important;
+        border: 1px solid #d7d9e0 !important;
+        border-radius: 6px !important;
+        padding: 4px 8px !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 28px !important;
+        color: #495057 !important;
+        padding-left: 2px !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px !important;
+    }
+
+    .select2-dropdown {
+        border: 1px solid #d7d9e0 !important;
+        border-radius: 6px !important;
+    }
+ </style>
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-lg-12">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ submenu }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="row">
+                        {% for field in form %}
+                            {% if field.name == 'rut' %}
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">{{ form.rut.label }}</label>
+                                    <div class="row">
+                                        <div class="col-9">
+                                            {{ form.rut }}
+                                            {% if form.rut.errors %}
+                                                <div class="text-danger small mt-1">{{ form.rut.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-3">
+                                            {{ form.dvrut }}
+                                            {% if form.dvrut.errors %}
+                                                <div class="text-danger small mt-1">{{ form.dvrut.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% elif field.name == 'dvrut' %}
+                                {# ya renderizado junto a rut #}
+                            {% elif field.name == 'comentario' %}
+                                {# se renderiza en bloque aparte #}
+                            {% else %}
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% if field.errors %}
+                                        <div class="text-danger small mt-1">{{ field.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    {% if mostrar_comentario %}
+                        <hr class="my-4">
+
+                        <div class="row">
+                            <div class="col-12 mb-4">
+                                <label for="{{ form.comentario.id_for_label }}" class="form-label">{{ form.comentario.label }}</label>
+                                {{ form.comentario }}
+                                {% if form.comentario.errors %}
+                                    <div class="text-danger small mt-1">{{ form.comentario.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> Guardar cambios
+                        </button>
+                        <a href="{% url volver_url_name %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Volver
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    $(document).ready(function () {
+        const $esprincipal = $('#id_esprincipal');
+        const $idclienteP = $('#id_idcliente_p');
+
+        function normalizarTexto(valor) {
+            return (valor || '')
+                .toString()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+        }
+
+        if ($idclienteP.length) {
+            $idclienteP.select2({
+                placeholder: 'Seleccione un cliente principal',
+                allowClear: true,
+                width: '100%',
+                matcher: function (params, data) {
+                    const termino = normalizarTexto(params.term);
+
+                    if (!termino) {
+                        return data;
+                    }
+
+                    const texto = normalizarTexto(data.text);
+                    if (texto.includes(termino)) {
+                        return data;
+                    }
+
+                    return null;
+                }
+            });
+
+            $idclienteP.on('select2:open', function () {
+                setTimeout(function () {
+                    document.querySelector('.select2-container--open .select2-search__field')?.focus();
+                }, 0);
+            });
+        }
+
+        function toggleClientePrincipal() {
+            if (!$esprincipal.length || !$idclienteP.length) {
+                return;
+            }
+
+            const valor = $esprincipal.val();
+
+            if (valor === 'True') {
+                $idclienteP.val('').trigger('change');
+                $idclienteP.prop('disabled', true).trigger('change.select2');
+                $idclienteP.removeAttr('required');
+            } else if (valor === 'False') {
+                $idclienteP.prop('disabled', false).trigger('change.select2');
+                $idclienteP.attr('required', 'required');
+            } else {
+                $idclienteP.val('').trigger('change');
+                $idclienteP.prop('disabled', true).trigger('change.select2');
+                $idclienteP.removeAttr('required');
+            }
+        }
+
+        toggleClientePrincipal();
+        $esprincipal.on('change', toggleClientePrincipal);
+    });
+</script>
+{% endblock %}

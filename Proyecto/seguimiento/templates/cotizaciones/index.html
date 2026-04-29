@@ -1,0 +1,46 @@
+{% extends "components/base.html" %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ submenu }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-light border mb-4">
+                    <form class="row g-2 align-items-end" method="get" action="{% url 'cotizaciones_busqueda' %}">
+                        <div class="col-md-4">
+                            <label class="form-label">Buscar por N° / Id de cotización</label>
+                            <input type="text" name="numero" class="form-control" placeholder="Ej: 15788">
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-primary">Ir a la cotización</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="row g-3">
+                    {% for seccion in secciones %}
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100 bg-light-subtle">
+                                <h5 class="mb-2">{{ seccion.titulo }}</h5>
+                                <p class="text-muted mb-3">{{ seccion.descripcion }}</p>
+                                <a href="{% url seccion.url_principal_name %}" class="btn btn-primary">
+                                    {{ seccion.accion_principal }}
+                                </a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

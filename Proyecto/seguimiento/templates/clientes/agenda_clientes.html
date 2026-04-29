@@ -1,0 +1,459 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    #calendar-clientes {
+        background: #fff;
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    .fc .fc-toolbar-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+
+    .fc-event {
+        border: none !important;
+        padding: 2px 4px;
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .fc-event,
+    .fc-daygrid-event {
+        cursor: pointer !important;
+    }
+
+    .fc-daygrid-day {
+        cursor: pointer;
+    }
+
+    #modalDetalleAgenda .modal-content,
+    #modalNuevaAgenda .modal-content {
+        border-radius: 10px;
+    }
+
+    #modalDetalleAgenda .form-control[readonly],
+    #modalNuevaAgenda .form-control[readonly],
+    #modalDetalleAgenda textarea[readonly] {
+        background-color: #f3f4f8;
+        border-color: #d7d9e0;
+        color: #495057;
+    }
+
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-container .select2-selection--single {
+        height: 38px !important;
+        border: 1px solid #d7d9e0 !important;
+        border-radius: 6px !important;
+        padding: 4px 8px !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 28px !important;
+        color: #495057 !important;
+        padding-left: 2px !important;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px !important;
+    }
+
+    .select2-dropdown {
+        border: 1px solid #d7d9e0 !important;
+        border-radius: 6px !important;
+    }
+
+    .agenda-contacto-item + .agenda-contacto-item {
+        margin-top: 0.75rem;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                <div>
+                    <h5 class="mb-0">{{ submenu }}</h5>
+                </div>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                    Visible desde {{ hace_30_dias_iso }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div id="calendar-clientes"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalDetalleAgenda" tabindex="-1" aria-labelledby="modalDetalleAgendaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h4 class="modal-title fw-bold" id="modalDetalleAgendaLabel">Detalle del evento</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body pt-4">
+                <div class="row g-4">
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Cliente</label>
+                        <input type="text" id="d_cliente" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Fecha</label>
+                        <input type="text" id="d_fecha" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Título</label>
+                        <input type="text" id="d_titulo" class="form-control" readonly>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Detalle</label>
+                        <textarea id="d_descrip" class="form-control" rows="5" readonly></textarea>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Comentario del cliente</label>
+                        <textarea id="d_comentario_cliente" class="form-control" rows="4" readonly></textarea>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Contactos asociados</label>
+                        <div id="d_contactos" class="border rounded p-3 bg-light-subtle"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalNuevaAgenda" tabindex="-1" aria-labelledby="modalNuevaAgendaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h4 class="modal-title fw-bold" id="modalNuevaAgendaLabel">Nuevo evento de agenda</h4>
+                    <span id="badgeFechaNuevaAgenda" class="badge bg-danger-subtle text-danger mt-2"></span>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body pt-4">
+                <input type="hidden" id="nueva_agenda_fecha">
+
+                <div class="row g-4">
+                    <div class="col-12">
+                        <label for="agenda_idcliente" class="form-label fw-semibold">Cliente</label>
+                        <select id="agenda_idcliente" class="form-select">
+                            <option value=""></option>
+                            {% for cliente in clientes %}
+                                <option value="{{ cliente.idcliente }}">{{ cliente.razonsocial }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-12">
+                        <label for="agenda_descrip" class="form-label fw-semibold">Detalle del evento</label>
+                        <textarea id="agenda_descrip" class="form-control" rows="4" maxlength="200" placeholder="Ejemplo: Recordar cotización, llamado de seguimiento, reunión comercial"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" id="btnGuardarNuevaAgenda" class="btn btn-success">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales-all.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const calendarEl = document.getElementById('calendar-clientes');
+    const modalDetalleAgenda = new bootstrap.Modal(document.getElementById('modalDetalleAgenda'));
+    const modalNuevaAgenda = new bootstrap.Modal(document.getElementById('modalNuevaAgenda'));
+
+    const dCliente = document.getElementById('d_cliente');
+    const dFecha = document.getElementById('d_fecha');
+    const dTitulo = document.getElementById('d_titulo');
+    const dDescrip = document.getElementById('d_descrip');
+    const dComentarioCliente = document.getElementById('d_comentario_cliente');
+    const dContactos = document.getElementById('d_contactos');
+
+    const badgeFechaNuevaAgenda = document.getElementById('badgeFechaNuevaAgenda');
+    const nuevaAgendaFecha = document.getElementById('nueva_agenda_fecha');
+    const agendaIdCliente = document.getElementById('agenda_idcliente');
+    const agendaDescrip = document.getElementById('agenda_descrip');
+    const btnGuardarNuevaAgenda = document.getElementById('btnGuardarNuevaAgenda');
+
+    const urlEventos = "{% url 'eventos_agenda_clientes' %}";
+    const urlCrearAgenda = "{% url 'crear_agenda_cliente' %}";
+    const urlMoverAgendaTemplate = "{% url 'mover_agenda_cliente' 0 %}";
+    const hoyIso = "{{ hoy_iso }}";
+    const hace30DiasIso = "{{ hace_30_dias_iso }}";
+
+    function normalizarTexto(valor) {
+        return (valor || '')
+            .toString()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim();
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    const csrftoken = getCookie('csrftoken');
+
+    $('#agenda_idcliente').select2({
+        placeholder: 'Selecciona un cliente',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#modalNuevaAgenda'),
+        matcher: function (params, data) {
+            const termino = normalizarTexto(params.term);
+
+            if (!termino) {
+                return data;
+            }
+
+            const texto = normalizarTexto(data.text);
+            if (texto.includes(termino)) {
+                return data;
+            }
+
+            return null;
+        }
+    });
+
+    $('#agenda_idcliente').on('select2:open', function () {
+        setTimeout(function () {
+            document.querySelector('.select2-container--open .select2-search__field')?.focus();
+        }, 0);
+    });
+
+    function resetModalNuevaAgenda() {
+        nuevaAgendaFecha.value = '';
+        badgeFechaNuevaAgenda.textContent = '';
+        agendaDescrip.value = '';
+        $('#agenda_idcliente').val('').trigger('change');
+    }
+
+    async function guardarNuevaAgenda() {
+        const fecha = nuevaAgendaFecha.value;
+        const idcliente = agendaIdCliente.value;
+        const descrip = agendaDescrip.value.trim();
+
+        if (!fecha) {
+            mostrarMensaje('No se pudo determinar la fecha del evento.', 'error');
+            return;
+        }
+
+        if (!idcliente) {
+            mostrarMensaje('Debes seleccionar un cliente.', 'warning');
+            return;
+        }
+
+        if (!descrip) {
+            mostrarMensaje('Debes ingresar el detalle del evento.', 'warning');
+            agendaDescrip.focus();
+            return;
+        }
+
+        btnGuardarNuevaAgenda.disabled = true;
+
+        try {
+            const response = await fetch(urlCrearAgenda, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken,
+                },
+                body: JSON.stringify({
+                    fecha,
+                    idcliente,
+                    descrip,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.mensaje || 'No se pudo guardar el evento.');
+            }
+
+            mostrarMensaje(data.mensaje || 'Evento creado correctamente.', 'success');
+            modalNuevaAgenda.hide();
+            resetModalNuevaAgenda();
+            calendar.refetchEvents();
+        } catch (error) {
+            mostrarMensaje(error.message || 'No se pudo guardar el evento.', 'error');
+        } finally {
+            btnGuardarNuevaAgenda.disabled = false;
+        }
+    }
+
+    async function moverAgendaCliente(info) {
+        const agendaId = info.event.id;
+        const nuevaFecha = info.event.startStr;
+        const urlMover = urlMoverAgendaTemplate.replace('/0/mover/', `/${agendaId}/mover/`);
+
+        try {
+            const response = await fetch(urlMover, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken,
+                },
+                body: JSON.stringify({
+                    nueva_fecha: nuevaFecha,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.mensaje || 'No se pudo mover el evento.');
+            }
+
+            mostrarMensaje(data.mensaje || 'Evento movido correctamente.', 'success');
+            calendar.refetchEvents();
+        } catch (error) {
+            info.revert();
+            mostrarMensaje(error.message || 'No se pudo mover el evento.', 'error');
+        }
+    }
+
+    function renderizarContactos(contactos) {
+        if (!Array.isArray(contactos) || contactos.length === 0) {
+            dContactos.innerHTML = '<div class="text-muted">Este cliente no tiene contactos registrados.</div>';
+            return;
+        }
+
+        dContactos.innerHTML = contactos.map(function (contacto) {
+            const bloques = [];
+
+            if (contacto.cargo) {
+                bloques.push(`<div><strong>Cargo:</strong> ${contacto.cargo}</div>`);
+            }
+
+            if (contacto.telefono) {
+                bloques.push(`<div><strong>Teléfono:</strong> ${contacto.telefono}</div>`);
+            }
+
+            if (contacto.email) {
+                bloques.push(`<div><strong>Email:</strong> ${contacto.email}</div>`);
+            }
+
+            const tipo = contacto.tipo ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2">${contacto.tipo}</span>` : '';
+            const nombre = contacto.nombre || 'Contacto sin nombre';
+
+            return `
+                <div class="agenda-contacto-item border rounded bg-white p-3">
+                    <div class="fw-semibold">${nombre}${tipo}</div>
+                    <div class="small text-muted mt-2">
+                        ${bloques.join('') || 'Sin datos adicionales'}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        initialDate: hoyIso,
+        validRange: {
+            start: hace30DiasIso,
+        },
+        locale: 'es',
+        height: 'auto',
+        fixedWeekCount: false,
+        displayEventTime: false,
+        editable: true,
+        eventStartEditable: true,
+        eventDurationEditable: false,
+        dayMaxEventRows: true,
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth',
+        },
+        events: urlEventos,
+        eventClick: function (info) {
+            info.jsEvent.preventDefault();
+
+            dCliente.value = info.event.extendedProps.cliente || info.event.title || '';
+            dFecha.value = info.event.extendedProps.fecha || '';
+            dTitulo.value = info.event.extendedProps.titulo || info.event.title || '';
+            dDescrip.value = info.event.extendedProps.descrip || '';
+            dComentarioCliente.value = info.event.extendedProps.comentario_cliente || '';
+            renderizarContactos(info.event.extendedProps.contactos || []);
+
+            modalDetalleAgenda.show();
+        },
+        dateClick: function (info) {
+            if (info.dateStr < hoyIso) {
+                mostrarMensaje('Solo puedes registrar eventos desde hoy en adelante.', 'warning');
+                return;
+            }
+
+            nuevaAgendaFecha.value = info.dateStr;
+            badgeFechaNuevaAgenda.textContent = `Fecha seleccionada: ${info.dateStr}`;
+            modalNuevaAgenda.show();
+
+            setTimeout(function () {
+                $('#agenda_idcliente').select2('open');
+            }, 150);
+        },
+        eventDrop: moverAgendaCliente,
+    });
+
+    btnGuardarNuevaAgenda.addEventListener('click', guardarNuevaAgenda);
+
+    document.getElementById('modalNuevaAgenda').addEventListener('hidden.bs.modal', function () {
+        resetModalNuevaAgenda();
+    });
+
+    calendar.render();
+});
+</script>
+{% endblock %}
