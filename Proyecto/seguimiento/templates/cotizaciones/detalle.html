@@ -1,0 +1,243 @@
+{% extends "components/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block body %}
+<style>
+    .cotizacion-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: .35rem .8rem;
+        border-radius: 999px;
+        font-size: .78rem;
+        font-weight: 700;
+        letter-spacing: .02em;
+    }
+    .cotizacion-badge-activa { background: #d1fae5; color: #065f46; }
+    .cotizacion-badge-borrador { background: #dbeafe; color: #1d4ed8; }
+    .cotizacion-badge-cerrada { background: #fee2e2; color: #991b1b; }
+    .detail-kpi {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 1rem 1.1rem;
+        height: 100%;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    }
+    .detail-kpi .label {
+        font-size: .75rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6b7280;
+        margin-bottom: .3rem;
+    }
+    .detail-kpi .value {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.2;
+    }
+    .detail-block {
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        background: #fff;
+        padding: 1.1rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    }
+    .detail-section-title {
+        font-size: .78rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6b7280;
+        font-weight: 700;
+        margin-bottom: .9rem;
+    }
+    .info-item {
+        padding: .55rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .info-item:last-child { border-bottom: 0; }
+    .info-item .label { font-size: .78rem; color: #6b7280; margin-bottom: .15rem; }
+    .info-item .value { font-weight: 600; color: #111827; }
+    .nav-tabs .nav-link {
+        border: 0;
+        border-bottom: 2px solid transparent;
+        color: #6b7280;
+        font-weight: 600;
+        padding: .85rem 1rem;
+    }
+    .nav-tabs .nav-link.active {
+        color: #4f46e5;
+        border-bottom-color: #4f46e5;
+        background: transparent;
+    }
+</style>
+
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="mb-1">{{ encabezado }}</h1>
+                <p class="text-muted mb-0">{{ submenu }}</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{% url volver_url_name %}" class="btn btn-outline-secondary">Volver</a>
+                {% if cotizacion.esactiva and cotizacion.estado == 0 %}
+                    <a href="{% url editar_url_name cotizacion.pk %}" class="btn btn-warning">Editar</a>
+                    <a href="{% url 'cotizacion_versionar' cotizacion.pk %}" class="btn btn-primary">Nueva versión</a>
+                    <a href="{% url 'cotizacion_reporte_pdf' cotizacion.pk %}" class="btn btn-danger">PDF</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="detail-block mb-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+                <div>
+                    <div class="cotizacion-badge {{ cotizacion.estado_visual.class }}">{{ cotizacion.estado_visual.label }}</div>
+                    <div class="text-muted mt-2">{{ cotizacion.estado_texto }}</div>
+                </div>
+                <div class="text-end text-muted small">
+                    <div>Fecha registro: {{ cotizacion.fecharegistro|date:"d-m-Y H:i" }}</div>
+                    <div>Es activa: {% if cotizacion.esactiva %}Sí{% else %}No{% endif %}</div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4"><div class="detail-kpi"><div class="label">N° Cotización</div><div class="value">{{ cotizacion.numcotizacion|default:cotizacion.idcotizacion }}-{{ cotizacion.numcorr|default:0|stringformat:"03d" }}</div></div></div>
+                <div class="col-md-4"><div class="detail-kpi"><div class="label">Fecha</div><div class="value">{{ cotizacion.fecha|date:"d-m-Y" }}</div></div></div>
+            </div>
+        </div>
+
+        <div class="detail-block">
+            <ul class="nav nav-tabs mb-3" role="tablist">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#general" type="button">General</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#mandante" type="button">Mandante / Contacto</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#valores" type="button">Valores</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#historial" type="button">Historial</button></li>
+            </ul>
+
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="general">
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <div class="detail-section-title">Proyecto</div>
+                            <div class="info-item"><div class="label">Nombre</div><div class="value">{{ cotizacion.nombreproyecto }}</div></div>
+                            <div class="info-item"><div class="label">Dirección</div><div class="value">{{ cotizacion.dirproyecto }}</div></div>
+                            <div class="info-item"><div class="label">Destino</div><div class="value">{{ cotizacion.destino }}</div></div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="detail-section-title">Datos técnicos</div>
+                            <div class="row g-3">
+                                <div class="col-md-6"><div class="info-item"><div class="label">Región</div><div class="value">{{ cotizacion.region_texto }}</div></div></div>
+                                <div class="col-md-6"><div class="info-item"><div class="label">Moneda</div><div class="value">{{ cotizacion.moneda }}</div></div></div>
+                                <div class="col-md-6"><div class="info-item"><div class="label">Pisos</div><div class="value">{{ cotizacion.pisos }}</div></div></div>
+                                <div class="col-md-6"><div class="info-item"><div class="label">Edificios</div><div class="value">{{ cotizacion.edificios }}</div></div></div>
+                                <div class="col-md-6"><div class="info-item"><div class="label">m2</div><div class="value">{{ cotizacion.mt2 }}</div></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="mandante">
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <div class="detail-section-title">Mandante</div>
+                            <div class="info-item"><div class="label">Razón social</div><div class="value">{{ cotizacion.mandante_texto }}</div></div>
+                            <div class="info-item"><div class="label">Teléfono</div><div class="value">{{ cotizacion.idcliente.telefono|default:'-' }}</div></div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="detail-section-title">Contacto</div>
+                            <div class="info-item"><div class="label">Nombre</div><div class="value">{{ cotizacion.contacto_texto }}</div></div>
+                            <div class="info-item"><div class="label">Teléfono</div><div class="value">{{ cotizacion.telefono_contacto|default:'-' }}</div></div>
+                            <div class="info-item"><div class="label">eMail</div><div class="value">{{ cotizacion.email_contacto|default:'-' }}</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="valores">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="row g-3 mb-1">
+                                <div class="col-md-4"><div class="detail-kpi"><div class="label">Moneda</div><div class="value">{{ cotizacion.moneda|default:'-' }}</div></div></div>
+                                <div class="col-md-4"><div class="detail-kpi"><div class="label">Total Proyecto</div><div class="value">{{ cotizacion.total_proyecto|default:0 }}</div></div></div>
+                                <div class="col-md-4"><div class="detail-kpi"><div class="label">Total Con Opcional</div><div class="value">{{ cotizacion.total_con_opcional|default:0 }}</div></div></div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="detail-section-title">Forma de Pago</div>
+                            {% if formas_pago %}
+                                {% for fp in formas_pago %}
+                                    <div class="border rounded p-2 mb-2">
+                                        <div class="text-muted small text-uppercase">Línea {{ fp.linea }}</div>
+                                        <div class="fw-semibold">{{ fp.concepto }}</div>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-muted">Sin forma de pago registrada.</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="detail-section-title">Notas</div>
+                            {% if notas %}
+                                {% for nota in notas %}
+                                    <div class="border rounded p-2 mb-2">
+                                        <div class="text-muted small text-uppercase">Nota</div>
+                                        <div class="fw-semibold">{{ nota.idnota.nota }}</div>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-muted">Sin notas registradas.</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 mt-2">
+                            <div class="detail-section-title">Items</div>
+                            {% if valores %}
+                                <div class="row g-3">
+                                    {% for valor in valores %}
+                                        <div class="col-md-6 col-xl-4">
+                                            <div class="border rounded p-3 h-100">
+                                                <div class="text-muted small text-uppercase">Item {{ valor.item }}</div>
+                                                <div class="fw-semibold">{{ valor.glosa }}</div>
+                                                <div class="text-muted small mt-2">Valor: {{ valor.valor }} | Opcional: {{ valor.opcional }}</div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-muted">Sin items registrados.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="historial">
+                    {% if proyectos %}
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Proyecto</th>
+                                        <th>Estado</th>
+                                        <th>Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for proyecto in proyectos %}
+                                        <tr>
+                                            <td>{{ proyecto.idproyecto }}</td>
+                                            <td>{{ proyecto.estado }}</td>
+                                            <td>{{ proyecto.valor }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-muted">No hay proyectos asociados.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

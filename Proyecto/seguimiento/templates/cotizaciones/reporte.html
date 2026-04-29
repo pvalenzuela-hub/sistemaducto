@@ -1,0 +1,343 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    @page {
+        size: A4 portrait;
+        margin: 10mm;
+    }
+    .report-page, .report-page * {
+        font-family: Arial, Helvetica, sans-serif;
+    }
+    .report-page {
+        background: #fff;
+        border: 2px solid #25b33f;
+        padding: 12px 13px 10px;
+        color: #111;
+        min-height: 277mm;
+    }
+    .page-one,
+    .page-two {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+    .report-header {
+        display: grid;
+        grid-template-columns: 180px 1fr 290px;
+        gap: 16px;
+        align-items: start;
+        margin-bottom: 10px;
+    }
+    .report-logo img {
+        width: 120px;
+        height: auto;
+        display: block;
+        margin-top: 2px;
+    }
+    .report-meta {
+        border: 1px solid #222;
+        padding: 10px 12px;
+        font-size: 11px;
+    }
+    .report-meta-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 4px 0;
+    }
+    .report-title {
+        font-size: 13px;
+        font-weight: 800;
+        margin: 10px 0 3px;
+        text-transform: uppercase;
+    }
+    .report-subtitle {
+        font-size: 9px;
+        font-weight: 700;
+        color: #666;
+        line-height: 1.2;
+    }
+    .report-contact {
+        font-size: 9px;
+        color: #666;
+        line-height: 1.3;
+    }
+    .section-bar {
+        background: #25b33f;
+        color: #111;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 4px 10px;
+        margin: 12px 0 8px;
+        font-size: 11px;
+    }
+    .report-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+    }
+    .report-table th,
+    .report-table td {
+        border: 1px solid #cfcfcf;
+        padding: 5px 6px;
+        vertical-align: top;
+    }
+    .report-table th { background: #f5f5f5; }
+    .report-note-box {
+        padding: 8px 10px;
+        font-size: 11px;
+        line-height: 1.25;
+    }
+    .highlight-box {
+        background: #f3f05a;
+        font-weight: 700;
+        text-align: center;
+        padding: 9px 12px;
+        margin: 8px 0 8px;
+        line-height: 1.25;
+    }
+    .signature-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-top: 26px;
+        width: 78%;
+        margin-left: auto;
+        margin-right: auto;
+        font-size: 10px;
+    }
+    .page-break {
+        break-before: page;
+        page-break-before: always;
+    }
+    .signature-name { font-weight: 700; font-size: 11px; }
+    @media print {
+        .no-print { display: none !important; }
+        body { background: #fff !important; }
+        .card { border: 0 !important; box-shadow: none !important; }
+        .report-page { border-width: 1px; min-height: calc(297mm - 20mm); break-after: page; page-break-after: always; }
+        .report-page:last-child { break-after: auto; page-break-after: auto; }
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="row no-print mb-3">
+    <div class="col-12 d-flex gap-2 flex-wrap">
+        <a href="{% url 'cotizacion_reporte_pdf' cotizacion.pk %}" class="btn btn-danger">Imprimir / Guardar PDF</a>
+        <a href="{% url 'cotizacion_detalle' cotizacion.pk %}" class="btn btn-secondary">Volver</a>
+    </div>
+</div>
+
+{% if pdf_error %}
+<div class="alert alert-danger no-print">
+    <strong>Error PDF:</strong> {{ pdf_error }}
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-3 p-lg-4">
+        <div class="report-page">
+            <div class="page-one">
+            <div class="report-header">
+                <div class="report-logo">
+                    <img src="{% static 'assets/images/brand/logoducto_1087x525.png' %}" alt="Ducto Proyectos">
+                </div>
+                <div>
+                    <div class="report-title">Consultoría en manejo de residuos</div>
+                    <div class="report-subtitle">SOCIEDAD DE PROFESIONALES CONTRERAS Y VALENZUELA LIMITADA 76.427.499-7</div>
+                    <div class="report-contact">La Goleta 879, Las Condes<br>contacto@ductoproyectos.cl</div>
+                </div>
+                <div class="report-meta">
+                    <div class="report-meta-row"><span>N° COTIZACIÓN</span><strong>{{ cotizacion.numcotizacion|default:cotizacion.idcotizacion }}-{{ cotizacion.numcorr|default:0|stringformat:"03d" }}</strong></div>
+                    <div class="report-meta-row"><span>FECHA</span><strong>{{ cotizacion.fecha|date:"d/m/Y" }}</strong></div>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 26px; margin: 6px 0 6px; font-size:12px; line-height:1.2;">
+                <div>
+                    <div><strong>Mandante:</strong> {{ cotizacion.mandante_texto }}</div>
+                    <div><strong>Contacto:</strong> {{ cotizacion.contacto_texto }}</div>
+                    <div><strong>Dirección:</strong> {{ cotizacion.dirproyecto }}</div>
+                    <div><strong>Fono:</strong> {{ cotizacion.telefono_contacto|default:'-' }}</div>
+                    <div><strong>E-mail:</strong> {{ cotizacion.email_contacto|default:'-' }}</div>
+                </div>
+                <div>
+                    <div><strong>Proyecto:</strong> {{ cotizacion.nombreproyecto }}</div>
+                    <div><strong>Caracteristicas</strong></div>
+                    <div><strong>Destino:</strong> {{ cotizacion.destino }}</div>
+                    <div><strong>N° Edificios:</strong> {{ cotizacion.edificios }}</div>
+                    <div><strong>N° Pisos:</strong> {{ cotizacion.pisos }}</div>
+                </div>
+            </div>
+
+            <table class="report-table">
+                <tr>
+                    <th style="width:22%">Destino</th><td style="width:28%">{{ cotizacion.destino }}</td>
+                    <th style="width:22%">N° Edificios</th><td style="width:28%">{{ cotizacion.edificios }}</td>
+                </tr>
+                <tr>
+                    <th>N° Pisos</th><td>{{ cotizacion.pisos }}</td>
+                    <th>m2</th><td>{{ cotizacion.mt2 }}</td>
+                </tr>
+            </table>
+
+            <div class="section-bar">PLANOS REQUERIDOS PARA DESARROLLO DEL PROYECTO (DWG)</div>
+            <div style="padding: 0 12px 6px; font-size:11px; line-height:1.22;">
+                <div>1.- PLANO DE EMPLAZAMIENTO Y/O UBICACIÓN (ZONA DE PRECARGUÍO)</div>
+                <div>2.- PLANO CON UBICACIÓN DE SALA DE BASURA, CLOSET Y TOLVA</div>
+                <div>3.- PLANO NIVEL DE ACCESO</div>
+                <div>4.- PLANO PISO TIPO</div>
+                <div>5.- CORTES Y ELEVACIONES (ZONA DUCTOS)</div>
+            </div>
+
+            <div class="section-bar">DOCUMENTOS REQUERIDOS PARA TRAMITACIÓN EN SEREMI DE SALUD</div>
+            <div style="padding: 0 12px 6px; font-size:11px; line-height:1.22;">
+                <div style="font-weight:700; color:#c00; margin-bottom:4px;">(NO APLICA POR CAMBIO DE LEY)</div>
+                <div>1.- COPIA CERTIFICADO DE NÚMERO MUNICIPAL</div>
+                <div>2.- COPIA C.I. PROPIETARIO Y REP. LEGAL</div>
+                <div>3.- DATOS PROPIETARIO Y/O REP. LEGAL (DIRECCIÓN, FONO, E-MAIL)</div>
+                <div>4.- DATOS ARQUITECTO (NOMBRE, RUT, DIRECCIÓN, E-MAIL)</div>
+                <div>5.- CHEQUE POR ARANCEL SEREMI: CRUZADO, NOMINATIVO, GIRADO A SEREMI DE SALUD CORRESPONDIENTE.</div>
+                <div style="margin-top:2px;">VALOR DEPENDE DE CADA PROYECTO.</div>
+            </div>
+
+            <div class="section-bar">LISTADO DE ENTREGABLES</div>
+            <div style="padding: 0 12px 6px; font-size:11px; line-height:1.22;">
+                <div>1.- PLANOS:</div>
+                <div style="padding-left:28px;">- EMPLAZAMIENTO</div>
+                <div style="padding-left:28px;">- PLANTAS Y CORTES SALA DE BASURA</div>
+                <div style="padding-left:28px;">- PLANTAS Y CORTES CLOSET DUCTOS DE BASURA</div>
+                <div style="padding-left:28px;">- DETALLES DE IMPLEMENTACIÓN</div>
+                <div style="padding-left:28px;">- ITEMIZADO</div>
+                <div style="padding-left:28px;">- CÁLCULO DE RESIDUOS</div>
+                <div style="padding-left:28px;">- NOMENCLATURA</div>
+                <div style="margin-top:4px;">2.- ESPECIFICACIONES TÉCNICAS</div>
+                <div>3.- ITEMIZADO</div>
+            </div>
+
+            <div class="section-bar">PLAZOS DE ENTREGA</div>
+            <div style="padding: 0 12px 4px; font-size:11px; line-height:1.22;">
+                <div>1.- PRIMERA ENTREGA: 15 DÍAS HÁBILES, UNA VEZ RECIBIDA LA ORDEN DE COMPRA O DATOS DE FACTURACIÓN Y LOS PLANOS DE ARQUITECTURA NECESARIOS PARA EL DESARROLLO DEL PROYECTO.</div>
+                <div style="margin-top:6px;">2.- CORRECCIONES: 5 DÍAS HÁBILES UNA VEZ RECIBIDAS LAS OBSERVACIONES.</div>
+                <div style="margin-top:6px;">3.- EL PROYECTO CONSIDERA 3 MODIFICACIONES A CAUSA DE CAMBIOS EN ARQUITECTURA.</div>
+            </div>
+
+            <div style="margin-top:auto; text-align:center; font-size:9px; padding-top:10px;">La Goleta 879, Las Condes - Fono: 22 261 5416 - Área Técnica 9 7783 4504 - contacto@ductoproyectos.cl - www.ductoproyectos.cl</div>
+            </div>
+
+            <div class="page-break"></div>
+            <div class="page-two">
+            <div class="section-bar">Valores Desarrollo Proyecto</div>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Glosa</th>
+                        <th style="width:12%">Valor</th>
+                        <th style="width:12%"> </th>
+                        <th style="width:16%"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if valores %}
+                        {% for valor in valores %}
+                            {% if not valor.opcional or valor.opcional == 'N' %}
+                                <tr>
+                                    <td>{{ valor.glosa }}</td>
+                                    <td>{{ valor.moneda|default:cotizacion.moneda|default:'UF' }}</td>
+                                    <td style="text-align:right;">{{ valor.valor }}</td>
+                                    <td></td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                    <tr>
+                        <td style="text-align:right; font-weight:700;">TOTAL PROYECTO</td>
+                        <td>{{ cotizacion.moneda|default:'UF' }}</td>
+                        <td style="text-align:right; font-weight:700;">{{ cotizacion.total_proyecto|default:0 }}</td>
+                        <td style="color:#c00; font-weight:700; text-align:left;">exento de IVA</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="report-note-box">
+                <div><strong>*</strong> El proyecto incluye Itemizado, reuniones de coordinación en Santiago, asesoría a arquitectos y consultas durante etapa de licitación.</div>
+                <div><strong>*</strong> Esta Cotización contempla un número de 3 modificaciones al proyecto de nuestra especialidad, sin embargo se considerará como modificación tanto cambios a nuestra especialidad como 3 actualizaciones de arquitectura que no impliquen cambios, es decir, 3 actualizaciones sin cambios = 1 modificación al proyecto. El costo adicional por modificación corresponde a UF 3.</div>
+            </div>
+
+            <div class="highlight-box">
+                A PARTIR DEL 18 DE MAYO DE 2026, EL SEREMI DE SALUD DEJARÁ DE APROBAR PROYECTOS DE BASURA<br>
+                EN EDIFICIOS DE MÁS DE 4 PISOS, SEGÚN LO ESTABLECE LA RESOLUCIÓN EXENTA N°1.378/2025,<br>
+                REEMPLAZANDO ESTE TRÁMITE POR UNA DECLARACIÓN JURADA.<br>
+                DADO LO ANTERIOR Y DEBIDO A LOS TIEMPOS DISPONIBLES, ESTA COTIZACIÓN NO CONSIDERA<br>
+                TRAMITACIÓN DE APROBACIÓN EN SEREMI.
+            </div>
+
+            <div class="section-bar">Opcionales</div>
+            <table class="report-table">
+                <thead>
+                    <tr><th>Glosa</th><th style="width:12%"></th><th style="width:16%">Valor</th></tr>
+                </thead>
+                <tbody>
+                    {% for valor in valores %}
+                        {% if valor.opcional == 'S' %}
+                            <tr>
+                                <td>{{ valor.glosa }}</td>
+                                <td>{{ valor.moneda|default:cotizacion.moneda|default:'UF' }}</td>
+                                <td style="text-align:right;">{{ valor.valor }}</td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="report-note-box" style="padding-top:4px; padding-bottom:4px;"><strong>ENTENDEMOS ACEPTADA NUESTRA COTIZACIÓN</strong> CON LA EMISIÓN DE ORDEN DE COMPRA O CONTRATO A NUESTRO FAVOR.</div>
+
+            <div style="font-weight:700; margin: 8px 0 4px; font-size: 13px;">FORMA DE PAGO</div>
+            <div class="report-note-box">
+                {% if formas_pago %}
+                    {% for fp in formas_pago %}
+                        <div>{% if fp.concepto %}{{ fp.concepto }}{% else %}{{ fp.descripcion }}{% endif %}</div>
+                    {% endfor %}
+                {% else %}
+                    <div>Sin forma de pago registrada.</div>
+                {% endif %}
+            </div>
+
+            <div class="report-note-box" style="padding-top:2px;">
+                <strong>Notas:</strong><br>
+                {% if notas %}
+                    {% for nota in notas %}
+                        <div style="margin-bottom:2px;">*{{ nota.idnota.nota }}</div>
+                    {% endfor %}
+                {% else %}
+                    <div>Sin notas registradas.</div>
+                {% endif %}
+            </div>
+
+            <div class="signature-row" style="padding-top:8px;">
+                <div style="text-align:center;">
+                    <div class="signature-name">Camila Valenzuela Dueñas</div>
+                    <div>Administración y Finanzas</div>
+                    <div>Ducto Proyectos</div>
+                    <div>Santiago - Chile</div>
+                </div>
+                <div style="text-align:center;">
+                    <div class="signature-name">Robinson Contreras Riffo</div>
+                    <div>Área Técnica y Desarrollo</div>
+                    <div>Ducto Proyectos</div>
+                    <div>Santiago - Chile</div>
+                </div>
+            </div>
+            <div style="margin-top:4px; text-align:center; font-size:9px; color:#333;">La Goleta 879, Las Condes - Fono: 22 261 5416 - Área Técnica 9 7783 4504 - contacto@ductoproyectos.cl - www.ductoproyectos.cl</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

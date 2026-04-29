@@ -3,6 +3,22 @@ from . import views
 from .views import Vista1, Vista2, Vista3, VisorComentario
 
 urlpatterns = [
+    path('cotizaciones/', views.cotizaciones_home, name='cotizaciones_home'),
+    path('cotizaciones/busqueda/', views.cotizaciones_busqueda, name='cotizaciones_busqueda'),
+    path('cotizaciones/ingreso/', views.cotizaciones_ingreso, name='cotizaciones_ingreso'),
+    path('cotizaciones/<int:pk>/', views.cotizacion_detalle, name='cotizacion_detalle'),
+    path('cotizaciones/<int:pk>/editar/', views.cotizacion_editar, name='cotizacion_editar'),
+    path('cotizaciones/<int:pk>/versionar/', views.cotizacion_versionar, name='cotizacion_versionar'),
+    path('cotizaciones/<int:pk>/reporte/', views.cotizacion_reporte, name='cotizacion_reporte'),
+    path('cotizaciones/<int:pk>/reporte/pdf/', views.cotizacion_reporte_pdf, name='cotizacion_reporte_pdf'),
+    path('cotizaciones/api/mandantes/', views.api_cotizaciones_mandantes, name='api_cotizaciones_mandantes'),
+    path('cotizaciones/api/mandantes/<int:pk>/', views.api_cotizaciones_mandante_detalle, name='api_cotizaciones_mandante_detalle'),
+    path('cotizaciones/api/contactos/', views.api_cotizaciones_contactos, name='api_cotizaciones_contactos'),
+    path('cotizaciones/api/contactos/<int:pk>/', views.api_cotizaciones_contacto_detalle, name='api_cotizaciones_contacto_detalle'),
+    path('cotizaciones/api/items/', views.api_cotizaciones_items, name='api_cotizaciones_items'),
+    path('cotizaciones/api/notas/', views.api_cotizaciones_notas, name='api_cotizaciones_notas'),
+    path('cotizaciones/api/forma-pago/', views.api_cotizaciones_formapago, name='api_cotizaciones_formapago'),
+
     path('terminados/', Vista1.as_view(), name='vista1'),
     path('vistobueno/', Vista2.as_view(), name='vista2'),
     path('desarrollo/', Vista3.as_view(), name='vista3'),
@@ -18,6 +34,13 @@ urlpatterns = [
 
     path('proyecto/reporte/', views.proyectos_totales, name='reporte_proyectos'),
     path('clientes/reporte/', views.reporte_clientes, name='reporte_clientes'),
+    path('clientes/totales/', views.clientes_totales, name='clientes_totales'),
+    path('clientes/crear/', views.cliente_create, name='cliente_create'),
+    path('clientes/principales/modificar/<int:pk>/', views.cliente_principal_update, name='cliente_principal_update'),
+    path('clientes/agenda/', views.agenda_clientes, name='agenda_clientes'),
+    path('clientes/agenda/eventos/', views.eventos_agenda_clientes, name='eventos_agenda_clientes'),
+    path('clientes/agenda/crear/', views.crear_agenda_cliente, name='crear_agenda_cliente'),
+    path('clientes/agenda/<int:agenda_id>/mover/', views.mover_agenda_cliente, name='mover_agenda_cliente'),
     path('clientes/modificar/<int:pk>/', views.cliente_update, name='cliente_update'),
     path('clientes/eliminar/<int:pk>/', views.cliente_delete, name='cliente_delete'),
 

@@ -1,28 +1,36 @@
 import json
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+from datetime import timezone as dt_timezone
 from django.shortcuts import render, redirect
 from .models import *
 import pyodbc
 from django.conf import settings
 from django.views.generic import TemplateView, ListView, DetailView
 from django.views.decorators.http import require_POST, require_GET
-from django.http import HttpResponseNotAllowed
+from django.http import HttpResponseNotAllowed, HttpResponse
 from collections import defaultdict
 from datetime import date
 
-from django.db.models import Max, Prefetch, F, OuterRef, Subquery, Count, IntegerField, CharField, Value
+from django.db.models import Max, Prefetch, F, OuterRef, Subquery, Count, IntegerField, CharField, Value, Q, Exists, Sum
 from django.db import transaction, IntegrityError
 from django.http import JsonResponse
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
 from django.contrib import messages
+from django.template.loader import render_to_string
 from django.db.models.functions import Coalesce
-from .forms import ClienteForm, ClienteContactoFormSet, TipoEntregaForm
+from django.core.paginator import Paginator
+from .forms import ClienteForm, ClienteContactoFormSet, ClienteSeguimientoForm, CotizacionForm, TipoEntregaForm
 
 
 
@@ -37,7 +45,743 @@ ESTADO_ENTREGA_NULA = 6
 FECHA_MINIMA_COTIZACION = None
 ESTADO_CLIENTE_ELIMINADO = 5
 
+CATALOGO_COTIZACIONES = [
+    {
+        'titulo': 'Búsqueda de Cotizaciones',
+        'submenu': 'Consulta y selección de cotizaciones',
+        'descripcion': 'Listado inicial para buscar, revisar y abrir cotizaciones existentes.',
+        'accion_principal': 'Buscar cotizaciones',
+        'url_principal_name': 'cotizaciones_busqueda',
+    },
+    {
+        'titulo': 'Ingreso de Cotizaciones',
+        'submenu': 'Alta de cotización nueva',
+        'descripcion': 'Formulario base para crear una cotización nueva en el sistema.',
+        'accion_principal': 'Crear cotización',
+        'url_principal_name': 'cotizaciones_ingreso',
+    },
+]
+
+ESTADOS_COTIZACION = {
+    0: 'Borrador',
+    1: 'Activa',
+    2: 'Cerrada',
+    3: 'Anulada',
+}
+
+
+def _cotizacion_estado_visual(cotizacion):
+    if not cotizacion.esactiva:
+        return {
+            'label': 'Cerrada / Inactiva',
+            'class': 'cotizacion-badge-cerrada',
+        }
+
+    if cotizacion.estado == 0:
+        return {
+            'label': 'Borrador',
+            'class': 'cotizacion-badge-borrador',
+        }
+
+    return {
+        'label': 'Activa',
+        'class': 'cotizacion-badge-activa',
+    }
+
 User = get_user_model()
+
+
+def _nombre_visible_usuario_actual(usuario):
+    nombre = usuario.get_full_name().strip()
+    if nombre:
+        return nombre
+
+    username = getattr(usuario, 'username', '') or str(usuario)
+    return username.strip()
+
+
+def _nombre_visible_usuario_legacy(usuario):
+    return (
+        (usuario.nombrecompleto or '').strip()
+        or (usuario.username or '').strip()
+        or (usuario.email or '').strip()
+        or (usuario.id or '').strip()
+    )
+
+
+@login_required
+def cotizaciones_home(request):
+    return render(request, 'cotizaciones/index.html', {
+        'titulo': 'Cotizaciones',
+        'encabezado': 'Cotizaciones',
+        'submenu': 'Módulo de cotizaciones',
+        'secciones': CATALOGO_COTIZACIONES,
+    })
+
+
+@login_required
+def cotizaciones_busqueda(request):
+    proyecto_principal = Proyecto.objects.filter(idcotizacion=OuterRef('pk')).order_by('idproyecto')
+
+    qs = (
+        Cotizacion.objects
+        .select_related('idcliente', 'idcontacto')
+        .annotate(
+            tiene_proyecto=Exists(Proyecto.objects.filter(idcotizacion=OuterRef('pk'))),
+            proyecto_id=Subquery(proyecto_principal.values('idproyecto')[:1]),
+        )
+        .only(
+            'idcotizacion', 'numcotizacion', 'numcorr', 'fecha', 'idcliente', 'idcontacto',
+            'nombreproyecto', 'valortotal', 'estado', 'esactiva'
+        )
+        .order_by('-numcotizacion', '-numcorr', '-fecha', '-idcotizacion')
+    )
+
+    numero = (request.GET.get('numero') or '').strip()
+    proyecto = (request.GET.get('proyecto') or '').strip()
+    mandante = (request.GET.get('mandante') or '').strip()
+    fecha_desde = (request.GET.get('fecha_desde') or '').strip()
+    fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
+
+    if numero:
+        if numero.isdigit():
+            numero_int = int(numero)
+            qs = qs.filter(
+                Q(idcotizacion=numero_int) |
+                Q(numcotizacion=numero_int) |
+                Q(numcorr=numero_int)
+            )
+        else:
+            qs = qs.filter(Q(numcorr__icontains=numero))
+    if proyecto:
+        qs = qs.filter(nombreproyecto__icontains=proyecto)
+    if mandante:
+        qs = qs.filter(idcliente__razonsocial__icontains=mandante)
+    if fecha_desde:
+        qs = qs.filter(fecha__gte=fecha_desde)
+    if fecha_hasta:
+        qs = qs.filter(fecha__lte=fecha_hasta)
+
+    paginator = Paginator(qs, 25)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    cotizaciones = []
+    for cotizacion in page_obj.object_list:
+        cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
+        cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
+        cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
+        cotizacion.proyecto_texto = cotizacion.nombreproyecto or (str(cotizacion.proyecto_id) if cotizacion.tiene_proyecto and cotizacion.proyecto_id else '')
+        cotizacion.valor_total_texto = cotizacion.valortotal or 0
+        cotizaciones.append(cotizacion)
+
+    return render(request, 'cotizaciones/busqueda.html', {
+        'titulo': 'Búsqueda de Cotizaciones',
+        'encabezado': 'Búsqueda de Cotizaciones',
+        'submenu': 'Consulta y selección',
+        'volver_url_name': 'cotizaciones_home',
+        'accion_nombre': 'Ingreso de Cotizaciones',
+        'accion_url_name': 'cotizaciones_ingreso',
+        'cotizaciones': cotizaciones,
+        'page_obj': page_obj,
+        'filtros': {
+            'numero': numero,
+            'proyecto': proyecto,
+            'mandante': mandante,
+            'fecha_desde': fecha_desde,
+            'fecha_hasta': fecha_hasta,
+        },
+    })
+
+
+@login_required
+def cotizaciones_ingreso(request):
+    if request.method == 'POST':
+        form = CotizacionForm(request.POST)
+        if form.is_valid():
+            cotizacion = form.save(commit=False)
+            cotizacion.fecha = form.cleaned_data.get('fecha') or timezone.localdate()
+            next_num = (Cotizacion.objects.aggregate(mx=Max('numcotizacion'))['mx'] or 0) + 1
+            cotizacion.numcotizacion = cotizacion.numcotizacion or next_num
+            cotizacion.numcorr = 0
+            cotizacion.estado = 0
+            cotizacion.esactiva = True
+            cotizacion.idusuario = (request.user.username or '')[:15]
+            ahora_local = _ahora_santiago_naive()
+            cotizacion.fecharegistro = ahora_local
+            cotizacion.fechaact = ahora_local
+            cotizacion.save()
+            _guardar_items_cotizacion(cotizacion, request.POST.get('items_json', ''))
+            _guardar_formapago_cotizacion(cotizacion, request.POST.get('formapago_json', ''))
+            _guardar_notas_cotizacion(cotizacion, request.POST.get('notas_json', ''))
+            _actualizar_valortotal_cotizacion(cotizacion)
+            messages.success(request, 'Cotización creada correctamente.')
+            return redirect('cotizacion_detalle', pk=cotizacion.pk)
+    else:
+        form = CotizacionForm(initial={'fecha': timezone.localdate()})
+
+    formapago_catalogo = list(TFpago.objects.filter(regionrm=0).order_by('codfp').values('concepto'))
+
+    return render(request, 'cotizaciones/form.html', {
+        'titulo': 'Ingreso de Cotizaciones',
+        'encabezado': 'Ingreso de Cotizaciones',
+        'submenu': 'Alta de cotización nueva',
+        'volver_url_name': 'cotizaciones_home',
+        'accion_nombre': 'Búsqueda de Cotizaciones',
+        'accion_url_name': 'cotizaciones_busqueda',
+        'form': form,
+        'modo': 'crear',
+        'items_guardados': [],
+        'formapago_catalogo': formapago_catalogo,
+    })
+
+
+@login_required
+def cotizacion_editar(request, pk):
+    cotizacion = get_object_or_404(Cotizacion, pk=pk)
+    notas_seleccionadas = list(
+        CotizacionNota.objects.filter(idcotizacion=cotizacion).values_list('idnota_id', flat=True)
+    )
+    formapago_items = list(
+        CotizacionFpago.objects.filter(idcotizacion=cotizacion).values('linea', 'concepto').order_by('linea')
+    )
+    items_guardados = list(
+        CotizacionValor.objects.filter(idcotizacion=cotizacion).values('item', 'glosa', 'valor', 'opcional').order_by('item')
+    )
+    if request.method == 'POST':
+        form = CotizacionForm(request.POST, instance=cotizacion)
+        if form.is_valid():
+            cotizacion = form.save(commit=False)
+            cotizacion.fecha = form.cleaned_data.get('fecha') or cotizacion.fecha
+            cotizacion.fechaact = _ahora_santiago_naive()
+            cotizacion.save()
+            _guardar_items_cotizacion(cotizacion, request.POST.get('items_json', ''))
+            _guardar_formapago_cotizacion(cotizacion, request.POST.get('formapago_json', ''))
+            _guardar_notas_cotizacion(cotizacion, request.POST.get('notas_json', ''))
+            _actualizar_valortotal_cotizacion(cotizacion)
+            messages.success(request, 'Cotización actualizada correctamente.')
+            return redirect('cotizacion_detalle', pk=cotizacion.pk)
+    else:
+        form = CotizacionForm(instance=cotizacion, initial={'fecha': cotizacion.fecha})
+
+    formapago_catalogo = list(TFpago.objects.filter(regionrm=0).order_by('codfp').values('concepto'))
+
+    return render(request, 'cotizaciones/form.html', {
+        'titulo': 'Editar Cotización',
+        'encabezado': 'Editar Cotización',
+        'submenu': 'Modificación de cotización',
+        'volver_url_name': 'cotizacion_detalle',
+        'volver_pk': cotizacion.pk,
+        'accion_url_name': 'cotizaciones_busqueda',
+        'accion_nombre': 'Búsqueda de Cotizaciones',
+        'form': form,
+        'cotizacion': cotizacion,
+        'modo': 'editar',
+        'notas_seleccionadas': notas_seleccionadas,
+        'formapago_items': formapago_items,
+        'items_guardados': items_guardados,
+        'formapago_catalogo': formapago_catalogo,
+    })
+
+
+@login_required
+@transaction.atomic
+def cotizacion_versionar(request, pk):
+    base = get_object_or_404(Cotizacion, pk=pk)
+
+    nuevo_corr = (base.numcorr or 0) + 1
+
+    nueva = Cotizacion(
+        numcotizacion=base.numcotizacion,
+        numcorr=nuevo_corr,
+        fecha=timezone.localdate(),
+        idcliente=base.idcliente,
+        idcontacto=base.idcontacto,
+        nombreproyecto=base.nombreproyecto,
+        dirproyecto=base.dirproyecto,
+        codregion=base.codregion,
+        destino=base.destino,
+        pisos=base.pisos,
+        edificios=base.edificios,
+        valortotal=base.valortotal,
+        moneda=base.moneda,
+        estado=0,
+        idusuario=(request.user.username or '')[:15],
+        fechaact=_ahora_santiago_naive(),
+        esactiva=True,
+        mt2=base.mt2,
+        fecharegistro=_ahora_santiago_naive(),
+    )
+    nueva.save()
+    _copiar_detalle_cotizacion(base, nueva)
+    _actualizar_valortotal_cotizacion(nueva)
+
+    messages.success(request, 'Nueva versión creada correctamente.')
+    return redirect('cotizacion_detalle', pk=nueva.pk)
+
+
+@login_required
+def cotizacion_detalle(request, pk):
+    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto'), pk=pk)
+    proyectos = list(Proyecto.objects.filter(idcotizacion=cotizacion).order_by('idproyecto'))
+    valores = list(CotizacionValor.objects.filter(idcotizacion=cotizacion).order_by('item'))
+    formas_pago = list(CotizacionFpago.objects.filter(idcotizacion=cotizacion).order_by('linea'))
+    notas = list(
+        CotizacionNota.objects.select_related('idnota').filter(idcotizacion=cotizacion).order_by('idcotizacionnota')
+    )
+
+    cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
+    cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
+    cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
+    cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
+    cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
+    cotizacion.region_texto = ''
+    if cotizacion.codregion:
+        region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
+        cotizacion.region_texto = region.descrip if region else ''
+    cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
+    cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
+    cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
+
+    return render(request, 'cotizaciones/detalle.html', {
+        'titulo': f'Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',
+        'encabezado': 'Detalle de Cotización',
+        'submenu': 'Ficha de cotización',
+        'cotizacion': cotizacion,
+        'proyectos': proyectos,
+        'valores': valores,
+        'formas_pago': formas_pago,
+        'notas': notas,
+        'volver_url_name': 'cotizaciones_busqueda',
+        'editar_url_name': 'cotizacion_editar',
+    })
+
+
+@login_required
+def cotizacion_reporte(request, pk):
+    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto'), pk=pk)
+    proyectos = list(Proyecto.objects.filter(idcotizacion=cotizacion).order_by('idproyecto'))
+    valores = list(CotizacionValor.objects.filter(idcotizacion=cotizacion).order_by('item'))
+    formas_pago = list(CotizacionFpago.objects.filter(idcotizacion=cotizacion).order_by('linea'))
+    notas = list(
+        CotizacionNota.objects.select_related('idnota').filter(idcotizacion=cotizacion).order_by('idcotizacionnota')
+    )
+
+    cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
+    cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
+    cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
+    cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
+    cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
+    cotizacion.region_texto = ''
+    if cotizacion.codregion:
+        region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
+        cotizacion.region_texto = region.descrip if region else ''
+    cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
+    cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
+    cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
+
+    return render(request, 'cotizaciones/reporte.html', {
+        'titulo': f'Reporte Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',
+        'cotizacion': cotizacion,
+        'proyectos': proyectos,
+        'valores': valores,
+        'formas_pago': formas_pago,
+        'notas': notas,
+    })
+
+
+def _cotizacion_pdf_asset_prefix():
+    static_dir = settings.BASE_DIR / 'static'
+    return static_dir.as_uri().rstrip('/')
+
+
+def _cotizacion_html_para_pdf(request, context):
+    html = render_to_string('cotizaciones/reporte_pdf.html', context, request=request)
+    prefix = _cotizacion_pdf_asset_prefix()
+    html = html.replace('/static/', f'{prefix}/')
+    html = html.replace('href="/static/', f'href="{prefix}/')
+    return html
+
+
+def _render_pdf_con_wkhtmltopdf(html):
+    wkhtmltopdf = shutil.which('wkhtmltopdf')
+    if not wkhtmltopdf:
+        return None
+    with tempfile.TemporaryDirectory() as tmpdir:
+        html_path = os.path.join(tmpdir, 'cotizacion.html')
+        pdf_path = os.path.join(tmpdir, 'cotizacion.pdf')
+        with open(html_path, 'w', encoding='utf-8') as fh:
+            fh.write(html)
+        input_url = f'file://{html_path}'
+        proc = subprocess.run(
+            [
+                wkhtmltopdf,
+                '--print-media-type',
+                '--enable-local-file-access',
+                '--margin-top', '8mm',
+                '--margin-right', '8mm',
+                '--margin-bottom', '8mm',
+                '--margin-left', '8mm',
+                input_url,
+                pdf_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=120,
+        )
+        if proc.returncode != 0 or not os.path.exists(pdf_path):
+            raise RuntimeError((proc.stderr or proc.stdout or 'wkhtmltopdf failed').strip())
+        with open(pdf_path, 'rb') as fh:
+            return fh.read()
+
+
+@login_required
+def cotizacion_reporte_pdf(request, pk):
+    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto'), pk=pk)
+    proyectos = list(Proyecto.objects.filter(idcotizacion=cotizacion).order_by('idproyecto'))
+    valores = list(CotizacionValor.objects.filter(idcotizacion=cotizacion).order_by('item'))
+    formas_pago = list(CotizacionFpago.objects.filter(idcotizacion=cotizacion).order_by('linea'))
+    notas = list(CotizacionNota.objects.select_related('idnota').filter(idcotizacion=cotizacion).order_by('idcotizacionnota'))
+
+    cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
+    cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
+    cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
+    cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
+    cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
+    cotizacion.region_texto = ''
+    if cotizacion.codregion:
+        region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
+        cotizacion.region_texto = region.descrip if region else ''
+    cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
+    cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
+    cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
+
+    context = {
+        'titulo': f'Reporte Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',
+        'cotizacion': cotizacion,
+        'proyectos': proyectos,
+        'valores': valores,
+        'formas_pago': formas_pago,
+        'notas': notas,
+    }
+    html = _cotizacion_html_para_pdf(request, context)
+    try:
+        pdf_bytes = _render_pdf_con_wkhtmltopdf(html)
+    except Exception as exc:
+        return render(request, 'cotizaciones/reporte.html', {**context, 'pdf_error': str(exc)})
+
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Reporte_Cotizacion_{cotizacion.numcotizacion or cotizacion.idcotizacion}.pdf"'
+    return response
+
+
+@login_required
+@require_GET
+def api_cotizaciones_mandantes(request):
+    term = (request.GET.get('term') or '').strip()
+    qs = Cliente.objects.order_by('razonsocial')
+    if term:
+        qs = qs.filter(razonsocial__icontains=term)
+    data = [
+        {
+            'id': c.idcliente,
+            'text': c.razonsocial or f'Cliente {c.idcliente}',
+            'direccion': c.direccion or '',
+            'telefono': c.telefono or '',
+        }
+        for c in qs[:20]
+    ]
+    return JsonResponse({'results': data})
+
+
+@login_required
+@require_GET
+def api_cotizaciones_mandante_detalle(request, pk):
+    cliente = Cliente.objects.filter(idcliente=pk).only('idcliente', 'razonsocial', 'direccion', 'telefono').first()
+    if not cliente:
+        return JsonResponse({'ok': False, 'detail': {}}, status=404)
+    return JsonResponse({
+        'ok': True,
+        'detail': {
+            'id': cliente.idcliente,
+            'text': cliente.razonsocial or f'Cliente {cliente.idcliente}',
+            'direccion': cliente.direccion or '',
+            'telefono': cliente.telefono or '',
+        },
+    })
+
+
+@login_required
+@require_GET
+def api_cotizaciones_contactos(request):
+    cliente_id = (request.GET.get('cliente_id') or '').strip()
+    term = (request.GET.get('term') or '').strip()
+
+    qs = Clientecontacto.objects.select_related('idcliente').order_by('nombrecontacto', 'idcontacto')
+    if cliente_id.isdigit():
+        qs = qs.filter(idcliente_id=int(cliente_id))
+    if term:
+        qs = qs.filter(nombrecontacto__icontains=term)
+
+    data = [
+        {
+            'id': contacto.idcontacto,
+            'text': contacto.nombrecontacto or f'Contacto {contacto.idcontacto}',
+            'cliente_id': contacto.idcliente_id,
+            'cargo': contacto.cargo or '',
+            'telefono': contacto.telefono or '',
+            'email': contacto.email or '',
+        }
+        for contacto in qs[:20]
+    ]
+    return JsonResponse({'results': data})
+
+
+@login_required
+@require_GET
+def api_cotizaciones_contacto_detalle(request, pk):
+    contacto = Clientecontacto.objects.filter(idcontacto=pk).only(
+        'idcontacto', 'nombrecontacto', 'cargo', 'telefono', 'email', 'idcliente_id'
+    ).first()
+    if not contacto:
+        return JsonResponse({'ok': False, 'detail': {}}, status=404)
+    return JsonResponse({
+        'ok': True,
+        'detail': {
+            'id': contacto.idcontacto,
+            'text': contacto.nombrecontacto or f'Contacto {contacto.idcontacto}',
+            'cliente_id': contacto.idcliente_id,
+            'cargo': contacto.cargo or '',
+            'telefono': contacto.telefono or '',
+            'email': contacto.email or '',
+        },
+    })
+
+
+@login_required
+@require_GET
+def api_cotizaciones_items(request):
+    qs = ItemCotizacion.objects.all().order_by('iditem')
+    data = [{'id': item.iditem, 'text': item.nombre} for item in qs]
+    return JsonResponse({'results': data})
+
+
+@login_required
+@require_GET
+def api_cotizaciones_notas(request):
+    qs = NotaCotizacion.objects.all().order_by('idnota')
+    data = [{'id': nota.idnota, 'text': nota.nota} for nota in qs]
+    return JsonResponse({'results': data})
+
+
+@login_required
+@require_GET
+def api_cotizaciones_formapago(request):
+    qs = TFpago.objects.filter(regionrm=0).order_by('codfp')
+    data = [{'id': fp.idfpago, 'text': fp.concepto} for fp in qs]
+    return JsonResponse({'results': data})
+
+
+def _resolver_id_usuario_nota(username):
+    identificador = (username or '').strip()
+    if not identificador:
+        return ''
+
+    usuario_legacy = AspNetUser.objects.filter(username=identificador).only('id').first()
+    if usuario_legacy and usuario_legacy.id:
+        return usuario_legacy.id
+
+    return identificador
+
+
+def _fecha_cliente_seg_guardado():
+    # Cliente_Seg es una tabla legacy donde la hora se maneja como valor local
+    # sin conversión real de zona horaria. Guardamos la hora local con marca UTC
+    # para conservar el mismo reloj visible al leerla después.
+    return timezone.localtime(timezone.now()).replace(tzinfo=dt_timezone.utc)
+
+
+def _ahora_santiago_naive():
+    return timezone.localtime(timezone.now()).replace(tzinfo=None)
+
+
+def _guardar_notas_cotizacion(cotizacion, items_json):
+    try:
+        datos = json.loads(items_json or '[]')
+    except json.JSONDecodeError:
+        datos = []
+
+    ids_notas = []
+    for dato in datos:
+        if dato.get('selected'):
+            try:
+                ids_notas.append(int(dato.get('id')))
+            except (TypeError, ValueError):
+                continue
+
+    CotizacionNota.objects.filter(idcotizacion=cotizacion).delete()
+    if not ids_notas:
+        return
+
+    notas = NotaCotizacion.objects.filter(idnota__in=ids_notas)
+    for nota in notas:
+        CotizacionNota.objects.create(idcotizacion=cotizacion, idnota=nota)
+
+
+def _guardar_formapago_cotizacion(cotizacion, formapago_json):
+    try:
+        datos = json.loads(formapago_json or '[]')
+    except json.JSONDecodeError:
+        datos = []
+
+    conceptos = []
+    for dato in datos:
+        if not isinstance(dato, dict):
+            continue
+        concepto = (dato.get('concepto') or '').strip()
+        if concepto:
+            conceptos.append(concepto)
+
+    CotizacionFpago.objects.filter(idcotizacion=cotizacion).delete()
+    for idx, concepto in enumerate(conceptos, start=1):
+        CotizacionFpago.objects.create(idcotizacion=cotizacion, linea=idx, concepto=concepto)
+
+
+def _actualizar_valortotal_cotizacion(cotizacion):
+    total = CotizacionValor.objects.filter(idcotizacion=cotizacion).aggregate(total=Sum('valor'))['total'] or 0
+    Cotizacion.objects.filter(pk=cotizacion.pk).update(valortotal=total)
+
+
+def _guardar_items_cotizacion(cotizacion, items_json):
+    try:
+        datos = json.loads(items_json or '[]')
+    except json.JSONDecodeError:
+        datos = []
+
+    items = []
+    for dato in datos:
+        if not isinstance(dato, dict):
+            continue
+        try:
+            item_num = int(dato.get('item'))
+        except (TypeError, ValueError):
+            continue
+        glosa = (dato.get('glosa') or '').strip()
+        if not glosa:
+            continue
+        try:
+            valor = float(dato.get('valor') or 0)
+        except (TypeError, ValueError):
+            valor = 0
+        opcional = 'S' if dato.get('opcional') == 'S' else 'N'
+        items.append((item_num, glosa, valor, opcional))
+
+    CotizacionValor.objects.filter(idcotizacion=cotizacion).delete()
+    for item_num, glosa, valor, opcional in items:
+        CotizacionValor.objects.create(
+            idcotizacion=cotizacion,
+            item=item_num,
+            glosa=glosa,
+            valor=valor,
+            opcional=opcional,
+        )
+
+
+def _copiar_detalle_cotizacion(origen, destino):
+    for nota in CotizacionNota.objects.filter(idcotizacion=origen).select_related('idnota').order_by('idcotizacionnota'):
+        CotizacionNota.objects.create(idcotizacion=destino, idnota=nota.idnota)
+
+    for fp in CotizacionFpago.objects.filter(idcotizacion=origen).order_by('linea'):
+        CotizacionFpago.objects.create(idcotizacion=destino, linea=fp.linea, concepto=fp.concepto)
+
+    for valor in CotizacionValor.objects.filter(idcotizacion=origen).order_by('item'):
+        CotizacionValor.objects.create(
+            idcotizacion=destino,
+            item=valor.item,
+            glosa=valor.glosa,
+            valor=valor.valor,
+            opcional=valor.opcional,
+        )
+
+
+def _fecha_cliente_seg_mostrada(fecha):
+    if not fecha:
+        return None
+
+    if timezone.is_aware(fecha):
+        return fecha.replace(tzinfo=None)
+
+    return fecha
+
+
+def _notas_pendientes_desde_post(post_data, usuario):
+    usuario_nombre = _nombre_visible_usuario_actual(usuario)
+    notas = []
+
+    for texto in post_data.getlist('notas_agregadas'):
+        texto_limpio = (texto or '').strip()
+        if texto_limpio:
+            notas.append({
+                'nota': texto_limpio,
+                'usuario_nombre': usuario_nombre,
+            })
+
+    return notas
+
+
+def _asignar_nombre_usuario_notas(notas):
+    identificadores = {
+        (nota.iduser or '').strip()
+        for nota in notas
+        if (nota.iduser or '').strip()
+    }
+
+    usuarios_aspnet = list(
+        AspNetUser.objects.filter(
+            Q(id__in=identificadores) | Q(username__in=identificadores)
+        )
+    )
+    usuarios_aspnet_por_id = {
+        usuario.id: _nombre_visible_usuario_legacy(usuario)
+        for usuario in usuarios_aspnet
+        if usuario.id
+    }
+    usuarios_aspnet_por_username = {
+        usuario.username: _nombre_visible_usuario_legacy(usuario)
+        for usuario in usuarios_aspnet
+        if usuario.username
+    }
+
+    usuarios_auth = {
+        usuario.username: usuario
+        for usuario in User.objects.filter(username__in=identificadores)
+    }
+    usuarios_legacy = {
+        usuario.username: (usuario.nombreusuario or '').strip()
+        for usuario in tusuario.objects.filter(username__in=identificadores)
+        if usuario.username
+    }
+
+    for nota in notas:
+        identificador = (nota.iduser or '').strip()
+        nombre_aspnet = usuarios_aspnet_por_id.get(identificador) or usuarios_aspnet_por_username.get(identificador)
+        usuario_auth = usuarios_auth.get(identificador)
+        nombre_auth = usuario_auth.get_full_name().strip() if usuario_auth else ''
+
+        if nombre_aspnet:
+            nota.usuario_nombre = nombre_aspnet
+        elif nombre_auth:
+            nota.usuario_nombre = nombre_auth
+        elif usuarios_legacy.get(identificador):
+            nota.usuario_nombre = usuarios_legacy[identificador]
+        elif usuario_auth:
+            nota.usuario_nombre = usuario_auth.username
+        elif identificador:
+            nota.usuario_nombre = 'Usuario no identificado'
+        else:
+            nota.usuario_nombre = 'Sin usuario'
+
+        nota.fecha_mostrada = _fecha_cliente_seg_mostrada(nota.fecha)
 
 def get_sql_conn() -> pyodbc.Connection:
     # Connection string directo (sin DSN)
@@ -315,34 +1059,69 @@ def tipo_entrega_delete(request, pk):
     
 FECHA_MINIMA_COTIZACION = date(1900, 1, 1)
 
-@login_required
-def reporte_clientes(request):
-    # 1. Clientes principales no eliminados lógicamente
-    clientes = list(
-        Cliente.objects.filter(
-            esprincipal=True
-        )
+
+def _queryset_clientes_con_relaciones():
+    return (
+        Cliente.objects
         .exclude(idestadocliente_id=ESTADO_CLIENTE_ELIMINADO)
-        .select_related('idestadocliente', 'idcomppago')
+        .select_related('idestadocliente', 'idcomppago', 'idcliente_p')
         .prefetch_related(
             Prefetch(
                 'clientecategoria_set',
                 queryset=ClienteCategoria.objects.select_related('idcategoria')
             )
         )
+    )
+
+
+def _anotar_clientes_reporte(clientes, fechas_por_cliente=None):
+    fechas_por_cliente = fechas_por_cliente or {}
+
+    for cliente in clientes:
+        cliente.fecha_ultima_cotizacion = fechas_por_cliente.get(cliente.idcliente)
+
+        categorias = []
+        for cc in cliente.clientecategoria_set.all():
+            if cc.idcategoria:
+                categorias.append(cc.idcategoria.NombreCat)
+
+        cliente.categorias_texto = ', '.join(dict.fromkeys(categorias))
+        cliente.estado_texto = cliente.idestadocliente.descrip if cliente.idestadocliente_id else ''
+        cliente.comportamiento_pago_texto = cliente.idcomppago.descrip if cliente.idcomppago_id else ''
+
+
+def _completar_post_data_cliente(post_data, cliente=None, force_esprincipal=None):
+    if force_esprincipal is not None:
+        post_data['esprincipal'] = 'True' if force_esprincipal else 'False'
+
+    if cliente and not post_data.get('idestadocliente') and cliente.idestadocliente_id:
+        post_data['idestadocliente'] = str(cliente.idestadocliente_id)
+
+    if cliente and not post_data.get('idcomppago') and cliente.idcomppago_id:
+        post_data['idcomppago'] = str(cliente.idcomppago_id)
+
+    return post_data
+
+@login_required
+def reporte_clientes(request):
+    clientes = list(
+        _queryset_clientes_con_relaciones()
+        .filter(esprincipal=True)
         .order_by('razonsocial')
     )
 
     if not clientes:
         return render(request, 'clientes/reporte_clientes.html', {
             'clientes': [],
-            'encabezado': 'Clientes totales',
-            'submenu': 'Lista total de clientes'
+            'titulo': 'Clientes principales',
+            'encabezado': 'Clientes principales',
+            'submenu': 'Lista de clientes principales',
+            'url_modificar_name': 'cliente_principal_update',
+            'mostrar_eliminar': False,
         })
 
     ids_principales = [c.idcliente for c in clientes]
 
-    # 2. Última fecha de cotización del cliente principal
     fechas_principal_qs = (
         Cotizacion.objects
         .filter(idcliente__in=ids_principales)
@@ -354,7 +1133,6 @@ def reporte_clientes(request):
         for row in fechas_principal_qs
     }
 
-    # 3. Obtener hijos de esos clientes principales, excluyendo eliminados
     hijos_qs = (
         Cliente.objects
         .filter(idcliente_p__in=ids_principales)
@@ -369,7 +1147,6 @@ def reporte_clientes(request):
         hijo_a_padre[row['idcliente']] = row['idcliente_p']
         ids_hijos.append(row['idcliente'])
 
-    # 4. Última fecha de cotización de los hijos
     fechas_hijos_por_padre = defaultdict(lambda: FECHA_MINIMA_COTIZACION)
 
     if ids_hijos:
@@ -393,46 +1170,161 @@ def reporte_clientes(request):
             ):
                 fechas_hijos_por_padre[id_padre] = fecha_hijo
 
-    # 5. Armar datos finales del reporte
+    fechas_cliente_finales = {}
     for cliente in clientes:
         fecha_cliente = fechas_principal.get(cliente.idcliente) or FECHA_MINIMA_COTIZACION
         fecha_hijos = fechas_hijos_por_padre.get(cliente.idcliente) or FECHA_MINIMA_COTIZACION
 
         if fecha_cliente and fecha_hijos:
-            cliente.fecha_ultima_cotizacion = max(fecha_cliente, fecha_hijos)
+            fechas_cliente_finales[cliente.idcliente] = max(fecha_cliente, fecha_hijos)
         else:
-            cliente.fecha_ultima_cotizacion = fecha_cliente or fecha_hijos
+            fechas_cliente_finales[cliente.idcliente] = fecha_cliente or fecha_hijos
 
-        categorias = []
-        for cc in cliente.clientecategoria_set.all():
-            if cc.idcategoria:
-                categorias.append(cc.idcategoria.NombreCat)
-
-        cliente.categorias_texto = ', '.join(dict.fromkeys(categorias))
-
-        cliente.estado_texto = cliente.idestadocliente.descrip if cliente.idestadocliente_id else ''
-        cliente.comportamiento_pago_texto = cliente.idcomppago.descrip if cliente.idcomppago_id else ''
+    _anotar_clientes_reporte(clientes, fechas_cliente_finales)
 
     return render(request, 'clientes/reporte_clientes.html', {
         'clientes': clientes,
-        'encabezado': 'Clientes totales',
-        'submenu': 'Lista total de clientes'
+        'titulo': 'Clientes principales',
+        'encabezado': 'Clientes principales',
+        'submenu': 'Lista de clientes principales',
+        'url_modificar_name': 'cliente_principal_update',
+        'mostrar_eliminar': False,
     })
-    
+
+
+@login_required
+def clientes_totales(request):
+    clientes = list(
+        _queryset_clientes_con_relaciones()
+        .order_by('razonsocial')
+    )
+
+    ids_clientes = [cliente.idcliente for cliente in clientes]
+    fechas_qs = (
+        Cotizacion.objects
+        .filter(idcliente__in=ids_clientes)
+        .values('idcliente')
+        .annotate(ultima_fecha=Max('fecha'))
+    )
+    fechas_por_cliente = {
+        row['idcliente']: row['ultima_fecha']
+        for row in fechas_qs
+    }
+
+    _anotar_clientes_reporte(clientes, fechas_por_cliente)
+
+    return render(request, 'clientes/reporte_clientes.html', {
+        'clientes': clientes,
+        'titulo': 'Clientes totales',
+        'encabezado': 'Clientes totales',
+        'submenu': 'Lista total de clientes',
+        'url_modificar_name': 'cliente_update',
+        'mostrar_eliminar': True,
+    })
+
+
+@login_required
+@transaction.atomic
+def cliente_principal_update(request, pk):
+    cliente = get_object_or_404(
+        Cliente.objects.exclude(idestadocliente_id=ESTADO_CLIENTE_ELIMINADO),
+        pk=pk,
+        esprincipal=True,
+    )
+
+    if request.method == 'POST':
+        post_data = _completar_post_data_cliente(
+            request.POST.copy(),
+            cliente=cliente,
+            force_esprincipal=True,
+        )
+        form = ClienteForm(
+            post_data,
+            instance=cliente,
+            readonly_esprincipal=True,
+            hide_parent_client=True,
+            hide_categorias=True,
+        )
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Cliente principal modificado correctamente.')
+            return redirect('reporte_clientes')
+
+        messages.error(request, 'Corrige los errores del formulario.')
+    else:
+        form = ClienteForm(
+            instance=cliente,
+            readonly_esprincipal=True,
+            hide_parent_client=True,
+            hide_categorias=True,
+        )
+
+    context = {
+        'titulo': 'Modificar cliente principal',
+        'encabezado': 'Modificar cliente principal',
+        'submenu': 'Edición de datos del cliente',
+        'form': form,
+        'mostrar_comentario': 'comentario' in form.fields,
+        'volver_url_name': 'reporte_clientes',
+    }
+    return render(request, 'clientes/cliente_basic_form.html', context)
+
+
+@login_required
+@transaction.atomic
+def cliente_create(request):
+    if request.method == 'POST':
+        form = ClienteForm(
+            request.POST,
+            hide_categorias=True,
+            hide_comentario=True,
+        )
+
+        if form.is_valid():
+            cliente = form.save(commit=False)
+            cliente.insercion = _ahora_santiago_naive()
+            cliente.save()
+            messages.success(request, 'Cliente creado correctamente.')
+            return redirect('clientes_totales')
+
+        messages.error(request, 'Corrige los errores del formulario.')
+    else:
+        form = ClienteForm(
+            hide_categorias=True,
+            hide_comentario=True,
+        )
+
+    context = {
+        'titulo': 'Ingresar cliente',
+        'encabezado': 'Ingresar cliente',
+        'submenu': 'Nuevo cliente',
+        'form': form,
+        'mostrar_comentario': 'comentario' in form.fields,
+        'volver_url_name': 'clientes_totales',
+    }
+    return render(request, 'clientes/cliente_basic_form.html', context)
+
+
 @login_required
 @transaction.atomic
 def cliente_update(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk)
+    notas_pendientes = []
 
     if request.method == 'POST':
-        form = ClienteForm(request.POST, instance=cliente)
+        post_data = _completar_post_data_cliente(request.POST.copy(), cliente=cliente)
+
+        form = ClienteForm(post_data, instance=cliente)
         formset_contactos = ClienteContactoFormSet(
-            request.POST,
+            post_data,
             instance=cliente,
             prefix='contactos'
         )
+        form_nota = ClienteSeguimientoForm(post_data, prefix='nota')
+        notas_pendientes = _notas_pendientes_desde_post(post_data, request.user)
 
-        if form.is_valid() and formset_contactos.is_valid():
+        if form.is_valid() and formset_contactos.is_valid() and form_nota.is_valid():
             cliente = form.save()
 
             # Guardar contactos
@@ -446,7 +1338,7 @@ def cliente_update(request, pk):
                 contacto.idcliente = cliente
 
                 if not contacto.fecharegistro:
-                    contacto.fecharegistro = timezone.now()
+                    contacto.fecharegistro = _ahora_santiago_naive()
 
                 contacto.save()
 
@@ -463,8 +1355,28 @@ def cliente_update(request, pk):
             if nuevas_categorias:
                 ClienteCategoria.objects.bulk_create(nuevas_categorias)
 
+            notas_a_guardar = []
+            notas_a_guardar.extend(post_data.getlist('notas_agregadas'))
+
+            nota_directa = form_nota.cleaned_data.get('nota')
+            if nota_directa:
+                notas_a_guardar.append(nota_directa)
+
+            for nota in notas_a_guardar:
+                nota = (nota or '').strip()
+                if not nota:
+                    continue
+
+                usuario_nota = _resolver_id_usuario_nota(request.user.username or str(request.user))[:128]
+                ClienteSeg.objects.create(
+                    idcliente=cliente,
+                    fecha=_fecha_cliente_seg_guardado(),
+                    iduser=usuario_nota,
+                    nota=nota,
+                )
+
             messages.success(request, 'Cliente modificado correctamente.')
-            return redirect('reporte_clientes')
+            return redirect('clientes_totales')
 
         messages.error(request, 'Corrige los errores del formulario.')
 
@@ -474,6 +1386,10 @@ def cliente_update(request, pk):
             instance=cliente,
             prefix='contactos'
         )
+        form_nota = ClienteSeguimientoForm(prefix='nota')
+
+    notas_cliente = list(ClienteSeg.objects.filter(idcliente=cliente))
+    _asignar_nombre_usuario_notas(notas_cliente)
 
     context = {
         'titulo': 'Modificar cliente',
@@ -481,7 +1397,11 @@ def cliente_update(request, pk):
         'submenu': 'Edición de cliente',
         'form': form,
         'formset_contactos': formset_contactos,
+        'form_nota': form_nota,
+        'notas_cliente': notas_cliente,
+        'notas_pendientes': notas_pendientes,
         'cliente': cliente,
+        'volver_url_name': 'clientes_totales',
     }
     return render(request, 'clientes/cliente_form.html', context)
     
@@ -496,13 +1416,14 @@ def cliente_delete(request, pk):
         cliente.save(update_fields=['idestadocliente'])
 
         messages.success(request, 'Cliente marcado como eliminado correctamente.')
-        return redirect('reporte_clientes')
+        return redirect('clientes_totales')
 
     context = {
         'titulo': 'Eliminar cliente',
         'encabezado': 'Eliminar cliente',
         'submenu': 'Confirmación de eliminación',
         'cliente': cliente,
+        'volver_url_name': 'clientes_totales',
     }
     return render(request, 'clientes/cliente_confirm_delete.html', context)
     
@@ -533,8 +1454,13 @@ def proyectos_totales(request):
         pro.destino_texto = cot.destino or '' if cot else ''
         pro.pisos_texto = cot.pisos or '' if cot else ''
         pro.region_texto = regiones.get(cot.codregion, '') if cot else ''
-        pro.numcotizacion_texto = cot.numcotizacion if cot else ''
-        pro.numcorr_texto = cot.numcorr if cot else ''
+        if cot:
+            numcot = cot.numcotizacion or cot.idcotizacion
+            numcorr = f"{int(cot.numcorr or 0):03d}"
+            pro.numcotizacion_texto = f"{numcot}-{numcorr}"
+        else:
+            pro.numcotizacion_texto = ''
+        pro.numcorr_texto = ''
         pro.fechacotizacion = cot.fecha if cot else None
         pro.dirproyecto_texto = cot.dirproyecto or '' if cot else ''
         pro.edificios_texto = cot.edificios or 0 if cot else 0
@@ -583,6 +1509,265 @@ def _to_local_naive(dt_str):
         dt = timezone.make_naive(dt, timezone.get_current_timezone())
 
     return dt
+
+
+def _make_local_aware(dt_value):
+    if not dt_value:
+        return None
+
+    if timezone.is_aware(dt_value):
+        return dt_value
+
+    return timezone.make_aware(dt_value, timezone.get_current_timezone())
+
+
+@login_required
+def agenda_clientes(request):
+    clientes = (
+        Cliente.objects
+        .exclude(idestadocliente_id=ESTADO_CLIENTE_ELIMINADO)
+        .order_by('razonsocial')
+    )
+
+    hoy = timezone.localdate()
+    hace_30_dias = hoy - timedelta(days=30)
+
+    context = {
+        'titulo': 'Agenda clientes',
+        'encabezado': 'Agenda de clientes',
+        'submenu': 'Calendario mensual de actividades comerciales',
+        'clientes': clientes,
+        'hoy_iso': hoy.isoformat(),
+        'hace_30_dias_iso': hace_30_dias.isoformat(),
+    }
+    return render(request, 'clientes/agenda_clientes.html', context)
+
+
+@login_required
+@require_GET
+def eventos_agenda_clientes(request):
+    start = request.GET.get('start')
+    end = request.GET.get('end')
+
+    start_local = _to_local_naive(start)
+    end_local = _to_local_naive(end)
+
+    hace_30_dias = datetime.combine(
+        timezone.localdate() - timedelta(days=30),
+        time.min,
+    )
+    hace_30_dias = _make_local_aware(hace_30_dias)
+
+    start_local = _make_local_aware(start_local)
+    end_local = _make_local_aware(end_local)
+
+    qs = (
+        ClienteAgenda.objects
+        .select_related('idcliente')
+        .prefetch_related(
+            Prefetch(
+                'idcliente__clientecontacto_set',
+                queryset=Clientecontacto.objects.order_by('nombrecontacto', 'idcontacto')
+            )
+        )
+        .filter(fecha__isnull=False)
+    )
+
+    filtro_desde = hace_30_dias
+    if start_local and start_local > filtro_desde:
+        filtro_desde = start_local
+
+    qs = qs.filter(fecha__gte=filtro_desde)
+
+    if end_local:
+        qs = qs.filter(fecha__lt=end_local)
+
+    eventos = []
+    for agenda in qs:
+        if not agenda.fecha:
+            continue
+
+        fecha_evento = agenda.fecha.date()
+        nombre_cliente = ''
+
+        if agenda.idcliente and agenda.idcliente.razonsocial:
+            nombre_cliente = agenda.idcliente.razonsocial
+        elif agenda.titulo:
+            nombre_cliente = agenda.titulo
+        elif agenda.idcliente_id:
+            nombre_cliente = f'Cliente {agenda.idcliente_id}'
+        else:
+            nombre_cliente = 'Cliente sin nombre'
+
+        contactos = []
+        if agenda.idcliente:
+            for contacto in agenda.idcliente.clientecontacto_set.all():
+                if not any([
+                    contacto.nombrecontacto,
+                    contacto.cargo,
+                    contacto.telefono,
+                    contacto.email,
+                ]):
+                    continue
+
+                tipo_contacto = {
+                    'N': 'Normal',
+                    'F': 'Facturación',
+                    'C': 'Comercial',
+                }.get((contacto.tipocontacto or '').strip().upper(), '')
+
+                contactos.append({
+                    'tipo': tipo_contacto,
+                    'nombre': contacto.nombrecontacto or '',
+                    'cargo': contacto.cargo or '',
+                    'telefono': contacto.telefono or '',
+                    'email': contacto.email or '',
+                })
+
+        eventos.append({
+            'id': agenda.id,
+            'title': nombre_cliente,
+            'start': fecha_evento.isoformat(),
+            'allDay': True,
+            'display': 'block',
+            'backgroundColor': '#0d6efd',
+            'borderColor': '#0d6efd',
+            'textColor': '#ffffff',
+            'extendedProps': {
+                'cliente': nombre_cliente,
+                'titulo': agenda.titulo or nombre_cliente,
+                'descrip': agenda.descrip or '',
+                'fecha': fecha_evento.strftime('%d-%m-%Y'),
+                'comentario_cliente': agenda.idcliente.comentario if agenda.idcliente and agenda.idcliente.comentario else '',
+                'contactos': contactos,
+            }
+        })
+
+    return JsonResponse(eventos, safe=False)
+
+
+@login_required
+@require_POST
+def crear_agenda_cliente(request):
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'Datos inválidos.'
+        }, status=400)
+
+    fecha_str = payload.get('fecha')
+    idcliente = payload.get('idcliente')
+    descrip = (payload.get('descrip') or '').strip()
+
+    if not fecha_str:
+        return JsonResponse({'ok': False, 'mensaje': 'Debes indicar la fecha del evento.'}, status=400)
+
+    if not idcliente:
+        return JsonResponse({'ok': False, 'mensaje': 'Debes seleccionar un cliente.'}, status=400)
+
+    if not descrip:
+        return JsonResponse({'ok': False, 'mensaje': 'Debes ingresar el detalle del evento.'}, status=400)
+
+    try:
+        fecha_evento = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({'ok': False, 'mensaje': 'La fecha del evento es inválida.'}, status=400)
+
+    if fecha_evento < timezone.localdate():
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'Solo puedes registrar eventos desde hoy en adelante.'
+        }, status=400)
+
+    cliente = get_object_or_404(Cliente, pk=idcliente)
+
+    if cliente.idestadocliente_id == ESTADO_CLIENTE_ELIMINADO:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'No es posible agendar un cliente eliminado.'
+        }, status=400)
+
+    fecha_agenda = datetime.combine(fecha_evento, time(hour=9, minute=0))
+    if timezone.is_naive(fecha_agenda):
+        fecha_agenda = timezone.make_aware(fecha_agenda, timezone.get_current_timezone())
+
+    agenda = ClienteAgenda(
+        idcliente=cliente,
+        fecha=fecha_agenda,
+        titulo=cliente.razonsocial or f'Cliente {cliente.idcliente}',
+        descrip=descrip,
+        estado=0,
+    )
+    agenda.save()
+
+    return JsonResponse({
+        'ok': True,
+        'mensaje': 'Evento de agenda creado correctamente.',
+        'id': agenda.id,
+    })
+
+
+@login_required
+@require_POST
+def mover_agenda_cliente(request, agenda_id):
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'Datos inválidos.'
+        }, status=400)
+
+    nueva_fecha = payload.get('nueva_fecha')
+    if not nueva_fecha:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'Falta la nueva fecha.'
+        }, status=400)
+
+    try:
+        fecha_nueva = datetime.strptime(nueva_fecha, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'Formato de fecha inválido.'
+        }, status=400)
+
+    hace_30_dias = timezone.localdate() - timedelta(days=30)
+    if fecha_nueva < hace_30_dias:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'No puedes mover el evento a una fecha anterior al rango visible.'
+        }, status=400)
+
+    with transaction.atomic():
+        agenda = get_object_or_404(
+            ClienteAgenda.objects.select_for_update(),
+            pk=agenda_id
+        )
+
+        if not agenda.fecha:
+            return JsonResponse({
+                'ok': False,
+                'mensaje': 'El evento no tiene fecha registrada.'
+            }, status=400)
+
+        fecha_actual = agenda.fecha
+        fecha_actualizada = fecha_actual.replace(
+            year=fecha_nueva.year,
+            month=fecha_nueva.month,
+            day=fecha_nueva.day
+        )
+
+        agenda.fecha = fecha_actualizada
+        agenda.save(update_fields=['fecha'])
+
+    return JsonResponse({
+        'ok': True,
+        'mensaje': 'Evento movido correctamente.'
+    })
 
 @login_required
 def calendario_entregas_proyecto(request):
@@ -804,7 +1989,7 @@ def crear_entrega_proyecto(request):
 
     entrega = EntregaProyecto(
         rutusercreador=rut_user,
-        fechacreacion=timezone.now(),
+        fechacreacion=_ahora_santiago_naive(),
         fechacalendario=dt_cal,
         idproyecto_id=idproyecto,
         idtipoentrega_id=idtipoentrega,
@@ -901,9 +2086,9 @@ def anular_entrega(request, identrega):
 
         entrega.idestadoentrega_id = 6
         entrega.rutuseranula = rut_user
-        entrega.fechaanulacion = timezone.now()
+        entrega.fechaanulacion = _ahora_santiago_naive()
         entrega.rutuserupdate = rut_user
-        entrega.fechaupdate = timezone.now()
+        entrega.fechaupdate = _ahora_santiago_naive()
 
         entrega.save(update_fields=[
             'idestadoentrega',
@@ -1053,7 +2238,7 @@ def mover_entrega_calendario(request, identrega):
 
         entrega.fechacalendario = fecha_actualizada
         entrega.rutuserupdate = rut_user
-        entrega.fechaupdate = timezone.now()
+        entrega.fechaupdate = _ahora_santiago_naive()
         entrega.save()
 
     return JsonResponse({
