@@ -27,3 +27,6 @@ staticfiles/
 # OS
 .DS_Store
 Thumbs.db
+
+# Legacy reference files
+legacy_vbnet/
