@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from urllib.parse import urlencode
 from datetime import timezone as dt_timezone
 from django.shortcuts import render, redirect
 from .models import *
@@ -88,6 +89,17 @@ def _cotizacion_estado_visual(cotizacion):
         'class': 'cotizacion-badge-activa',
     }
 
+
+def _estado_cotizacion_class(nombre):
+    texto = (nombre or '').lower()
+    if 'aprob' in texto:
+        return 'estado-cotizacion-aprobada'
+    if 'esper' in texto:
+        return 'estado-cotizacion-espera'
+    if 'cerr' in texto or 'inact' in texto:
+        return 'estado-cotizacion-cerrada'
+    return 'estado-cotizacion-pendiente'
+
 User = get_user_model()
 
 
@@ -129,12 +141,9 @@ def cotizaciones_busqueda(request):
         .annotate(
             tiene_proyecto=Exists(Proyecto.objects.filter(idcotizacion=OuterRef('pk'))),
             proyecto_id=Subquery(proyecto_principal.values('idproyecto')[:1]),
+            estadocotizacion_texto=F('estadocotizacion__nombre'),
         )
-        .only(
-            'idcotizacion', 'numcotizacion', 'numcorr', 'fecha', 'idcliente', 'idcontacto',
-            'nombreproyecto', 'valortotal', 'estado', 'esactiva'
-        )
-        .order_by('-numcotizacion', '-numcorr', '-fecha', '-idcotizacion')
+        .order_by('-fecha', '-numcotizacion', '-numcorr')
     )
 
     numero = (request.GET.get('numero') or '').strip()
@@ -142,6 +151,11 @@ def cotizaciones_busqueda(request):
     mandante = (request.GET.get('mandante') or '').strip()
     fecha_desde = (request.GET.get('fecha_desde') or '').strip()
     fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
+
+    if not any([numero, proyecto, mandante, fecha_desde, fecha_hasta]):
+        fecha_desde = (timezone.localdate() - timedelta(days=30)).isoformat()
+
+    clear_params = {'fecha_desde': fecha_desde}
 
     if numero:
         if numero.isdigit():
@@ -162,16 +176,16 @@ def cotizaciones_busqueda(request):
     if fecha_hasta:
         qs = qs.filter(fecha__lte=fecha_hasta)
 
-    paginator = Paginator(qs, 25)
-    page_obj = paginator.get_page(request.GET.get('page'))
-
     cotizaciones = []
-    for cotizacion in page_obj.object_list:
+    for cotizacion in qs:
         cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
+        cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion_texto or 'Sin estado'
+        cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
         cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
         cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
         cotizacion.proyecto_texto = cotizacion.nombreproyecto or (str(cotizacion.proyecto_id) if cotizacion.tiene_proyecto and cotizacion.proyecto_id else '')
         cotizacion.valor_total_texto = cotizacion.valortotal or 0
+        cotizacion.es_activa_texto = 'SI' if cotizacion.esactiva else 'NO'
         cotizaciones.append(cotizacion)
 
     return render(request, 'cotizaciones/busqueda.html', {
@@ -182,7 +196,6 @@ def cotizaciones_busqueda(request):
         'accion_nombre': 'Ingreso de Cotizaciones',
         'accion_url_name': 'cotizaciones_ingreso',
         'cotizaciones': cotizaciones,
-        'page_obj': page_obj,
         'filtros': {
             'numero': numero,
             'proyecto': proyecto,
@@ -190,6 +203,7 @@ def cotizaciones_busqueda(request):
             'fecha_desde': fecha_desde,
             'fecha_hasta': fecha_hasta,
         },
+        'limpiar_url': f"?{urlencode(clear_params)}",
     })
 
 
@@ -237,7 +251,7 @@ def cotizaciones_ingreso(request):
 
 @login_required
 def cotizacion_editar(request, pk):
-    cotizacion = get_object_or_404(Cotizacion, pk=pk)
+    cotizacion = get_object_or_404(Cotizacion.objects.select_related('estadocotizacion'), pk=pk)
     notas_seleccionadas = list(
         CotizacionNota.objects.filter(idcotizacion=cotizacion).values_list('idnota_id', flat=True)
     )
@@ -321,7 +335,7 @@ def cotizacion_versionar(request, pk):
 
 @login_required
 def cotizacion_detalle(request, pk):
-    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto'), pk=pk)
+    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto', 'estadocotizacion'), pk=pk)
     proyectos = list(Proyecto.objects.filter(idcotizacion=cotizacion).order_by('idproyecto'))
     valores = list(CotizacionValor.objects.filter(idcotizacion=cotizacion).order_by('item'))
     formas_pago = list(CotizacionFpago.objects.filter(idcotizacion=cotizacion).order_by('linea'))
@@ -330,6 +344,8 @@ def cotizacion_detalle(request, pk):
     )
 
     cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
+    cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
+    cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
     cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
     cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
@@ -358,7 +374,7 @@ def cotizacion_detalle(request, pk):
 
 @login_required
 def cotizacion_reporte(request, pk):
-    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto'), pk=pk)
+    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto', 'estadocotizacion'), pk=pk)
     proyectos = list(Proyecto.objects.filter(idcotizacion=cotizacion).order_by('idproyecto'))
     valores = list(CotizacionValor.objects.filter(idcotizacion=cotizacion).order_by('item'))
     formas_pago = list(CotizacionFpago.objects.filter(idcotizacion=cotizacion).order_by('linea'))
@@ -367,6 +383,8 @@ def cotizacion_reporte(request, pk):
     )
 
     cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
+    cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
+    cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
     cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
     cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
@@ -444,6 +462,8 @@ def cotizacion_reporte_pdf(request, pk):
     notas = list(CotizacionNota.objects.select_related('idnota').filter(idcotizacion=cotizacion).order_by('idcotizacionnota'))
 
     cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
+    cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
+    cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
     cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
     cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''

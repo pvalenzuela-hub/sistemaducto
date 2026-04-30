@@ -2,6 +2,19 @@ from django.db import models
 from django.contrib.auth.models import User
 
 # Create your models here.
+class Estadocotizacion(models.Model):
+    nombre = models.CharField(max_length=50, null=True, blank=True)
+
+    class Meta:
+        db_table = 'Estadocotizacion'
+
+
+class Estadofactura(models.Model):
+    nombre = models.CharField(max_length=50, null=True, blank=True)
+
+    class Meta:
+        db_table = 'Estadofactura'
+
 class T_Categoria(models.Model):
     IdCategoria = models.AutoField(primary_key=True)
     NombreCat = models.CharField(max_length=100)
@@ -223,6 +236,7 @@ class Cotizacion(models.Model):
     fechaaceptacion = models.DateField(db_column='FechaAceptacion', null=True, blank=True)
     mt2 = models.IntegerField(db_column='Mt2', null=True, blank=True)
     fecharegistro = models.DateTimeField(db_column='FechaRegistro', null=True, blank=True)
+    estadocotizacion = models.ForeignKey(Estadocotizacion,db_column='estadocotizacion_id',on_delete=models.DO_NOTHING, null=True, blank=True)
 
     class Meta:
         managed = False

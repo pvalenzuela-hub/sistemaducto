@@ -15,14 +15,73 @@
     }
     .cotizacion-badge-activa { background: #d1fae5; color: #065f46; }
     .cotizacion-badge-borrador { background: #dbeafe; color: #1d4ed8; }
-    .cotizacion-badge-cerrada { background: #fee2e2; color: #991b1b; }
-    .cotizacion-badge-inactiva { background: #e5e7eb; color: #374151; }
+    .cotizacion-badge-cerrada { background: #e5e7eb; color: #475569; }
+    .cotizacion-badge-inactiva { background: #f1f5f9; color: #64748b; }
+    .estado-cotizacion-badge {
+        display: inline-block;
+        padding: .25rem .55rem;
+        border-radius: 999px;
+        font-size: .76rem;
+        font-weight: 700;
+        border: 1px solid transparent;
+    }
+    .estado-cotizacion-espera { background: #fef3c7; color: #92400e; border-color: #f59e0b; }
+    .estado-cotizacion-aprobada { background: #dcfce7; color: #166534; border-color: #22c55e; }
+    .estado-cotizacion-cerrada { background: #e5e7eb; color: #475569; border-color: #94a3b8; }
+    .estado-cotizacion-pendiente { background: #dbeafe; color: #1d4ed8; border-color: #60a5fa; }
     .search-panel,
     .results-panel {
         border: 1px solid #e5e7eb;
         border-radius: 14px;
         background: #fff;
         box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    }
+    .search-panel {
+        background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+        border-left: 4px solid #2563eb;
+    }
+    .search-panel .form-label {
+        font-weight: 700;
+        color: #334155;
+    }
+    .search-panel .form-control {
+        border-color: #cbd5e1;
+    }
+    .search-panel .btn-primary {
+        background: #4f46e5;
+        border-color: #4f46e5;
+    }
+    .search-panel .btn-secondary {
+        background: #e2e8f0;
+        border-color: #cbd5e1;
+        color: #0f172a;
+    }
+    .search-panel .btn-secondary:hover {
+        background: #cbd5e1;
+        border-color: #94a3b8;
+    }
+    .search-panel .btn {
+        min-width: 96px;
+    }
+    .results-panel {
+        overflow: hidden;
+    }
+    .results-panel table thead th {
+        background: #f8fafc;
+        color: #334155;
+        font-size: .82rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .results-panel table tbody td {
+        vertical-align: middle;
+    }
+    .results-panel .btn-sm {
+        padding: .28rem .55rem;
+    }
+    .results-panel .table {
+        margin-bottom: 0;
     }
 </style>
 <div class="row">
@@ -37,7 +96,10 @@
 
         <div class="search-panel p-4 mb-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">Filtros de búsqueda</h5>
+                <div>
+                    <h5 class="mb-0">Filtros de búsqueda</h5>
+                    <div class="text-muted small">Por defecto se muestran los últimos 30 días.</div>
+                </div>
                 <span class="badge bg-light text-dark border">{{ cotizaciones|length }} resultados</span>
             </div>
             <div>
@@ -64,7 +126,7 @@
                     </div>
                     <div class="col-12 d-flex gap-2 flex-wrap">
                         <button class="btn btn-primary" type="submit">Buscar</button>
-                        <a href="{% url 'cotizaciones_busqueda' %}" class="btn btn-secondary">Limpiar</a>
+                        <a href="{{ limpiar_url }}" class="btn btn-secondary">Limpiar</a>
                     </div>
                 </form>
             </div>
@@ -76,7 +138,7 @@
                 <span class="badge bg-primary">{{ cotizaciones|length }} registros</span>
             </div>
             <div class="table-responsive">
-                    <table id="tabla-cotizaciones" class="table table-hover align-middle mb-0">
+                    <table id="tabla-cotizaciones" class="table table-hover align-middle">
                         <thead>
                             <tr>
                                 <th>N°</th>
@@ -84,8 +146,9 @@
                                 <th>Proyecto</th>
                                 <th>Mandante</th>
                                 <th>Contacto</th>
+                                <th>Estado Cotización</th>
                                 <th>Valor</th>
-                                <th>Estado</th>
+                                <th>Es Activo</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -97,16 +160,12 @@
                                     <td>{{ cotizacion.proyecto_texto }}</td>
                                     <td>{{ cotizacion.mandante_texto }}</td>
                                     <td>{{ cotizacion.contacto_texto }}</td>
+                                    <td>
+                                        <span class="estado-cotizacion-badge {{ cotizacion.estadocotizacion_class }}">{{ cotizacion.estadocotizacion_texto }}</span>
+                                    </td>
                                     <td>{{ cotizacion.valor_total_texto }}</td>
                                     <td>
-                                        {% if cotizacion.esactiva and cotizacion.estado == 0 %}
-                                            <span class="cotizacion-badge cotizacion-badge-borrador">Borrador</span>
-                                        {% elif cotizacion.esactiva %}
-                                            <span class="cotizacion-badge cotizacion-badge-activa">Activa</span>
-                                        {% else %}
-                                            <span class="cotizacion-badge cotizacion-badge-cerrada">Cerrada / Inactiva</span>
-                                        {% endif %}
-                                        <div class="small text-muted mt-1">{{ cotizacion.estado_texto }}</div>
+                                        <span class="cotizacion-badge {% if cotizacion.esactiva %}cotizacion-badge-activa{% else %}cotizacion-badge-inactiva{% endif %}">{% if cotizacion.esactiva %}SI{% else %}NO{% endif %}</span>
                                     </td>
                                     <td class="text-center">
                                         <a href="{% url 'cotizacion_detalle' cotizacion.pk %}" class="btn btn-info btn-sm">Ver</a>
@@ -119,30 +178,13 @@
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="8" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
+                                    <td colspan="9" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
                     </table>
             </div>
 
-                {% if page_obj.paginator.num_pages > 1 %}
-                    <nav class="mt-3" aria-label="Paginación cotizaciones">
-                        <ul class="pagination justify-content-center mb-0">
-                            {% if page_obj.has_previous %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&numero={{ filtros.numero }}&proyecto={{ filtros.proyecto }}&mandante={{ filtros.mandante }}&fecha_desde={{ filtros.fecha_desde }}&fecha_hasta={{ filtros.fecha_hasta }}">Anterior</a>
-                                </li>
-                            {% endif %}
-                            <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
-                            {% if page_obj.has_next %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&numero={{ filtros.numero }}&proyecto={{ filtros.proyecto }}&mandante={{ filtros.mandante }}&fecha_desde={{ filtros.fecha_desde }}&fecha_hasta={{ filtros.fecha_hasta }}">Siguiente</a>
-                                </li>
-                            {% endif %}
-                        </ul>
-                    </nav>
-                {% endif %}
         </div>
     </div>
 </div>
@@ -153,7 +195,6 @@
     $(document).ready(function () {
         if ($('#tabla-cotizaciones').length) {
             $('#tabla-cotizaciones').DataTable({
-                pageLength: 10,
                 searching: false,
                 lengthChange: false,
                 info: false,

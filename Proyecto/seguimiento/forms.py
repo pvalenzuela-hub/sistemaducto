@@ -10,6 +10,7 @@ from .models import (
     DestinoCotizacion,
     ClienteCategoria,
     Cotizacion,
+    Estadocotizacion,
     CotizacionValor,
     ItemCotizacion,
     TFpago,
@@ -429,6 +430,14 @@ class ClienteSeguimientoForm(forms.Form):
 
 
 class CotizacionForm(forms.ModelForm):
+    estadocotizacion = forms.ModelChoiceField(
+        queryset=Estadocotizacion.objects.all().order_by('nombre'),
+        required=False,
+        label='Estado cotización',
+        empty_label='Sin estado',
+        disabled=True,
+    )
+
     idcliente = ClienteRelacionadoChoiceField(
         queryset=Cliente.objects.all().order_by('razonsocial'),
         required=True,
@@ -469,7 +478,7 @@ class CotizacionForm(forms.ModelForm):
     class Meta:
         model = Cotizacion
         fields = [
-            'idcliente', 'idcontacto', 'fecha', 'nombreproyecto', 'dirproyecto',
+            'estadocotizacion', 'idcliente', 'idcontacto', 'fecha', 'nombreproyecto', 'dirproyecto',
             'codregion', 'destino', 'pisos', 'edificios', 'mt2', 'moneda'
         ]
         widgets = {
@@ -493,10 +502,12 @@ class CotizacionForm(forms.ModelForm):
                 field.widget.attrs['class'] = 'form-control'
 
         self.fields['idcliente'].label = 'Mandante'
+        self.fields['estadocotizacion'].label = 'Estado cotización'
         self.fields['idcontacto'].label = 'Contacto'
         self.fields['codregion'].label = 'Región'
         self.fields['destino'].label = 'Destino'
         self.fields['idcliente'].queryset = Cliente.objects.all().order_by('razonsocial')
+        self.fields['estadocotizacion'].queryset = Estadocotizacion.objects.all().order_by('nombre')
         self.fields['idcontacto'].queryset = Clientecontacto.objects.all().order_by('nombrecontacto', 'idcontacto')
         self.fields['codregion'].queryset = Tregion.objects.all().order_by('descrip')
         self.fields['destino'].choices = [('', 'Seleccione destino')] + [
@@ -514,6 +525,9 @@ class CotizacionForm(forms.ModelForm):
         self.fields['destino'].widget.attrs.update({'data-autocomplete': 'destino'})
         self.fields['moneda'].widget.attrs.update({'data-autocomplete': 'moneda'})
         self.fields['moneda'].required = False
+
+        if self.instance and self.instance.pk and self.instance.estadocotizacion_id:
+            self.fields['estadocotizacion'].initial = self.instance.estadocotizacion_id
 
     def clean_codregion(self):
         valor = self.cleaned_data.get('codregion')
