@@ -8,7 +8,7 @@
     <style>
         @page { size: A4 portrait; margin: 10mm; }
         body, html, * { font-family: Arial, Helvetica, sans-serif; color: #111; }
-        body { margin: 0; }
+        body { margin: 0; padding-bottom: 14mm; }
         .report-page { border: 2px solid #25b33f; padding: 10px 12px 8px; height: 277mm; box-sizing: border-box; }
         .report-header { display: grid; grid-template-columns: 136px 1fr 290px; gap: 10px; align-items: start; margin-bottom: 4px; }
         .report-logo img { width: 98px; height: auto; display: block; margin-top: 0; }
@@ -27,6 +27,16 @@
         .signature-block { flex: 1; text-align: center; }
         .signature-name { font-weight: 700; font-size: 11px; }
         .page-one, .page-two { display: flex; flex-direction: column; min-height: 0; }
+        .report-footer {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 4mm;
+            text-align: center;
+            font-size: 8px;
+            color: #333;
+            z-index: 10;
+        }
         .page-break { break-before: page; page-break-before: always; }
     </style>
 </head>
@@ -73,7 +83,7 @@
         <div style="padding: 0 12px 3px; font-size:10px; line-height:1.14;">1.- PLANOS:<br>&nbsp;&nbsp;- EMPLAZAMIENTO<br>&nbsp;&nbsp;- PLANTAS Y CORTES SALA DE BASURA<br>&nbsp;&nbsp;- PLANTAS Y CORTES CLOSET DUCTOS DE BASURA<br>&nbsp;&nbsp;- DETALLES DE IMPLEMENTACIÓN<br>&nbsp;&nbsp;- ITEMIZADO<br>&nbsp;&nbsp;- CÁLCULO DE RESIDUOS<br>&nbsp;&nbsp;- NOMENCLATURA<br>2.- ESPECIFICACIONES TÉCNICAS<br>3.- ITEMIZADO</div>
         <div class="section-bar">PLAZOS DE ENTREGA</div>
         <div style="padding: 0 12px 2px; font-size:10px; line-height:1.14;">1.- PRIMERA ENTREGA: 15 DÍAS HÁBILES, UNA VEZ RECIBIDA LA ORDEN DE COMPRA O DATOS DE FACTURACIÓN Y LOS PLANOS DE ARQUITECTURA NECESARIOS PARA EL DESARROLLO DEL PROYECTO.<br><br>2.- CORRECCIONES: 5 DÍAS HÁBILES UNA VEZ RECIBIDAS LAS OBSERVACIONES.<br><br>3.- EL PROYECTO CONSIDERA 3 MODIFICACIONES A CAUSA DE CAMBIOS EN ARQUITECTURA.</div>
-        <div style="margin-top:auto; text-align:center; font-size:8px; padding-top:6px;">La Goleta 879, Las Condes - Fono: 22 261 5416 - Área Técnica 9 7783 4504 - contacto@ductoproyectos.cl - www.ductoproyectos.cl</div>
+        <div class="report-footer">La Goleta 879, Las Condes - Fono: 22 261 5416 - Área Técnica 9 7783 4504 - contacto@ductoproyectos.cl - www.ductoproyectos.cl</div>
     </div>
     <div class="page-break"></div>
     <div class="page-two">
@@ -101,7 +111,7 @@
                 <div>Santiago - Chile</div>
             </div>
         </div>
-        <div style="margin-top:2px; text-align:center; font-size:8px; color:#333;">La Goleta 879, Las Condes - Fono: 22 261 5416 - Área Técnica 9 7783 4504 - contacto@ductoproyectos.cl - www.ductoproyectos.cl</div>
+        <div class="report-footer">La Goleta 879, Las Condes - Fono: 22 261 5416 - Área Técnica 9 7783 4504 - contacto@ductoproyectos.cl - www.ductoproyectos.cl</div>
     </div>
 </div>
 </body>
