@@ -1,9 +1,6 @@
 import json
 import os
 import re
-import shutil
-import subprocess
-import tempfile
 from urllib.parse import urlencode
 from datetime import timezone as dt_timezone
 from django.shortcuts import render, redirect
@@ -32,6 +29,7 @@ from django.template.loader import render_to_string
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from .forms import ClienteForm, ClienteContactoFormSet, ClienteSeguimientoForm, CotizacionForm, TipoEntregaForm
+from weasyprint import HTML
 
 
 
@@ -407,50 +405,12 @@ def cotizacion_reporte(request, pk):
     })
 
 
-def _cotizacion_pdf_asset_prefix():
-    static_dir = settings.BASE_DIR / 'static'
-    return static_dir.as_uri().rstrip('/')
-
-
 def _cotizacion_html_para_pdf(request, context):
-    html = render_to_string('cotizaciones/reporte_pdf.html', context, request=request)
-    prefix = _cotizacion_pdf_asset_prefix()
-    html = html.replace('/static/', f'{prefix}/')
-    html = html.replace('href="/static/', f'href="{prefix}/')
-    return html
+    return render_to_string('cotizaciones/reporte_pdf.html', context, request=request)
 
 
-def _render_pdf_con_wkhtmltopdf(html):
-    wkhtmltopdf = shutil.which('wkhtmltopdf')
-    if not wkhtmltopdf:
-        return None
-    with tempfile.TemporaryDirectory() as tmpdir:
-        html_path = os.path.join(tmpdir, 'cotizacion.html')
-        pdf_path = os.path.join(tmpdir, 'cotizacion.pdf')
-        with open(html_path, 'w', encoding='utf-8') as fh:
-            fh.write(html)
-        input_url = f'file://{html_path}'
-        proc = subprocess.run(
-            [
-                wkhtmltopdf,
-                '--print-media-type',
-                '--enable-local-file-access',
-                '--margin-top', '8mm',
-                '--margin-right', '8mm',
-                '--margin-bottom', '8mm',
-                '--margin-left', '8mm',
-                input_url,
-                pdf_path,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=120,
-        )
-        if proc.returncode != 0 or not os.path.exists(pdf_path):
-            raise RuntimeError((proc.stderr or proc.stdout or 'wkhtmltopdf failed').strip())
-        with open(pdf_path, 'rb') as fh:
-            return fh.read()
+def _render_pdf_con_weasyprint(html, base_url):
+    return HTML(string=html, base_url=base_url).write_pdf()
 
 
 @login_required
@@ -486,9 +446,12 @@ def cotizacion_reporte_pdf(request, pk):
     }
     html = _cotizacion_html_para_pdf(request, context)
     try:
-        pdf_bytes = _render_pdf_con_wkhtmltopdf(html)
+        pdf_bytes = _render_pdf_con_weasyprint(html, request.build_absolute_uri('/'))
     except Exception as exc:
         return render(request, 'cotizaciones/reporte.html', {**context, 'pdf_error': str(exc)})
+
+    if not pdf_bytes or not isinstance(pdf_bytes, (bytes, bytearray)):
+        return render(request, 'cotizaciones/reporte.html', {**context, 'pdf_error': 'No se pudo generar el PDF.'})
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Reporte_Cotizacion_{cotizacion.numcotizacion or cotizacion.idcotizacion}.pdf"'
