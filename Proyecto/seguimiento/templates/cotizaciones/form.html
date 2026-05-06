@@ -462,6 +462,15 @@
             return `${monedaActual()} ${num.toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`.trim();
         }
 
+        function escaparHtml(valor) {
+            return String(valor || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function leerItems() {
             try {
                 return JSON.parse($itemsJson.val() || '[]');
@@ -537,7 +546,7 @@
             items.forEach(function (item, index) {
                 const fila = `
                     <tr>
-                        <td>${item.glosa || ''}</td>
+                        <td><input type="text" class="form-control form-control-sm item-glosa" data-index="${index}" value="${escaparHtml(item.glosa)}"></td>
                         <td>${item.moneda || ''}</td>
                         <td class="text-end">${formatearMonto(item.valor)}</td>
                         <td>${item.opcional === 'S' ? 'S' : 'N'}</td>
@@ -640,6 +649,14 @@
             items.splice(index, 1);
             guardarItems(items);
             renderItems();
+        });
+
+        $tablaItems.on('input', '.item-glosa', function () {
+            const index = Number($(this).data('index'));
+            const items = leerItems();
+            if (!items[index]) return;
+            items[index].glosa = $(this).val();
+            guardarItems(items);
         });
 
         $moneda.on('change', function () {

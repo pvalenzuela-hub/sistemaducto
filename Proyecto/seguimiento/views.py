@@ -492,6 +492,7 @@ def cotizacion_reporte_pdf(request, pk):
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Reporte_Cotizacion_{cotizacion.numcotizacion or cotizacion.idcotizacion}.pdf"'
+    response['X-Content-Type-Options'] = 'nosniff'
     return response
 
 
