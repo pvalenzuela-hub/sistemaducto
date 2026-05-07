@@ -169,9 +169,12 @@
                                     </td>
                                     <td class="text-center">
                                         <a href="{% url 'cotizacion_detalle' cotizacion.pk %}" class="btn btn-info btn-sm">Ver</a>
-                                        {% if cotizacion.esactiva and cotizacion.estado == 0 %}
+                                        <a href="{% url 'cotizaciones_ingreso' %}?copy_from={{ cotizacion.pk }}" class="btn btn-success btn-sm">Copiar</a>
+                                        {% if not cotizacion.bloquea_acciones %}
                                             <a href="{% url 'cotizacion_editar' cotizacion.pk %}" class="btn btn-warning btn-sm">Editar</a>
                                             <a href="{% url 'cotizacion_versionar' cotizacion.pk %}" class="btn btn-secondary btn-sm">Versión</a>
+                                            <a href="{% url 'cotizacion_reporte' cotizacion.pk %}" class="btn btn-danger btn-sm">PDF</a>
+                                        {% else %}
                                             <a href="{% url 'cotizacion_reporte' cotizacion.pk %}" class="btn btn-danger btn-sm">PDF</a>
                                         {% endif %}
                                     </td>

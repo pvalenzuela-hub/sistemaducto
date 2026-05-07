@@ -126,6 +126,9 @@
         <div class="detail-block">
             <form method="post" class="row g-3">
                     {% csrf_token %}
+                    {% if copy_from %}
+                        <input type="hidden" name="copy_from" value="{{ copy_from }}">
+                    {% endif %}
 
                 {% if cotizacion %}
                 <div class="col-12">

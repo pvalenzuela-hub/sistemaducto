@@ -231,6 +231,7 @@ class Cotizacion(models.Model):
     moneda = models.CharField(db_column='Moneda', max_length=2, null=True, blank=True)
     estado = models.IntegerField(db_column='Estado', null=True, blank=True)
     idusuario = models.CharField(db_column='IdUsuario', max_length=15, null=True, blank=True)
+    origen = models.CharField(db_column='Origen', max_length=10, null=True, blank=True)
     fechaact = models.DateTimeField(db_column='FechaACT', null=True, blank=True)
     esactiva = models.BooleanField(db_column='EsActiva', null=True, blank=True)
     fechaaceptacion = models.DateField(db_column='FechaAceptacion', null=True, blank=True)

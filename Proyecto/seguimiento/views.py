@@ -14,6 +14,7 @@ from collections import defaultdict
 from datetime import date
 
 from django.db.models import Max, Prefetch, F, OuterRef, Subquery, Count, IntegerField, CharField, Value, Q, Exists, Sum
+from django.db.models.functions import Cast
 from django.db import transaction, IntegrityError
 from django.http import JsonResponse
 from django.utils.dateparse import parse_datetime
@@ -149,9 +150,14 @@ def cotizaciones_busqueda(request):
     mandante = (request.GET.get('mandante') or '').strip()
     fecha_desde = (request.GET.get('fecha_desde') or '').strip()
     fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
+    busqueda_textual = bool(numero or proyecto or mandante)
 
     if not any([numero, proyecto, mandante, fecha_desde, fecha_hasta]):
         fecha_desde = (timezone.localdate() - timedelta(days=30)).isoformat()
+
+    if busqueda_textual:
+        fecha_desde = ''
+        fecha_hasta = ''
 
     clear_params = {'fecha_desde': fecha_desde}
 
@@ -161,10 +167,19 @@ def cotizaciones_busqueda(request):
             qs = qs.filter(
                 Q(idcotizacion=numero_int) |
                 Q(numcotizacion=numero_int) |
-                Q(numcorr=numero_int)
+                Q(numcorr=numero_int) |
+                Q(numcotizacion__icontains=numero) |
+                Q(idcotizacion__icontains=numero)
             )
         else:
-            qs = qs.filter(Q(numcorr__icontains=numero))
+            qs = qs.annotate(
+                numcotizacion_texto=Cast('numcotizacion', CharField()),
+                idcotizacion_texto=Cast('idcotizacion', CharField()),
+            ).filter(
+                Q(numcorr__icontains=numero) |
+                Q(numcotizacion_texto__icontains=numero) |
+                Q(idcotizacion_texto__icontains=numero)
+            )
     if proyecto:
         qs = qs.filter(nombreproyecto__icontains=proyecto)
     if mandante:
@@ -175,6 +190,7 @@ def cotizaciones_busqueda(request):
         qs = qs.filter(fecha__lte=fecha_hasta)
 
     cotizaciones = []
+    estado_proyecto_protegido = 'Aprobada, Es Proyecto'
     for cotizacion in qs:
         cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
         cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion_texto or 'Sin estado'
@@ -184,6 +200,7 @@ def cotizaciones_busqueda(request):
         cotizacion.proyecto_texto = cotizacion.nombreproyecto or (str(cotizacion.proyecto_id) if cotizacion.tiene_proyecto and cotizacion.proyecto_id else '')
         cotizacion.valor_total_texto = cotizacion.valortotal or 0
         cotizacion.es_activa_texto = 'SI' if cotizacion.esactiva else 'NO'
+        cotizacion.bloquea_acciones = bool(cotizacion.tiene_proyecto and cotizacion.estadocotizacion_texto == estado_proyecto_protegido)
         cotizaciones.append(cotizacion)
 
     return render(request, 'cotizaciones/busqueda.html', {
@@ -207,6 +224,24 @@ def cotizaciones_busqueda(request):
 
 @login_required
 def cotizaciones_ingreso(request):
+    copy_from = (request.GET.get('copy_from') or request.POST.get('copy_from') or '').strip()
+    cotizacion_origen = None
+    notas_seleccionadas = []
+    formapago_items = []
+    items_guardados = []
+
+    if copy_from.isdigit():
+        cotizacion_origen = get_object_or_404(Cotizacion.objects.select_related('estadocotizacion', 'idcliente', 'idcontacto'), pk=int(copy_from))
+        notas_seleccionadas = list(
+            CotizacionNota.objects.filter(idcotizacion=cotizacion_origen).values_list('idnota_id', flat=True)
+        )
+        formapago_items = list(
+            CotizacionFpago.objects.filter(idcotizacion=cotizacion_origen).values('linea', 'concepto').order_by('linea')
+        )
+        items_guardados = list(
+            CotizacionValor.objects.filter(idcotizacion=cotizacion_origen).values('item', 'glosa', 'valor', 'opcional').order_by('item')
+        )
+
     if request.method == 'POST':
         form = CotizacionForm(request.POST)
         if form.is_valid():
@@ -218,6 +253,7 @@ def cotizaciones_ingreso(request):
             cotizacion.estado = 0
             cotizacion.esactiva = True
             cotizacion.idusuario = (request.user.username or '')[:15]
+            cotizacion.origen = 'WEB'
             ahora_local = _ahora_santiago_naive()
             cotizacion.fecharegistro = ahora_local
             cotizacion.fechaact = ahora_local
@@ -229,20 +265,38 @@ def cotizaciones_ingreso(request):
             messages.success(request, 'Cotización creada correctamente.')
             return redirect('cotizacion_detalle', pk=cotizacion.pk)
     else:
-        form = CotizacionForm(initial={'fecha': timezone.localdate()})
+        initial = {'fecha': timezone.localdate()}
+        if cotizacion_origen:
+            initial.update({
+                'idcliente': cotizacion_origen.idcliente_id,
+                'idcontacto': cotizacion_origen.idcontacto_id,
+                'fecha': timezone.localdate(),
+                'nombreproyecto': cotizacion_origen.nombreproyecto,
+                'dirproyecto': cotizacion_origen.dirproyecto,
+                'codregion': cotizacion_origen.codregion,
+                'destino': cotizacion_origen.destino,
+                'pisos': cotizacion_origen.pisos,
+                'edificios': cotizacion_origen.edificios,
+                'mt2': cotizacion_origen.mt2,
+                'moneda': cotizacion_origen.moneda,
+            })
+        form = CotizacionForm(initial=initial)
 
     formapago_catalogo = list(TFpago.objects.filter(regionrm=0).order_by('codfp').values('concepto'))
 
     return render(request, 'cotizaciones/form.html', {
         'titulo': 'Ingreso de Cotizaciones',
         'encabezado': 'Ingreso de Cotizaciones',
-        'submenu': 'Alta de cotización nueva',
+        'submenu': 'Alta de cotización nueva' if not cotizacion_origen else 'Copia de cotización',
         'volver_url_name': 'cotizaciones_home',
         'accion_nombre': 'Búsqueda de Cotizaciones',
         'accion_url_name': 'cotizaciones_busqueda',
         'form': form,
         'modo': 'crear',
-        'items_guardados': [],
+        'copy_from': copy_from,
+        'items_guardados': items_guardados,
+        'notas_seleccionadas': notas_seleccionadas,
+        'formapago_items': formapago_items,
         'formapago_catalogo': formapago_catalogo,
     })
 
@@ -265,6 +319,7 @@ def cotizacion_editar(request, pk):
             cotizacion = form.save(commit=False)
             cotizacion.fecha = form.cleaned_data.get('fecha') or cotizacion.fecha
             cotizacion.fechaact = _ahora_santiago_naive()
+            cotizacion.origen = cotizacion.origen or 'WEB'
             cotizacion.save()
             _guardar_items_cotizacion(cotizacion, request.POST.get('items_json', ''))
             _guardar_formapago_cotizacion(cotizacion, request.POST.get('formapago_json', ''))
@@ -318,6 +373,7 @@ def cotizacion_versionar(request, pk):
         moneda=base.moneda,
         estado=0,
         idusuario=(request.user.username or '')[:15],
+        origen='WEB',
         fechaact=_ahora_santiago_naive(),
         esactiva=True,
         mt2=base.mt2,
