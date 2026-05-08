@@ -282,6 +282,9 @@ def cotizaciones_seguimiento(request):
         cotizacion.estadocotizacion_style = _estado_cotizacion_style(cotizacion.estadocotizacion)
         cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
         cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
+        cotizacion.email_texto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
+        cotizacion.telefono_texto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
+        cotizacion.fpago_texto = cotizacion.fpago_proyecto or ''
         cotizacion.valor_total_texto = cotizacion.valortotal or 0
         cotizacion.es_activa_texto = 'SI' if cotizacion.esactiva else 'NO'
         cotizacion.puede_editar = cotizacion.estado == 1
