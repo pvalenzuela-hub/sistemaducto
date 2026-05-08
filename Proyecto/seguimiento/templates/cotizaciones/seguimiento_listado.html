@@ -55,18 +55,18 @@
                             <th>N°</th>
                             <th>Fecha</th>
                             <th>Proyecto</th>
+                            <th>Moneda</th>
+                            <th>Valor Cot.</th>
+                            <th>Fec. Seg.</th>
                             <th>Mandante</th>
                             <th>Contacto</th>
                             <th>eMail</th>
                             <th>Teléfono</th>
-                            <th>Estado</th>
-                            <th>Moneda</th>
-                            <th>Valor Cot.</th>
-                            <th>Valor Opc.</th>
-                            <th>Últ. Seguimiento</th>
-                            <th>Proyecto</th>
                             <th>Forma Pago</th>
-                            <th>Valor</th>
+                            <th>Estado</th>
+                            <th>N° Proyecto</th>
+                            <th>Valor Proyecto</th>
+                            <th>Valor Opc.</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -76,18 +76,18 @@
                                 <td>{{ cotizacion.numcotizacion|default:cotizacion.idcotizacion }}-{{ cotizacion.numcorr|default:0|stringformat:"03d" }}</td>
                                 <td>{{ cotizacion.fecha|date:"d-m-Y" }}</td>
                                 <td>{{ cotizacion.nombreproyecto }}</td>
+                                <td>{{ cotizacion.moneda_texto }}</td>
+                                <td>{{ cotizacion.valor_total_texto }}</td>
+                                <td title="{{ cotizacion.comentario_ultimo_seg_texto }}">{{ cotizacion.fecha_ultimo_seg_texto }}</td>
                                 <td>{{ cotizacion.mandante_texto }}</td>
                                 <td>{{ cotizacion.contacto_texto }}</td>
                                 <td>{{ cotizacion.email_texto }}</td>
                                 <td>{{ cotizacion.telefono_texto }}</td>
-                                <td><span class="estado-cotizacion-badge" style="{{ cotizacion.estadocotizacion_style }}; display:inline-block; min-width: 120px; text-align:center;">{{ cotizacion.estadocotizacion_texto }}</span></td>
-                                <td>{{ cotizacion.moneda_texto }}</td>
-                                <td>{{ cotizacion.valor_total_texto }}</td>
-                                <td>{{ cotizacion.valor_opcional_texto }}</td>
-                                <td title="{{ cotizacion.comentario_ultimo_seg_texto }}">{{ cotizacion.fecha_ultimo_seg_texto }}</td>
-                                <td>{{ cotizacion.num_proyecto_texto }}</td>
                                 <td>{{ cotizacion.fpago_texto }}</td>
+                                <td><span class="estado-cotizacion-badge" style="{{ cotizacion.estadocotizacion_style }}; display:inline-block; min-width: 120px; text-align:center;">{{ cotizacion.estadocotizacion_texto }}</span></td>
+                                <td>{{ cotizacion.num_proyecto_texto }}</td>
                                 <td>{{ cotizacion.valor_proyecto_texto }}</td>
+                                <td>{{ cotizacion.valor_opcional_texto }}</td>
                                 <td class="text-center">
                                     <a href="{% url 'cotizacion_visor' cotizacion.pk %}" class="btn btn-info btn-sm">Visor</a>
                                     <a href="{% url 'cotizacion_seguimiento' cotizacion.pk %}" class="btn btn-primary btn-sm">Seguimiento</a>
@@ -98,7 +98,7 @@
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="16" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
+                                <td colspan="15" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
                             </tr>
                         {% endfor %}
                     </tbody>

@@ -246,15 +246,21 @@ def cotizaciones_busqueda(request):
 
 @login_required
 def cotizaciones_seguimiento(request):
+    ultimo_seguimiento = CotizacionSeg.objects.filter(idcotizacion=OuterRef('pk')).order_by('-idreg')
+    proyecto_relacionado = Proyecto.objects.filter(idcotizacion=OuterRef('pk')).order_by('idproyecto')
     qs = (
         Cotizacion.objects
         .select_related('idcliente', 'idcontacto', 'estadocotizacion')
         .annotate(tiene_proyecto=Exists(Proyecto.objects.filter(idcotizacion=OuterRef('pk'))))
         .annotate(
-            estado_orden=Coalesce('estadocotizacion__orden', Value(999)),
             valor_opcional=Coalesce(Sum('cotizacionvalor__valor', filter=Q(cotizacionvalor__opcional='S')), Value(0)),
+            num_proyecto=Subquery(proyecto_relacionado.values('idproyecto')[:1]),
+            valor_proyecto=Subquery(proyecto_relacionado.values('valor')[:1]),
+            fpago_proyecto=Subquery(proyecto_relacionado.values('fpago')[:1]),
+            fecha_ultimo_seg=Subquery(ultimo_seguimiento.values('fecharevision')[:1]),
+            comentario_ultimo_seg=Subquery(ultimo_seguimiento.values('comentario')[:1]),
         )
-        .order_by('-fecha', 'estado_orden', '-numcotizacion', '-numcorr')
+        .order_by('-fecha', '-numcotizacion', '-numcorr')
     )
 
     numero = (request.GET.get('numero') or '').strip()
@@ -291,6 +297,10 @@ def cotizaciones_seguimiento(request):
         cotizacion.moneda_texto = cotizacion.moneda or ''
         cotizacion.valor_total_texto = cotizacion.valortotal or 0
         cotizacion.valor_opcional_texto = cotizacion.valor_opcional or 0
+        cotizacion.fecha_ultimo_seg_texto = cotizacion.fecha_ultimo_seg.strftime('%d-%m-%Y %H:%M') if cotizacion.fecha_ultimo_seg else ''
+        cotizacion.comentario_ultimo_seg_texto = (cotizacion.comentario_ultimo_seg or '')[:80]
+        cotizacion.num_proyecto_texto = str(cotizacion.num_proyecto) if cotizacion.num_proyecto else ''
+        cotizacion.valor_proyecto_texto = cotizacion.valor_proyecto or 0
         cotizacion.es_activa_texto = 'SI' if cotizacion.esactiva else 'NO'
         cotizacion.puede_editar = cotizacion.estado == 1
         cotizaciones.append(cotizacion)
