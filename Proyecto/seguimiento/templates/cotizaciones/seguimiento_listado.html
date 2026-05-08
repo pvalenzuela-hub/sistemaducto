@@ -60,6 +60,9 @@
                             <th>eMail</th>
                             <th>Teléfono</th>
                             <th>Estado</th>
+                            <th>Moneda</th>
+                            <th>Valor Cot.</th>
+                            <th>Valor Opc.</th>
                             <th>Últ. Seguimiento</th>
                             <th>Proyecto</th>
                             <th>Forma Pago</th>
@@ -78,6 +81,9 @@
                                 <td>{{ cotizacion.email_texto }}</td>
                                 <td>{{ cotizacion.telefono_texto }}</td>
                                 <td><span class="estado-cotizacion-badge" style="{{ cotizacion.estadocotizacion_style }}; display:inline-block; min-width: 120px; text-align:center;">{{ cotizacion.estadocotizacion_texto }}</span></td>
+                                <td>{{ cotizacion.moneda_texto }}</td>
+                                <td>{{ cotizacion.valor_total_texto }}</td>
+                                <td>{{ cotizacion.valor_opcional_texto }}</td>
                                 <td title="{{ cotizacion.comentario_ultimo_seg_texto }}">{{ cotizacion.fecha_ultimo_seg_texto }}</td>
                                 <td>{{ cotizacion.num_proyecto_texto }}</td>
                                 <td>{{ cotizacion.fpago_texto }}</td>
@@ -92,7 +98,7 @@
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="13" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
+                                <td colspan="16" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
                             </tr>
                         {% endfor %}
                     </tbody>

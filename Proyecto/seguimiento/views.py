@@ -250,7 +250,10 @@ def cotizaciones_seguimiento(request):
         Cotizacion.objects
         .select_related('idcliente', 'idcontacto', 'estadocotizacion')
         .annotate(tiene_proyecto=Exists(Proyecto.objects.filter(idcotizacion=OuterRef('pk'))))
-        .annotate(estado_orden=Coalesce('estadocotizacion__orden', Value(999)))
+        .annotate(
+            estado_orden=Coalesce('estadocotizacion__orden', Value(999)),
+            valor_opcional=Coalesce(Sum('cotizacionvalor__valor', filter=Q(cotizacionvalor__opcional='S')), Value(0)),
+        )
         .order_by('-fecha', 'estado_orden', '-numcotizacion', '-numcorr')
     )
 
@@ -285,7 +288,9 @@ def cotizaciones_seguimiento(request):
         cotizacion.email_texto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
         cotizacion.telefono_texto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
         cotizacion.fpago_texto = cotizacion.fpago_proyecto or ''
+        cotizacion.moneda_texto = cotizacion.moneda or ''
         cotizacion.valor_total_texto = cotizacion.valortotal or 0
+        cotizacion.valor_opcional_texto = cotizacion.valor_opcional or 0
         cotizacion.es_activa_texto = 'SI' if cotizacion.esactiva else 'NO'
         cotizacion.puede_editar = cotizacion.estado == 1
         cotizaciones.append(cotizacion)
