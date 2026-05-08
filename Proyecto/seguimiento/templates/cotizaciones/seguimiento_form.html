@@ -1,0 +1,98 @@
+{% extends "components/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div>
+                <h1 class="mb-1">{{ encabezado }}</h1>
+                <p class="text-muted mb-0">{{ submenu }}</p>
+            </div>
+            <a href="{% url volver_url_name cotizacion.pk %}" class="btn btn-outline-secondary">Volver</a>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="fw-semibold">Cotización {{ cotizacion.numcotizacion|default:cotizacion.idcotizacion }}-{{ cotizacion.numcorr|default:0|stringformat:"03d" }}</div>
+                    <div class="text-muted">{{ cotizacion.nombreproyecto }}</div>
+                </div>
+
+                <form method="post" class="row g-3">
+                    {% csrf_token %}
+                    <div class="col-12">
+                        <label class="form-label" for="id_comentario">Comentario</label>
+                        {{ form.comentario }}
+                        {% if form.comentario.errors %}<div class="text-danger small mt-1">{{ form.comentario.errors }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-md-4 form-check mt-4 ps-4">
+                        {{ form.cambia_estado }}
+                        <label class="form-check-label" for="id_cambia_estado">Cambiar estado</label>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label" for="id_nuevo_estado">Nuevo estado</label>
+                        {{ form.nuevo_estado }}
+                        {% if form.nuevo_estado.errors %}<div class="text-danger small mt-1">{{ form.nuevo_estado.errors }}</div>{% endif %}
+                    </div>
+
+                    <div class="col-md-4 form-check mt-4 ps-4">
+                        {{ form.es_recordatorio }}
+                        <label class="form-check-label" for="id_es_recordatorio">Es recordatorio</label>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="id_fecha_recordatorio">Fecha recordatorio</label>
+                        {{ form.fecha_recordatorio }}
+                        {% if form.fecha_recordatorio.errors %}<div class="text-danger small mt-1">{{ form.fecha_recordatorio.errors }}</div>{% endif %}
+                    </div>
+
+                    <div id="bloque_adjudicacion" class="col-12 border rounded p-3 bg-light">
+                        <div class="fw-semibold mb-3">Datos adjudicación</div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label" for="id_quien_adjudica">Quién adjudica</label>
+                                {{ form.quien_adjudica }}
+                                {% if form.quien_adjudica.errors %}<div class="text-danger small mt-1">{{ form.quien_adjudica.errors }}</div>{% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="id_email_adjudicacion">eMail quien adjudica</label>
+                                {{ form.email_adjudicacion }}
+                                {% if form.email_adjudicacion.errors %}<div class="text-danger small mt-1">{{ form.email_adjudicacion.errors }}</div>{% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="id_fecha_adjudicacion">Fecha adjudicación</label>
+                                {{ form.fecha_adjudicacion }}
+                                {% if form.fecha_adjudicacion.errors %}<div class="text-danger small mt-1">{{ form.fecha_adjudicacion.errors }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Grabar seguimiento</button>
+                        <a href="{% url volver_url_name cotizacion.pk %}" class="btn btn-secondary">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function () {
+        const $chkCambio = $('#id_cambia_estado');
+        const $estado = $('#id_nuevo_estado');
+        const $bloque = $('#bloque_adjudicacion');
+
+        function refrescarAdjudicacion() {
+            const mostrar = $chkCambio.is(':checked') && $estado.find('option:selected').text() === 'Aprobada, Es Proyecto';
+            $bloque.toggle(mostrar);
+        }
+
+        $chkCambio.on('change', refrescarAdjudicacion);
+        $estado.on('change', refrescarAdjudicacion);
+        refrescarAdjudicacion();
+    });
+</script>
+{% endblock %}

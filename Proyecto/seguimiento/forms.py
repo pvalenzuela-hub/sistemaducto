@@ -104,6 +104,30 @@ class TipoEntregaForm(forms.ModelForm):
         return valor or None
 
 
+class SeguimientoCotizacionForm(forms.Form):
+    comentario = forms.CharField(label='Comentario', widget=forms.Textarea(attrs={'rows': 4}))
+    cambia_estado = forms.BooleanField(label='Cambiar estado', required=False)
+    nuevo_estado = forms.ModelChoiceField(
+        label='Nuevo estado',
+        required=False,
+        queryset=Estadocotizacion.objects.all().order_by('nombre'),
+        empty_label='Seleccione estado',
+    )
+    es_recordatorio = forms.BooleanField(label='Es recordatorio', required=False)
+    fecha_recordatorio = forms.DateField(label='Fecha recordatorio', required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    quien_adjudica = forms.CharField(label='Quién adjudica', required=False)
+    email_adjudicacion = forms.EmailField(label='eMail quien adjudica', required=False)
+    fecha_adjudicacion = forms.DateField(label='Fecha adjudicación', required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for _, field in self.fields.items():
+            field.widget.attrs['class'] = 'form-control'
+        self.fields['cambia_estado'].widget.attrs['class'] = 'form-check-input'
+        self.fields['es_recordatorio'].widget.attrs['class'] = 'form-check-input'
+        self.fields['nuevo_estado'].widget.attrs['class'] = 'form-select'
+
+
 class ClienteForm(forms.ModelForm):
     esprincipal = forms.TypedChoiceField(
         label='Es principal',

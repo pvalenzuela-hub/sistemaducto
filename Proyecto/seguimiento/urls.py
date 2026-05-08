@@ -5,7 +5,10 @@ from .views import Vista1, Vista2, Vista3, VisorComentario
 urlpatterns = [
     path('cotizaciones/', views.cotizaciones_home, name='cotizaciones_home'),
     path('cotizaciones/busqueda/', views.cotizaciones_busqueda, name='cotizaciones_busqueda'),
+    path('cotizaciones/seguimiento/', views.cotizaciones_seguimiento, name='cotizaciones_seguimiento'),
     path('cotizaciones/ingreso/', views.cotizaciones_ingreso, name='cotizaciones_ingreso'),
+    path('cotizaciones/<int:pk>/visor/', views.cotizacion_visor, name='cotizacion_visor'),
+    path('cotizaciones/<int:pk>/seguimiento/', views.cotizacion_seguimiento, name='cotizacion_seguimiento'),
     path('cotizaciones/<int:pk>/', views.cotizacion_detalle, name='cotizacion_detalle'),
     path('cotizaciones/<int:pk>/editar/', views.cotizacion_editar, name='cotizacion_editar'),
     path('cotizaciones/<int:pk>/versionar/', views.cotizacion_versionar, name='cotizacion_versionar'),

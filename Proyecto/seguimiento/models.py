@@ -4,6 +4,9 @@ from django.contrib.auth.models import User
 # Create your models here.
 class Estadocotizacion(models.Model):
     nombre = models.CharField(max_length=50, null=True, blank=True)
+    colorfondo = models.CharField(db_column='ColorFondo', max_length=20, null=True, blank=True)
+    colortexto = models.CharField(db_column='ColorTexto', max_length=20, null=True, blank=True)
+    orden = models.IntegerField(db_column='Orden', null=True, blank=True)
 
     class Meta:
         db_table = 'Estadocotizacion'
@@ -245,6 +248,22 @@ class Cotizacion(models.Model):
 
     def __str__(self):
         return f"Cotización {self.numcotizacion or self.idcotizacion}"
+
+
+class CotizacionSeg(models.Model):
+    idcotizacion = models.ForeignKey(Cotizacion, db_column='IdCotizacion', on_delete=models.DO_NOTHING)
+    idreg = models.IntegerField(db_column='IdReg', primary_key=True)
+    fecharevision = models.DateTimeField(db_column='FechaRevision', null=True, blank=True)
+    comentario = models.TextField(db_column='Comentario', null=True, blank=True)
+    esrecordatorio = models.BooleanField(db_column='EsRecordatorio', null=True, blank=True)
+    fecharecordatorio = models.DateField(db_column='FechaRecordatorio', null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'Cotizacion_Seg'
+
+    def __str__(self):
+        return f"Seguimiento {self.idcotizacion_id}-{self.idreg}"
 
 
 class DestinoCotizacion(models.Model):
