@@ -22,6 +22,9 @@
 
                 <form method="post" class="row g-3">
                     {% csrf_token %}
+                    {% if return_to %}
+                        <input type="hidden" name="return_to" value="{{ return_to }}">
+                    {% endif %}
                     <div class="col-12">
                         <label class="form-label" for="id_comentario">Comentario</label>
                         {{ form.comentario }}

@@ -20,6 +20,7 @@ from django.http import JsonResponse
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from datetime import timedelta, datetime, time
+from decimal import Decimal
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -159,7 +160,7 @@ def cotizaciones_busqueda(request):
             fecha_ultimo_seg=Subquery(ultimo_seguimiento.values('fecharevision')[:1]),
             comentario_ultimo_seg=Subquery(ultimo_seguimiento.values('comentario')[:1]),
         )
-        .order_by('-fecha', '-numcotizacion', '-numcorr')
+        .order_by('-numcotizacion', '-numcorr', '-fecha')
     )
 
     numero = (request.GET.get('numero') or '').strip()
@@ -244,6 +245,13 @@ def cotizaciones_busqueda(request):
     })
 
 
+def _formatear_miles(valor):
+    try:
+        return f"{float(valor or 0):,.0f}".replace(',', '.')
+    except (TypeError, ValueError):
+        return '0'
+
+
 @login_required
 def cotizaciones_seguimiento(request):
     ultimo_seguimiento = CotizacionSeg.objects.filter(idcotizacion=OuterRef('pk')).order_by('-idreg')
@@ -275,7 +283,7 @@ def cotizaciones_seguimiento(request):
     fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
 
     if not any([numero, proyecto, mandante, estado, fecha_desde, fecha_hasta]):
-        fecha_desde = (timezone.localdate() - timedelta(days=30)).isoformat()
+        estado = 'En Espera'
 
     usar_fechas = not any([numero, proyecto, mandante, estado])
 
@@ -298,9 +306,6 @@ def cotizaciones_seguimiento(request):
 
     cotizaciones = []
     for cotizacion in qs:
-        seguimientos_qs = list(
-            CotizacionSeg.objects.filter(idcotizacion=cotizacion).order_by('-fecharevision', '-idreg')
-        )
         cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
         cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
         cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
@@ -312,24 +317,16 @@ def cotizaciones_seguimiento(request):
         cotizacion.fpago_texto = cotizacion.fpago_proyecto or ''
         cotizacion.moneda_texto = cotizacion.moneda or ''
         cotizacion.proyecto_texto = cotizacion.nombreproyecto or ''
-        cotizacion.valor_total_texto = cotizacion.valortotal or 0
-        cotizacion.valor_opcional_texto = cotizacion.valor_opcional or 0
+        valor_total = float(cotizacion.valortotal or 0)
+        valor_opcional = float(cotizacion.valor_opcional or 0)
+        cotizacion.valor_opcional_texto = _formatear_miles(valor_opcional)
+        cotizacion.valor_total_texto = _formatear_miles(max(valor_total - valor_opcional, 0))
         cotizacion.fecha_ultimo_seg_texto = cotizacion.fecha_ultimo_seg.strftime('%d-%m-%Y %H:%M') if cotizacion.fecha_ultimo_seg else ''
         cotizacion.comentario_ultimo_seg_texto = (cotizacion.comentario_ultimo_seg or '')[:80]
-        cotizacion.historial_seguimiento = [
-            {
-                'fecha': seg.fecharevision.strftime('%d-%m-%Y %H:%M') if seg.fecharevision else '',
-                'usuario': getattr(seg, 'iduser', '') or getattr(seg, 'idusuario', '') or '',
-                'comentario': seg.comentario or '',
-                'recordatorio': 'SI' if seg.esrecordatorio else 'NO',
-                'fecha_recordatorio': seg.fecharecordatorio.strftime('%d-%m-%Y') if seg.fecharecordatorio else '',
-            }
-            for seg in seguimientos_qs
-        ]
         cotizacion.num_proyecto_texto = str(cotizacion.num_proyecto) if cotizacion.num_proyecto else ''
-        cotizacion.valor_proyecto_texto = cotizacion.valor_proyecto or 0
+        cotizacion.valor_proyecto_texto = _formatear_miles(cotizacion.valor_proyecto)
         cotizacion.es_activa_texto = 'SI' if cotizacion.esactiva else 'NO'
-        cotizacion.puede_editar = cotizacion.estado == 1
+        cotizacion.puede_editar = cotizacion.estadocotizacion_texto == 'En Espera'
         cotizaciones.append(cotizacion)
 
     return render(request, 'cotizaciones/seguimiento_listado.html', {
@@ -350,6 +347,24 @@ def cotizaciones_seguimiento(request):
         'estados': list(Estadocotizacion.objects.order_by('orden', 'nombre')),
         'limpiar_url': request.path,
     })
+
+
+@login_required
+def cotizacion_seguimiento_historial(request, pk):
+    seguimientos = []
+    for seg in CotizacionSeg.objects.select_related('usuario').filter(idcotizacion_id=pk).order_by('-fecharevision', '-idreg'):
+        usuario = seg.usuario
+        nombre_usuario = ''
+        if usuario:
+            nombre_usuario = f"{(usuario.first_name or '').strip()} {(usuario.last_name or '').strip()}".strip() or usuario.username
+        seguimientos.append({
+            'fecha': seg.fecharevision.strftime('%d-%m-%Y %H:%M') if seg.fecharevision else '',
+            'usuario': nombre_usuario,
+            'comentario': seg.comentario or '',
+            'recordatorio': 'SI' if seg.esrecordatorio else 'NO',
+            'fecha_recordatorio': seg.fecharecordatorio.strftime('%d-%m-%Y') if seg.fecharecordatorio else '',
+        })
+    return JsonResponse({'seguimientos': seguimientos})
 
 
 @login_required
@@ -455,7 +470,7 @@ def cotizacion_visor(request, pk):
     cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
     cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
     cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
-    cotizacion.puede_editar = cotizacion.estado == 1
+    cotizacion.puede_editar = (cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else '') == 'En Espera'
 
     return render(request, 'cotizaciones/detalle.html', {
         'titulo': f'Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',
@@ -476,6 +491,8 @@ def cotizacion_visor(request, pk):
 @transaction.atomic
 def cotizacion_seguimiento(request, pk):
     cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto', 'estadocotizacion'), pk=pk)
+    return_to = (request.GET.get('return_to') or request.POST.get('return_to') or '').strip()
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
     if request.method == 'POST':
         form = SeguimientoCotizacionForm(request.POST)
         if form.is_valid():
@@ -502,25 +519,58 @@ def cotizacion_seguimiento(request, pk):
                 form.add_error('fecha_recordatorio', 'Ingrese fecha de recordatorio mayor a hoy.')
 
             if not form.errors:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        "EXEC GR_Cotizacion_SEG %s, %s, %s, %s, %s, %s, %s, %s, %s",
-                        [
-                            cotizacion.pk,
-                            comentario,
-                            1 if es_recordatorio else 0,
-                            1 if cambia_estado else 0,
-                            nuevo_estado_nombre if cambia_estado else None,
-                            quien_adjudica,
-                            email_adjudicacion,
-                            fecha_adjudicacion,
-                            fecha_recordatorio,
-                        ],
-                    )
+                ultimo_idreg = CotizacionSeg.objects.filter(idcotizacion=cotizacion).aggregate(mx=Max('idreg'))['mx'] or 0
+                seguimiento = CotizacionSeg(
+                    idcotizacion=cotizacion,
+                    idreg=ultimo_idreg + 1,
+                    usuario=request.user,
+                    fecharevision=_ahora_santiago_naive(),
+                    comentario=comentario,
+                    esrecordatorio=es_recordatorio,
+                    fecharecordatorio=fecha_recordatorio,
+                )
+                seguimiento.save(force_insert=True)
+
+                if cambia_estado:
+                    cotizacion.estadocotizacion = nuevo_estado
+                    if nuevo_estado_nombre == 'Aprobada, Es Proyecto':
+                        cotizacion.estado = 1
+                        proyecto_id = (Proyecto.objects.aggregate(mx=Max('idproyecto'))['mx'] or Decimal('0')) + Decimal('1')
+                        if not Proyecto.objects.filter(idcotizacion=cotizacion).exists():
+                            Proyecto.objects.create(
+                                idproyecto=proyecto_id,
+                                fechacreacion=timezone.localdate(),
+                                idcotizacion=cotizacion,
+                                fpago='',
+                                valor=float(cotizacion.valortotal or 0),
+                                estado=1,
+                                idcliente=cotizacion.idcliente,
+                                fechaact=timezone.localdate(),
+                                quienadjudica=quien_adjudica or None,
+                                emailadjudicacion=email_adjudicacion or None,
+                                fechaadjudicacion=fecha_adjudicacion,
+                                moneda=cotizacion.moneda,
+                                fecharegistro=_ahora_santiago_naive(),
+                            )
+                    cotizacion.fechaact = _ahora_santiago_naive()
+                    cotizacion.save(update_fields=['estadocotizacion', 'estado', 'fechaact'])
                 messages.success(request, 'Seguimiento registrado correctamente.')
+                if is_ajax:
+                    return JsonResponse({'ok': True})
+                if return_to == 'seguimiento':
+                    return redirect('cotizaciones_seguimiento')
                 return redirect('cotizacion_visor', pk=cotizacion.pk)
     else:
         form = SeguimientoCotizacionForm(initial={'comentario': ''})
+
+    if is_ajax:
+        return JsonResponse({
+            'html': render_to_string('cotizaciones/seguimiento_form_body.html', {
+                'cotizacion': cotizacion,
+                'form': form,
+                'return_to': return_to,
+            }, request=request)
+        })
 
     return render(request, 'cotizaciones/seguimiento_form.html', {
         'titulo': f'Seguimiento Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',
@@ -529,13 +579,16 @@ def cotizacion_seguimiento(request, pk):
         'cotizacion': cotizacion,
         'form': form,
         'volver_url_name': 'cotizaciones_seguimiento',
+        'return_to': return_to,
     })
 
 
 @login_required
 def cotizacion_editar(request, pk):
     cotizacion = get_object_or_404(Cotizacion.objects.select_related('estadocotizacion'), pk=pk)
-    if cotizacion.estado != 1:
+    return_to = (request.GET.get('return_to') or request.POST.get('return_to') or '').strip()
+    volver_url_name = 'cotizaciones_seguimiento' if return_to == 'seguimiento' else 'cotizacion_detalle'
+    if (cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else '') != 'En Espera':
         messages.info(request, 'Esta cotización no se puede editar en su estado actual.')
         return redirect('cotizacion_visor', pk=cotizacion.pk)
     notas_seleccionadas = list(
@@ -560,7 +613,9 @@ def cotizacion_editar(request, pk):
             _guardar_notas_cotizacion(cotizacion, request.POST.get('notas_json', ''))
             _actualizar_valortotal_cotizacion(cotizacion)
             messages.success(request, 'Cotización actualizada correctamente.')
-            return redirect('cotizacion_detalle', pk=cotizacion.pk)
+            if volver_url_name == 'cotizaciones_seguimiento':
+                return redirect(volver_url_name)
+            return redirect(volver_url_name, pk=cotizacion.pk)
     else:
         form = CotizacionForm(instance=cotizacion, initial={'fecha': cotizacion.fecha})
 
@@ -577,6 +632,8 @@ def cotizacion_editar(request, pk):
         'form': form,
         'cotizacion': cotizacion,
         'modo': 'editar',
+        'volver_url_name': volver_url_name,
+        'return_to': return_to,
         'notas_seleccionadas': notas_seleccionadas,
         'formapago_items': formapago_items,
         'items_guardados': items_guardados,
@@ -645,7 +702,7 @@ def cotizacion_detalle(request, pk):
     cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
     cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
     cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
-    cotizacion.puede_editar = cotizacion.estado == 1
+    cotizacion.puede_editar = (cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else '') == 'En Espera'
 
     return render(request, 'cotizaciones/detalle.html', {
         'titulo': f'Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',

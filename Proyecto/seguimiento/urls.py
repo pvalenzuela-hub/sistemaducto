@@ -6,6 +6,7 @@ urlpatterns = [
     path('cotizaciones/', views.cotizaciones_home, name='cotizaciones_home'),
     path('cotizaciones/busqueda/', views.cotizaciones_busqueda, name='cotizaciones_busqueda'),
     path('cotizaciones/seguimiento/', views.cotizaciones_seguimiento, name='cotizaciones_seguimiento'),
+    path('cotizaciones/<int:pk>/seguimiento/historial/', views.cotizacion_seguimiento_historial, name='cotizacion_seguimiento_historial'),
     path('cotizaciones/ingreso/', views.cotizaciones_ingreso, name='cotizaciones_ingreso'),
     path('cotizaciones/<int:pk>/visor/', views.cotizacion_visor, name='cotizacion_visor'),
     path('cotizaciones/<int:pk>/seguimiento/', views.cotizacion_seguimiento, name='cotizacion_seguimiento'),

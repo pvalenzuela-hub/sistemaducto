@@ -176,7 +176,6 @@
                                     <td class="text-center">
                                         <a href="{% url 'cotizacion_visor' cotizacion.pk %}" class="btn btn-info btn-sm">Visor</a>
                                         <a href="{% url 'cotizacion_detalle' cotizacion.pk %}" class="btn btn-outline-info btn-sm">Ver</a>
-                                        <a href="{% url 'cotizacion_seguimiento' cotizacion.pk %}" class="btn btn-primary btn-sm">Seguimiento</a>
                                         <a href="{% url 'cotizaciones_ingreso' %}?copy_from={{ cotizacion.pk }}" class="btn btn-success btn-sm">Copiar</a>
                                         {% if cotizacion.estado == 1 %}
                                             <a href="{% url 'cotizacion_editar' cotizacion.pk %}" class="btn btn-warning btn-sm">Editar</a>

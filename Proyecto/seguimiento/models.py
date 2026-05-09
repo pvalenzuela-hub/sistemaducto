@@ -256,6 +256,7 @@ class Cotizacion(models.Model):
 class CotizacionSeg(models.Model):
     idcotizacion = models.ForeignKey(Cotizacion, db_column='IdCotizacion', on_delete=models.DO_NOTHING)
     idreg = models.IntegerField(db_column='IdReg', primary_key=True)
+    usuario = models.ForeignKey(User, db_column='Usuario', on_delete=models.DO_NOTHING, null=True, blank=True)
     fecharevision = models.DateTimeField(db_column='FechaRevision', null=True, blank=True)
     comentario = models.TextField(db_column='Comentario', null=True, blank=True)
     esrecordatorio = models.BooleanField(db_column='EsRecordatorio', null=True, blank=True)

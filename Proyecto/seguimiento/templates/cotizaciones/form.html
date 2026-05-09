@@ -124,8 +124,11 @@
         </div>
 
         <div class="detail-block">
-            <form method="post" class="row g-3">
+                <form method="post" class="row g-3">
                     {% csrf_token %}
+                    {% if return_to %}
+                        <input type="hidden" name="return_to" value="{{ return_to }}">
+                    {% endif %}
                     {% if copy_from %}
                         <input type="hidden" name="copy_from" value="{{ copy_from }}">
                     {% endif %}
@@ -341,7 +344,11 @@
                 <div class="col-12 d-flex gap-2 flex-wrap mt-4">
                     <button type="submit" class="btn btn-success">Guardar cotización</button>
                     {% if modo == 'editar' %}
-                        <a href="{% url 'cotizacion_detalle' cotizacion.pk %}" class="btn btn-secondary">Cancelar</a>
+                        {% if return_to == 'seguimiento' %}
+                            <a href="{% url 'cotizaciones_seguimiento' %}" class="btn btn-secondary">Cancelar</a>
+                        {% else %}
+                            <a href="{% url 'cotizacion_detalle' cotizacion.pk %}" class="btn btn-secondary">Cancelar</a>
+                        {% endif %}
                     {% endif %}
                 </div>
             </form>

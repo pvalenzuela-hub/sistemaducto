@@ -9,14 +9,17 @@
     .seguimiento-panel .panel-heading { background: #f5f5f5; border-bottom: 1px solid #d9d9d9; }
     .seguimiento-panel table thead th { background: #efefef; color: #333; font-size: .78rem; border-bottom: 1px solid #d0d0d0; white-space: nowrap; }
     .seguimiento-panel table tbody td { vertical-align: middle; font-size: .85rem; }
+    .seguimiento-panel .table-scroll { max-height: calc(100vh - 320px); overflow: auto; }
+    .seguimiento-panel thead th { position: sticky; top: 0; z-index: 3; }
     .legacy-actions .btn { padding: .22rem .45rem; font-size: .74rem; }
-    .seguimiento-toggle { color: #5b21b6; font-weight: 700; text-decoration: none; }
-    .seguimiento-toggle:hover { color: #4c1d95; text-decoration: underline; }
-    .seguimiento-card { margin-top: .5rem; padding: .6rem .75rem; border: 1px solid #c7d2fe; border-radius: 10px; background: #f8f7ff; box-shadow: inset 0 1px 0 rgba(255,255,255,.65); }
-    .seguimiento-item { padding: .45rem 0; border-bottom: 1px solid #e5e7eb; }
-    .seguimiento-item:last-child { border-bottom: 0; }
-    .seguimiento-meta { color: #6b7280; font-size: .75rem; font-weight: 600; }
-    .seguimiento-text { color: #111827; font-weight: 500; }
+    .seguimiento-link { display: inline-flex; align-items: center; gap: .35rem; color: #2563eb; font-weight: 700; text-decoration: none; cursor: pointer; }
+    .seguimiento-link:hover { color: #1d4ed8; text-decoration: underline; }
+    .seguimiento-link .seguimiento-icon { font-size: .8rem; line-height: 1; }
+    #seguimientoModal .modal-dialog { max-width: 1100px; }
+    #seguimientoModal .modal-content { border: 0; border-radius: 18px; box-shadow: 0 20px 60px rgba(15, 23, 42, .28); }
+    #seguimientoModal .modal-header { padding: 1.25rem 1.5rem 1rem; border-bottom: 1px solid #e5e7eb; }
+    #seguimientoModal .modal-title { font-size: 1.15rem; font-weight: 800; color: #111827; }
+    #seguimientoModal .modal-body { padding: 1.5rem; }
 </style>
 
 <div class="row">
@@ -69,26 +72,20 @@
                 <strong>Resultados</strong>
                 <span class="badge bg-primary">{{ cotizaciones|length }} registros</span>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive table-scroll">
                 <table id="tabla-seguimiento" class="table table-sm table-striped table-hover mb-0 align-middle">
                     <thead>
                         <tr>
                             <th>N°</th>
                             <th>Fecha</th>
                             <th>Proyecto</th>
+                            <th>Moneda</th>
+                            <th class="text-end">Valor Total</th>
+                            <th class="text-end">Valor Opcional</th>
+                            <th>Fec. Seg.</th>
                             <th>Mandante</th>
                             <th>Estado</th>
-                            <th>Moneda</th>
-                            <th>Valor Cot.</th>
-                            <th>Fec. Seg.</th>
-                            <th>Contacto</th>
-                            <th>eMail</th>
-                            <th>Teléfono</th>
-                            <th>Forma Pago</th>
                             <th>N° Proyecto</th>
-                            <th>Valor Proyecto</th>
-                            <th>Valor Opc.</th>
-                            <th>Seguimiento</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -98,54 +95,49 @@
                                 <td>{{ cotizacion.numcotizacion|default:cotizacion.idcotizacion }}-{{ cotizacion.numcorr|default:0|stringformat:"03d" }}</td>
                                 <td data-order="{{ cotizacion.fecha|date:'Y-m-d' }}">{{ cotizacion.fecha|date:"d-m-Y" }}</td>
                                 <td>{{ cotizacion.proyecto_texto }}</td>
-                                <td>{{ cotizacion.mandante_texto }}</td>
-                                <td><span class="estado-cotizacion-badge" style="{{ cotizacion.estadocotizacion_style }}">{{ cotizacion.estadocotizacion_texto }}</span></td>
                                 <td>{{ cotizacion.moneda_texto }}</td>
-                                <td>{{ cotizacion.valor_total_texto }}</td>
-                                <td title="{{ cotizacion.comentario_ultimo_seg_texto }}">{{ cotizacion.fecha_ultimo_seg_texto }}</td>
-                                <td>{{ cotizacion.contacto_texto }}</td>
-                                <td>{{ cotizacion.email_texto }}</td>
-                                <td>{{ cotizacion.telefono_texto }}</td>
-                                <td>{{ cotizacion.fpago_texto }}</td>
-                                <td>{{ cotizacion.num_proyecto_texto }}</td>
-                                <td>{{ cotizacion.valor_proyecto_texto }}</td>
-                                <td>{{ cotizacion.valor_opcional_texto }}</td>
-                                <td>
-                                    {% if cotizacion.historial_seguimiento %}
-                                        <details>
-                                            <summary class="seguimiento-toggle" style="cursor:pointer;">Ver seguimiento ({{ cotizacion.historial_seguimiento|length }})</summary>
-                                            <div class="seguimiento-card" style="max-width: 420px; max-height: 240px; overflow:auto;">
-                                                {% for seg in cotizacion.historial_seguimiento %}
-                                                    <div class="seguimiento-item">
-                                                        <div class="seguimiento-meta">{{ seg.fecha }}{% if seg.usuario %} - {{ seg.usuario }}{% endif %}</div>
-                                                        <div class="seguimiento-text">{{ seg.comentario }}</div>
-                                                        {% if seg.recordatorio == 'SI' or seg.fecha_recordatorio %}
-                                                            <div class="seguimiento-meta">Recordatorio: {{ seg.recordatorio }}{% if seg.fecha_recordatorio %} / {{ seg.fecha_recordatorio }}{% endif %}</div>
-                                                        {% endif %}
-                                                    </div>
-                                                {% endfor %}
-                                            </div>
-                                        </details>
+                                <td class="text-end">{{ cotizacion.valor_total_texto }}</td>
+                                <td class="text-end">{{ cotizacion.valor_opcional_texto }}</td>
+                                <td title="{{ cotizacion.comentario_ultimo_seg_texto }}">
+                                    {% if cotizacion.fecha_ultimo_seg_texto %}
+                                        <a href="#" class="seguimiento-link seguimiento-trigger" data-url="{% url 'cotizacion_seguimiento_historial' cotizacion.pk %}" title="Ver seguimiento">
+                                            <span class="seguimiento-icon">&#9656;</span>
+                                            <span>{{ cotizacion.fecha_ultimo_seg_texto }}</span>
+                                        </a>
                                     {% else %}
-                                        <span class="text-muted small">Sin seguimientos</span>
+                                        <span class="text-muted">Sin seguimiento</span>
                                     {% endif %}
                                 </td>
+                                <td>{{ cotizacion.mandante_texto }}</td>
+                                <td><span class="estado-cotizacion-badge" style="{{ cotizacion.estadocotizacion_style }}">{{ cotizacion.estadocotizacion_texto }}</span></td>
+                                <td>{{ cotizacion.num_proyecto_texto }}</td>
                                 <td class="text-center legacy-actions">
-                                    <a href="{% url 'cotizacion_visor' cotizacion.pk %}" class="btn btn-outline-primary btn-sm">Ver</a>
-                                    <a href="{% url 'cotizacion_seguimiento' cotizacion.pk %}" class="btn btn-primary btn-sm">Seg.</a>
-                                    {% if cotizacion.estado == 1 %}
-                                        <a href="{% url 'cotizacion_editar' cotizacion.pk %}" class="btn btn-warning btn-sm">Editar</a>
+                                    {% if cotizacion.estadocotizacion_texto == 'En Espera' %}
+                                        <a href="{% url 'cotizacion_editar' cotizacion.pk %}?return_to=seguimiento" class="btn btn-warning btn-sm">Editar</a>
                                     {% endif %}
+                                    <a href="{% url 'cotizacion_seguimiento' cotizacion.pk %}?return_to=seguimiento" class="btn btn-primary btn-sm seguimiento-open" data-url="{% url 'cotizacion_seguimiento' cotizacion.pk %}?return_to=seguimiento">Seg.</a>
                                 </td>
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="16" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
+                                <td colspan="10" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="seguimientoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Seguimiento de cotización</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" id="seguimientoModalBody"><div class="text-muted">Cargando...</div></div>
         </div>
     </div>
 </div>
@@ -160,7 +152,7 @@
                 lengthChange: false,
                 info: false,
                 ordering: true,
-                order: [[1, 'desc']],
+                order: [[0, 'desc']],
                 paging: false,
                 responsive: true,
                 autoWidth: false,
@@ -170,6 +162,91 @@
                 }
             });
         }
+
+        const modalEl = document.getElementById('seguimientoModal');
+        const modalBody = document.getElementById('seguimientoModalBody');
+        const modal = modalEl && window.bootstrap ? new bootstrap.Modal(modalEl) : null;
+
+        function bindSeguimientoForm(context) {
+            const $ctx = $(context || document);
+            const $chkCambio = $ctx.find('#id_cambia_estado');
+            const $estado = $ctx.find('#id_nuevo_estado');
+            const $bloque = $ctx.find('#bloque_adjudicacion');
+            function refrescar() {
+                const mostrar = $chkCambio.is(':checked') && $estado.find('option:selected').text() === 'Aprobada, Es Proyecto';
+                $bloque.toggle(mostrar);
+            }
+            $chkCambio.on('change', refrescar);
+            $estado.on('change', refrescar);
+            refrescar();
+        }
+
+        $('#tabla-seguimiento').on('click', '.seguimiento-trigger', function (e) {
+            e.preventDefault();
+            const url = $(this).data('url');
+            if (!url) return;
+            if (modalBody) modalBody.innerHTML = '<div class="text-center py-4 text-muted">Cargando seguimiento...</div>';
+            if (modal) modal.show();
+            $.getJSON(url)
+                .done(function (data) {
+                    const items = (data && data.seguimientos) ? data.seguimientos : [];
+                    if (!items.length) {
+                        modalBody.innerHTML = '<div class="text-muted">No hay seguimientos registrados.</div>';
+                        return;
+                    }
+                    let html = '<div class="list-group">';
+                    items.forEach(function (seg) {
+                        html += '<div class="list-group-item">';
+                        html += '<div class="d-flex justify-content-between gap-2 flex-wrap"><strong>' + (seg.fecha || '') + '</strong><span class="badge bg-light text-dark border">' + (seg.usuario || 'Sin usuario') + '</span></div>';
+                        html += '<div class="mt-2">' + (seg.comentario || '') + '</div>';
+                        if (seg.recordatorio === 'SI' || seg.fecha_recordatorio) {
+                            html += '<div class="small text-muted mt-1">Recordatorio: ' + (seg.recordatorio || '') + (seg.fecha_recordatorio ? ' / ' + seg.fecha_recordatorio : '') + '</div>';
+                        }
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                    modalBody.innerHTML = html;
+                })
+                .fail(function () {
+                    modalBody.innerHTML = '<div class="text-danger">No se pudo cargar el seguimiento.</div>';
+                });
+        });
+
+        $('#tabla-seguimiento').on('click', '.seguimiento-open', function (e) {
+            e.preventDefault();
+            const url = $(this).data('url');
+            if (!url) return;
+            if (modalBody) modalBody.innerHTML = '<div class="text-center py-4 text-muted">Cargando formulario...</div>';
+            if (modal) modal.show();
+            $.getJSON(url)
+                .done(function (data) {
+                    modalBody.innerHTML = data.html || '<div class="text-muted">Sin formulario.</div>';
+                    bindSeguimientoForm(modalBody);
+                    const $form = $('#seguimiento-form');
+                    $form.on('submit', function (ev) {
+                        ev.preventDefault();
+                        $.ajax({
+                            url: url,
+                            method: 'POST',
+                            data: $form.serialize(),
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            success: function (resp) {
+                                if (resp && resp.ok) {
+                                    window.location.reload();
+                                } else {
+                                    modalBody.innerHTML = (resp && resp.html) ? resp.html : modalBody.innerHTML;
+                                }
+                            },
+                            error: function () {
+                                modalBody.innerHTML = '<div class="text-danger">No se pudo guardar el seguimiento.</div>';
+                            }
+                        });
+                    });
+                })
+                .fail(function () {
+                    modalBody.innerHTML = '<div class="text-danger">No se pudo cargar el formulario.</div>';
+                });
+        });
     });
 </script>
 {% endblock %}

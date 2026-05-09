@@ -1,0 +1,57 @@
+<div class="mb-4 pb-3 border-bottom">
+    <div class="small text-uppercase text-muted fw-bold mb-1">Cotización</div>
+    <div class="fs-5 fw-semibold">{{ cotizacion.numcotizacion|default:cotizacion.idcotizacion }}-{{ cotizacion.numcorr|default:0|stringformat:"03d" }}</div>
+    <div class="text-muted">{{ cotizacion.nombreproyecto }}</div>
+</div>
+
+<form method="post" class="row g-4" id="seguimiento-form">
+    {% csrf_token %}
+    {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+    <div class="col-12">
+        <label class="form-label" for="id_comentario">Comentario</label>
+        {{ form.comentario }}
+        {% if form.comentario.errors %}<div class="text-danger small mt-1">{{ form.comentario.errors }}</div>{% endif %}
+    </div>
+    <div class="col-md-4 form-check mt-3 ps-4">
+        {{ form.cambia_estado }}
+        <label class="form-check-label" for="id_cambia_estado">Cambiar estado</label>
+    </div>
+    <div class="col-md-8">
+        <label class="form-label" for="id_nuevo_estado">Nuevo estado</label>
+        {{ form.nuevo_estado }}
+        {% if form.nuevo_estado.errors %}<div class="text-danger small mt-1">{{ form.nuevo_estado.errors }}</div>{% endif %}
+    </div>
+    <div class="col-md-4 form-check mt-3 ps-4">
+        {{ form.es_recordatorio }}
+        <label class="form-check-label" for="id_es_recordatorio">Es recordatorio</label>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label" for="id_fecha_recordatorio">Fecha recordatorio</label>
+        {{ form.fecha_recordatorio }}
+        {% if form.fecha_recordatorio.errors %}<div class="text-danger small mt-1">{{ form.fecha_recordatorio.errors }}</div>{% endif %}
+    </div>
+    <div id="bloque_adjudicacion" class="col-12 border rounded-3 p-4 bg-light">
+        <div class="fw-semibold mb-4">Datos adjudicación</div>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <label class="form-label" for="id_quien_adjudica">Quién adjudica</label>
+                {{ form.quien_adjudica }}
+                {% if form.quien_adjudica.errors %}<div class="text-danger small mt-1">{{ form.quien_adjudica.errors }}</div>{% endif %}
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="id_email_adjudicacion">eMail quien adjudica</label>
+                {{ form.email_adjudicacion }}
+                {% if form.email_adjudicacion.errors %}<div class="text-danger small mt-1">{{ form.email_adjudicacion.errors }}</div>{% endif %}
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="id_fecha_adjudicacion">Fecha adjudicación</label>
+                {{ form.fecha_adjudicacion }}
+                {% if form.fecha_adjudicacion.errors %}<div class="text-danger small mt-1">{{ form.fecha_adjudicacion.errors }}</div>{% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-12 d-flex gap-2 pt-2">
+        <button type="submit" class="btn btn-primary">Grabar seguimiento</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+    </div>
+</form>
