@@ -8,6 +8,9 @@ class Estadocotizacion(models.Model):
     colortexto = models.CharField(db_column='ColorTexto', max_length=20, null=True, blank=True)
     orden = models.IntegerField(db_column='Orden', null=True, blank=True)
 
+    def __str__(self):
+        return self.nombre or f"Estado {self.pk}"
+
     class Meta:
         db_table = 'Estadocotizacion'
 

@@ -270,11 +270,14 @@ def cotizaciones_seguimiento(request):
     numero = (request.GET.get('numero') or '').strip()
     proyecto = (request.GET.get('proyecto') or '').strip()
     mandante = (request.GET.get('mandante') or '').strip()
+    estado = (request.GET.get('estado') or '').strip()
     fecha_desde = (request.GET.get('fecha_desde') or '').strip()
     fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
 
-    if not any([numero, proyecto, mandante, fecha_desde, fecha_hasta]):
+    if not any([numero, proyecto, mandante, estado, fecha_desde, fecha_hasta]):
         fecha_desde = (timezone.localdate() - timedelta(days=30)).isoformat()
+
+    usar_fechas = not any([numero, proyecto, mandante, estado])
 
     if numero:
         qs = qs.filter(Q(numcotizacion__icontains=numero) | Q(idcotizacion__icontains=numero))
@@ -282,13 +285,22 @@ def cotizaciones_seguimiento(request):
         qs = qs.filter(nombreproyecto__icontains=proyecto)
     if mandante:
         qs = qs.filter(idcliente__razonsocial__icontains=mandante)
-    if fecha_desde:
-        qs = qs.filter(fecha__gte=fecha_desde)
-    if fecha_hasta:
-        qs = qs.filter(fecha__lte=fecha_hasta)
+    if estado:
+        if estado.isdigit():
+            qs = qs.filter(estadocotizacion_id=int(estado))
+        else:
+            qs = qs.filter(estadocotizacion__nombre__iexact=estado)
+    if usar_fechas:
+        if fecha_desde:
+            qs = qs.filter(fecha__gte=fecha_desde)
+        if fecha_hasta:
+            qs = qs.filter(fecha__lte=fecha_hasta)
 
     cotizaciones = []
     for cotizacion in qs:
+        seguimientos_qs = list(
+            CotizacionSeg.objects.filter(idcotizacion=cotizacion).order_by('-fecharevision', '-idreg')
+        )
         cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
         cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
         cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
@@ -299,17 +311,27 @@ def cotizaciones_seguimiento(request):
         cotizacion.telefono_texto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
         cotizacion.fpago_texto = cotizacion.fpago_proyecto or ''
         cotizacion.moneda_texto = cotizacion.moneda or ''
+        cotizacion.proyecto_texto = cotizacion.nombreproyecto or ''
         cotizacion.valor_total_texto = cotizacion.valortotal or 0
         cotizacion.valor_opcional_texto = cotizacion.valor_opcional or 0
         cotizacion.fecha_ultimo_seg_texto = cotizacion.fecha_ultimo_seg.strftime('%d-%m-%Y %H:%M') if cotizacion.fecha_ultimo_seg else ''
         cotizacion.comentario_ultimo_seg_texto = (cotizacion.comentario_ultimo_seg or '')[:80]
+        cotizacion.historial_seguimiento = [
+            {
+                'fecha': seg.fecharevision.strftime('%d-%m-%Y %H:%M') if seg.fecharevision else '',
+                'usuario': getattr(seg, 'iduser', '') or getattr(seg, 'idusuario', '') or '',
+                'comentario': seg.comentario or '',
+                'recordatorio': 'SI' if seg.esrecordatorio else 'NO',
+                'fecha_recordatorio': seg.fecharecordatorio.strftime('%d-%m-%Y') if seg.fecharecordatorio else '',
+            }
+            for seg in seguimientos_qs
+        ]
         cotizacion.num_proyecto_texto = str(cotizacion.num_proyecto) if cotizacion.num_proyecto else ''
         cotizacion.valor_proyecto_texto = cotizacion.valor_proyecto or 0
         cotizacion.es_activa_texto = 'SI' if cotizacion.esactiva else 'NO'
         cotizacion.puede_editar = cotizacion.estado == 1
         cotizaciones.append(cotizacion)
 
-    clear_params = {'fecha_desde': fecha_desde}
     return render(request, 'cotizaciones/seguimiento_listado.html', {
         'titulo': 'Seguimiento de Cotizaciones',
         'encabezado': 'Seguimiento de Cotizaciones',
@@ -320,10 +342,13 @@ def cotizaciones_seguimiento(request):
             'numero': numero,
             'proyecto': proyecto,
             'mandante': mandante,
+            'estado': estado,
             'fecha_desde': fecha_desde,
             'fecha_hasta': fecha_hasta,
         },
-        'limpiar_url': f"?{urlencode(clear_params)}",
+        'usar_fechas': usar_fechas,
+        'estados': list(Estadocotizacion.objects.order_by('orden', 'nombre')),
+        'limpiar_url': request.path,
     })
 
 
@@ -422,6 +447,7 @@ def cotizacion_visor(request, pk):
     cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
     cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
+    cotizacion.proyecto_texto = cotizacion.nombreproyecto or ''
     cotizacion.region_texto = ''
     if cotizacion.codregion:
         region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
@@ -502,7 +528,7 @@ def cotizacion_seguimiento(request, pk):
         'submenu': 'Registrar comentario y cambio de estado',
         'cotizacion': cotizacion,
         'form': form,
-        'volver_url_name': 'cotizacion_visor',
+        'volver_url_name': 'cotizaciones_seguimiento',
     })
 
 

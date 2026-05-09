@@ -4,68 +4,91 @@
 
 {% block body %}
 <style>
-    .estado-cotizacion-badge { display: inline-block; padding: .25rem .55rem; border-radius: 999px; font-size: .76rem; font-weight: 700; border: 1px solid transparent; }
-    .cotizacion-badge { display: inline-block; padding: .35rem .65rem; border-radius: 999px; font-size: .78rem; font-weight: 700; }
-    .cotizacion-badge-activa { background: #d1fae5; color: #065f46; }
-    .cotizacion-badge-inactiva { background: #f1f5f9; color: #64748b; }
-    .search-panel, .results-panel { border: 1px solid #e5e7eb; border-radius: 14px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
-    .search-panel { background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%); border-left: 4px solid #2563eb; }
-    .results-panel { overflow: hidden; }
-    .results-panel table thead th { background: #f8fafc; color: #334155; font-size: .82rem; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid #e2e8f0; }
-    .results-panel table tbody td { vertical-align: middle; }
+    .estado-cotizacion-badge { display: inline-block; min-width: 128px; padding: .2rem .5rem; border-radius: 4px; font-size: .75rem; font-weight: 700; border: 1px solid transparent; text-align: center; }
+    .seguimiento-panel { border: 1px solid #d9d9d9; background: #fff; }
+    .seguimiento-panel .panel-heading { background: #f5f5f5; border-bottom: 1px solid #d9d9d9; }
+    .seguimiento-panel table thead th { background: #efefef; color: #333; font-size: .78rem; border-bottom: 1px solid #d0d0d0; white-space: nowrap; }
+    .seguimiento-panel table tbody td { vertical-align: middle; font-size: .85rem; }
+    .legacy-actions .btn { padding: .22rem .45rem; font-size: .74rem; }
+    .seguimiento-toggle { color: #5b21b6; font-weight: 700; text-decoration: none; }
+    .seguimiento-toggle:hover { color: #4c1d95; text-decoration: underline; }
+    .seguimiento-card { margin-top: .5rem; padding: .6rem .75rem; border: 1px solid #c7d2fe; border-radius: 10px; background: #f8f7ff; box-shadow: inset 0 1px 0 rgba(255,255,255,.65); }
+    .seguimiento-item { padding: .45rem 0; border-bottom: 1px solid #e5e7eb; }
+    .seguimiento-item:last-child { border-bottom: 0; }
+    .seguimiento-meta { color: #6b7280; font-size: .75rem; font-weight: 600; }
+    .seguimiento-text { color: #111827; font-weight: 500; }
 </style>
 
 <div class="row">
     <div class="col-12">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <div>
-                <h1 class="mb-1">{{ encabezado }}</h1>
-                <p class="text-muted mb-0">{{ submenu }}</p>
+                <h4 class="mb-0">{{ encabezado }}</h4>
+                <div class="text-muted small">{{ submenu }}</div>
             </div>
-            <a href="{% url 'cotizaciones_ingreso' %}" class="btn btn-success">Nueva cotización</a>
+            <div class="d-flex gap-2">
+                <a href="{% url 'cotizaciones_busqueda' %}" class="btn btn-outline-secondary btn-sm">Búsqueda de Cotizaciones</a>
+                <a href="{% url 'cotizaciones_ingreso' %}" class="btn btn-success btn-sm">Nueva Cotización</a>
+            </div>
         </div>
 
-        <div class="search-panel p-4 mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="seguimiento-panel mb-3">
+            <div class="panel-heading px-3 py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
-                    <h5 class="mb-0">Filtros de búsqueda</h5>
-                    <div class="text-muted small">Listado de seguimiento separado y ordenado por fecha descendente.</div>
+                    <strong>Filtros</strong>
+                    <span class="text-muted small ms-2">Listado de seguimiento ordenado por fecha descendente.</span>
                 </div>
-                <span class="badge bg-light text-dark border">{{ cotizaciones|length }} resultados</span>
+                <span class="badge bg-light text-dark border">{{ cotizaciones|length }} registros</span>
             </div>
-            <form method="get" class="row g-3">
-                <div class="col-md-3"><label class="form-label">N° Cotización</label><input type="text" name="numero" value="{{ filtros.numero }}" class="form-control"></div>
-                <div class="col-md-3"><label class="form-label">Proyecto</label><input type="text" name="proyecto" value="{{ filtros.proyecto }}" class="form-control"></div>
-                <div class="col-md-3"><label class="form-label">Mandante</label><input type="text" name="mandante" value="{{ filtros.mandante }}" class="form-control"></div>
-                <div class="col-md-3"><label class="form-label">Desde</label><input type="date" name="fecha_desde" value="{{ filtros.fecha_desde }}" class="form-control"></div>
-                <div class="col-md-3"><label class="form-label">Hasta</label><input type="date" name="fecha_hasta" value="{{ filtros.fecha_hasta }}" class="form-control"></div>
-                <div class="col-12 d-flex gap-2 flex-wrap"><button class="btn btn-primary" type="submit">Buscar</button><a href="{{ limpiar_url }}" class="btn btn-secondary">Limpiar</a></div>
+            <form method="get" class="p-3">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2"><label class="form-label small mb-1">N° Cotización</label><input type="text" name="numero" value="{{ filtros.numero }}" class="form-control form-control-sm"></div>
+                    <div class="col-md-3"><label class="form-label small mb-1">Proyecto</label><input type="text" name="proyecto" value="{{ filtros.proyecto }}" class="form-control form-control-sm"></div>
+                    <div class="col-md-3"><label class="form-label small mb-1">Mandante</label><input type="text" name="mandante" value="{{ filtros.mandante }}" class="form-control form-control-sm"></div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Estado</label>
+                        <select name="estado" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            {% for estado in estados %}
+                                <option value="{{ estado.id }}" {% if filtros.estado == estado.id|stringformat:'s' %}selected{% endif %}>{{ estado.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2"><label class="form-label small mb-1">Desde</label><input type="date" name="fecha_desde" value="{{ filtros.fecha_desde }}" class="form-control form-control-sm"></div>
+                    <div class="col-md-2"><label class="form-label small mb-1">Hasta</label><input type="date" name="fecha_hasta" value="{{ filtros.fecha_hasta }}" class="form-control form-control-sm"></div>
+                </div>
+                <div class="d-flex gap-2 flex-wrap mt-3">
+                    <button class="btn btn-primary btn-sm" type="submit">Buscar</button>
+                    <a href="{{ limpiar_url }}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
+                </div>
             </form>
         </div>
 
-        <div class="results-panel p-3 p-md-4">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                <h5 class="mb-0">Resultados</h5>
+        <div class="seguimiento-panel">
+            <div class="panel-heading px-3 py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <strong>Resultados</strong>
                 <span class="badge bg-primary">{{ cotizaciones|length }} registros</span>
             </div>
             <div class="table-responsive">
-                <table id="tabla-seguimiento" class="table table-hover align-middle">
+                <table id="tabla-seguimiento" class="table table-sm table-striped table-hover mb-0 align-middle">
                     <thead>
                         <tr>
                             <th>N°</th>
                             <th>Fecha</th>
+                            <th>Proyecto</th>
+                            <th>Mandante</th>
+                            <th>Estado</th>
                             <th>Moneda</th>
                             <th>Valor Cot.</th>
                             <th>Fec. Seg.</th>
-                            <th>Mandante</th>
                             <th>Contacto</th>
                             <th>eMail</th>
                             <th>Teléfono</th>
                             <th>Forma Pago</th>
-                            <th>Estado</th>
                             <th>N° Proyecto</th>
                             <th>Valor Proyecto</th>
                             <th>Valor Opc.</th>
+                            <th>Seguimiento</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -73,22 +96,43 @@
                         {% for cotizacion in cotizaciones %}
                             <tr>
                                 <td>{{ cotizacion.numcotizacion|default:cotizacion.idcotizacion }}-{{ cotizacion.numcorr|default:0|stringformat:"03d" }}</td>
-                                <td>{{ cotizacion.fecha|date:"d-m-Y" }}</td>
+                                <td data-order="{{ cotizacion.fecha|date:'Y-m-d' }}">{{ cotizacion.fecha|date:"d-m-Y" }}</td>
+                                <td>{{ cotizacion.proyecto_texto }}</td>
+                                <td>{{ cotizacion.mandante_texto }}</td>
+                                <td><span class="estado-cotizacion-badge" style="{{ cotizacion.estadocotizacion_style }}">{{ cotizacion.estadocotizacion_texto }}</span></td>
                                 <td>{{ cotizacion.moneda_texto }}</td>
                                 <td>{{ cotizacion.valor_total_texto }}</td>
                                 <td title="{{ cotizacion.comentario_ultimo_seg_texto }}">{{ cotizacion.fecha_ultimo_seg_texto }}</td>
-                                <td>{{ cotizacion.mandante_texto }}</td>
                                 <td>{{ cotizacion.contacto_texto }}</td>
                                 <td>{{ cotizacion.email_texto }}</td>
                                 <td>{{ cotizacion.telefono_texto }}</td>
                                 <td>{{ cotizacion.fpago_texto }}</td>
-                                <td><span class="estado-cotizacion-badge" style="{{ cotizacion.estadocotizacion_style }}; display:inline-block; min-width: 120px; text-align:center;">{{ cotizacion.estadocotizacion_texto }}</span></td>
                                 <td>{{ cotizacion.num_proyecto_texto }}</td>
                                 <td>{{ cotizacion.valor_proyecto_texto }}</td>
                                 <td>{{ cotizacion.valor_opcional_texto }}</td>
-                                <td class="text-center">
-                                    <a href="{% url 'cotizacion_visor' cotizacion.pk %}" class="btn btn-info btn-sm">Visor</a>
-                                    <a href="{% url 'cotizacion_seguimiento' cotizacion.pk %}" class="btn btn-primary btn-sm">Seguimiento</a>
+                                <td>
+                                    {% if cotizacion.historial_seguimiento %}
+                                        <details>
+                                            <summary class="seguimiento-toggle" style="cursor:pointer;">Ver seguimiento ({{ cotizacion.historial_seguimiento|length }})</summary>
+                                            <div class="seguimiento-card" style="max-width: 420px; max-height: 240px; overflow:auto;">
+                                                {% for seg in cotizacion.historial_seguimiento %}
+                                                    <div class="seguimiento-item">
+                                                        <div class="seguimiento-meta">{{ seg.fecha }}{% if seg.usuario %} - {{ seg.usuario }}{% endif %}</div>
+                                                        <div class="seguimiento-text">{{ seg.comentario }}</div>
+                                                        {% if seg.recordatorio == 'SI' or seg.fecha_recordatorio %}
+                                                            <div class="seguimiento-meta">Recordatorio: {{ seg.recordatorio }}{% if seg.fecha_recordatorio %} / {{ seg.fecha_recordatorio }}{% endif %}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </details>
+                                    {% else %}
+                                        <span class="text-muted small">Sin seguimientos</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center legacy-actions">
+                                    <a href="{% url 'cotizacion_visor' cotizacion.pk %}" class="btn btn-outline-primary btn-sm">Ver</a>
+                                    <a href="{% url 'cotizacion_seguimiento' cotizacion.pk %}" class="btn btn-primary btn-sm">Seg.</a>
                                     {% if cotizacion.estado == 1 %}
                                         <a href="{% url 'cotizacion_editar' cotizacion.pk %}" class="btn btn-warning btn-sm">Editar</a>
                                     {% endif %}
@@ -96,7 +140,7 @@
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="15" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
+                                <td colspan="16" class="text-center text-muted py-4">No hay cotizaciones para los filtros seleccionados.</td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -117,6 +161,7 @@
                 info: false,
                 ordering: true,
                 order: [[1, 'desc']],
+                paging: false,
                 responsive: true,
                 autoWidth: false,
                 language: {

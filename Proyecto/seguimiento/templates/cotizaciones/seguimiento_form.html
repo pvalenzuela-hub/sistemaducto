@@ -10,7 +10,7 @@
                 <h1 class="mb-1">{{ encabezado }}</h1>
                 <p class="text-muted mb-0">{{ submenu }}</p>
             </div>
-            <a href="{% url volver_url_name cotizacion.pk %}" class="btn btn-outline-secondary">Volver</a>
+            <a href="{% if volver_url_name == 'cotizaciones_seguimiento' %}{% url volver_url_name %}{% else %}{% url volver_url_name cotizacion.pk %}{% endif %}" class="btn btn-outline-secondary">Volver</a>
         </div>
 
         <div class="card shadow-sm border-0">
@@ -71,7 +71,7 @@
 
                     <div class="col-12 d-flex gap-2">
                         <button type="submit" class="btn btn-primary">Grabar seguimiento</button>
-                        <a href="{% url volver_url_name cotizacion.pk %}" class="btn btn-secondary">Cancelar</a>
+                        <a href="{% if volver_url_name == 'cotizaciones_seguimiento' %}{% url volver_url_name %}{% else %}{% url volver_url_name cotizacion.pk %}{% endif %}" class="btn btn-secondary">Cancelar</a>
                     </div>
                 </form>
             </div>
