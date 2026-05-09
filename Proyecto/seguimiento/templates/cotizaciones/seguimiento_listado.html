@@ -54,7 +54,6 @@
                         <tr>
                             <th>N°</th>
                             <th>Fecha</th>
-                            <th>Proyecto</th>
                             <th>Moneda</th>
                             <th>Valor Cot.</th>
                             <th>Fec. Seg.</th>
@@ -75,7 +74,6 @@
                             <tr>
                                 <td>{{ cotizacion.numcotizacion|default:cotizacion.idcotizacion }}-{{ cotizacion.numcorr|default:0|stringformat:"03d" }}</td>
                                 <td>{{ cotizacion.fecha|date:"d-m-Y" }}</td>
-                                <td>{{ cotizacion.nombreproyecto }}</td>
                                 <td>{{ cotizacion.moneda_texto }}</td>
                                 <td>{{ cotizacion.valor_total_texto }}</td>
                                 <td title="{{ cotizacion.comentario_ultimo_seg_texto }}">{{ cotizacion.fecha_ultimo_seg_texto }}</td>

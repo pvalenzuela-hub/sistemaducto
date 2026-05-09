@@ -13,7 +13,7 @@ from django.http import HttpResponseNotAllowed, HttpResponse
 from collections import defaultdict
 from datetime import date
 
-from django.db.models import Max, Prefetch, F, OuterRef, Subquery, Count, IntegerField, CharField, Value, Q, Exists, Sum
+from django.db.models import Max, Prefetch, F, OuterRef, Subquery, Count, IntegerField, CharField, Value, Q, Exists, Sum, DecimalField
 from django.db.models.functions import Cast
 from django.db import transaction, IntegrityError, connection
 from django.http import JsonResponse
@@ -253,7 +253,11 @@ def cotizaciones_seguimiento(request):
         .select_related('idcliente', 'idcontacto', 'estadocotizacion')
         .annotate(tiene_proyecto=Exists(Proyecto.objects.filter(idcotizacion=OuterRef('pk'))))
         .annotate(
-            valor_opcional=Coalesce(Sum('cotizacionvalor__valor', filter=Q(cotizacionvalor__opcional='S')), Value(0)),
+            valor_opcional=Coalesce(
+                Sum('cotizacionvalor__valor', filter=Q(cotizacionvalor__opcional='S')),
+                Value(0),
+                output_field=DecimalField(max_digits=18, decimal_places=2),
+            ),
             num_proyecto=Subquery(proyecto_relacionado.values('idproyecto')[:1]),
             valor_proyecto=Subquery(proyecto_relacionado.values('valor')[:1]),
             fpago_proyecto=Subquery(proyecto_relacionado.values('fpago')[:1]),
