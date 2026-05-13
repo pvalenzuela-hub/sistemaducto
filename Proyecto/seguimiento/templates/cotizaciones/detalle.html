@@ -95,10 +95,10 @@
             <div class="d-flex gap-2 flex-wrap">
                 <a href="{% url volver_url_name %}" class="btn btn-outline-secondary">Volver</a>
                 <a href="{% url 'cotizacion_seguimiento' cotizacion.pk %}" class="btn btn-primary">Seguimiento</a>
+                <a href="{% url 'cotizacion_reporte_pdf' cotizacion.pk %}" class="btn btn-danger">PDF</a>
                 {% if cotizacion.puede_editar %}
                     <a href="{% url editar_url_name cotizacion.pk %}" class="btn btn-warning">Editar</a>
                     <a href="{% url 'cotizacion_versionar' cotizacion.pk %}" class="btn btn-primary">Nueva versión</a>
-                    <a href="{% url 'cotizacion_reporte_pdf' cotizacion.pk %}" class="btn btn-danger">PDF</a>
                 {% endif %}
             </div>
         </div>

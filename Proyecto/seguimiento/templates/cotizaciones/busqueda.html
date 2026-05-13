@@ -181,7 +181,7 @@
                                             <a href="{% url 'cotizacion_editar' cotizacion.pk %}" class="btn btn-warning btn-sm">Editar</a>
                                         {% endif %}
                                         <a href="{% url 'cotizacion_versionar' cotizacion.pk %}" class="btn btn-secondary btn-sm">Versión</a>
-                                        <a href="{% url 'cotizacion_reporte' cotizacion.pk %}" class="btn btn-danger btn-sm">PDF</a>
+                                        <a href="{% url 'cotizacion_reporte_pdf' cotizacion.pk %}" class="btn btn-danger btn-sm">PDF</a>
                                     </td>
                                 </tr>
                             {% empty %}
@@ -207,6 +207,7 @@
                 lengthChange: false,
                 info: false,
                 ordering: true,
+                order: [[0, 'desc']],
                 responsive: true,
                 autoWidth: false,
                 language: {

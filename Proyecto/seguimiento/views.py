@@ -4,6 +4,7 @@ import re
 from urllib.parse import urlencode
 from datetime import timezone as dt_timezone
 from django.shortcuts import render, redirect
+from django.urls import reverse
 from .models import *
 import pyodbc
 from django.conf import settings
@@ -392,6 +393,8 @@ def cotizaciones_ingreso(request):
         if form.is_valid():
             cotizacion = form.save(commit=False)
             cotizacion.fecha = form.cleaned_data.get('fecha') or timezone.localdate()
+            estado_espera = Estadocotizacion.objects.filter(pk=1).first() or Estadocotizacion.objects.filter(nombre__iexact='En Espera').first()
+            cotizacion.estadocotizacion = estado_espera
             next_num = (Cotizacion.objects.aggregate(mx=Max('numcotizacion'))['mx'] or 0) + 1
             cotizacion.numcotizacion = cotizacion.numcotizacion or next_num
             cotizacion.numcorr = 0
@@ -468,6 +471,8 @@ def cotizacion_visor(request, pk):
         region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
         cotizacion.region_texto = region.descrip if region else ''
     cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
+    cotizacion.cotizacion_pdf_url = request.build_absolute_uri(reverse('cotizacion_reporte_pdf', args=[cotizacion.pk]))
+    cotizacion.mt2_texto = cotizacion.mt2 if cotizacion.mt2 is not None else 'No informado'
     cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
     cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
     cotizacion.puede_editar = (cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else '') == 'En Espera'
@@ -663,6 +668,7 @@ def cotizacion_versionar(request, pk):
         valortotal=base.valortotal,
         moneda=base.moneda,
         estado=0,
+        estadocotizacion=Estadocotizacion.objects.filter(pk=1).first() or Estadocotizacion.objects.filter(nombre__iexact='En Espera').first(),
         idusuario=(request.user.username or '')[:15],
         origen='WEB',
         fechaact=_ahora_santiago_naive(),
@@ -700,6 +706,8 @@ def cotizacion_detalle(request, pk):
         region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
         cotizacion.region_texto = region.descrip if region else ''
     cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
+    cotizacion.cotizacion_pdf_url = request.build_absolute_uri(reverse('cotizacion_reporte_pdf', args=[cotizacion.pk]))
+    cotizacion.mt2_texto = cotizacion.mt2 if cotizacion.mt2 is not None else 'No informado'
     cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
     cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
     cotizacion.puede_editar = (cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else '') == 'En Espera'
@@ -715,41 +723,6 @@ def cotizacion_detalle(request, pk):
         'notas': notas,
         'volver_url_name': 'cotizaciones_busqueda',
         'editar_url_name': 'cotizacion_editar',
-    })
-
-
-@login_required
-def cotizacion_reporte(request, pk):
-    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto', 'estadocotizacion'), pk=pk)
-    proyectos = list(Proyecto.objects.filter(idcotizacion=cotizacion).order_by('idproyecto'))
-    valores = list(CotizacionValor.objects.filter(idcotizacion=cotizacion).order_by('item'))
-    formas_pago = list(CotizacionFpago.objects.filter(idcotizacion=cotizacion).order_by('linea'))
-    notas = list(
-        CotizacionNota.objects.select_related('idnota').filter(idcotizacion=cotizacion).order_by('idcotizacionnota')
-    )
-
-    cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
-    cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
-    cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
-    cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
-    cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
-    cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
-    cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
-    cotizacion.region_texto = ''
-    if cotizacion.codregion:
-        region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
-        cotizacion.region_texto = region.descrip if region else ''
-    cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
-    cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
-    cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
-
-    return render(request, 'cotizaciones/reporte.html', {
-        'titulo': f'Reporte Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',
-        'cotizacion': cotizacion,
-        'proyectos': proyectos,
-        'valores': valores,
-        'formas_pago': formas_pago,
-        'notas': notas,
     })
 
 
@@ -796,10 +769,10 @@ def cotizacion_reporte_pdf(request, pk):
     try:
         pdf_bytes = _render_pdf_con_weasyprint(html, request.build_absolute_uri('/'))
     except Exception as exc:
-        return render(request, 'cotizaciones/reporte.html', {**context, 'pdf_error': str(exc)})
+        return HttpResponse(f'No se pudo generar el PDF: {exc}', content_type='text/plain', status=500)
 
     if not pdf_bytes or not isinstance(pdf_bytes, (bytes, bytearray)):
-        return render(request, 'cotizaciones/reporte.html', {**context, 'pdf_error': 'No se pudo generar el PDF.'})
+        return HttpResponse('No se pudo generar el PDF.', content_type='text/plain', status=500)
 
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Reporte_Cotizacion_{cotizacion.numcotizacion or cotizacion.idcotizacion}.pdf"'
