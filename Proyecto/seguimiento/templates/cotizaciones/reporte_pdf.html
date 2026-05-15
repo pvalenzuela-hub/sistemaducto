@@ -58,13 +58,15 @@
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 26px; margin: 4px 0 5px; font-size:10px; line-height:1.16;">
                 <div>
                     <div><strong>Mandante:</strong> {{ cotizacion.mandante_texto|default:'No informado' }}</div>
+                    <div><strong>Dirección Mandante:</strong> {{ cotizacion.mandante_direccion|default:'No informado' }}</div>
                     <div><strong>Contacto:</strong> {{ cotizacion.contacto_texto|default:'No informado' }}</div>
-                    <div><strong>Dirección:</strong> {{ cotizacion.dirproyecto|default:'No informado' }}</div>
                     <div><strong>Fono:</strong> {{ cotizacion.telefono_contacto|default:'No informado' }}</div>
                     <div><strong>E-mail:</strong> {{ cotizacion.email_contacto|default:'No informado' }}</div>
                 </div>
                 <div>
                     <div><strong>Proyecto:</strong> {{ cotizacion.nombreproyecto|default:'No informado' }}</div>
+                    <div><strong>Dirección Proyecto:</strong> {{ cotizacion.dirproyecto|default:'No informado' }}</div>
+                    <div><strong>Región:</strong> {{ cotizacion.region_texto|default:'No informado' }}</div>
                     <div><strong>Caracteristicas</strong></div>
                     <div><strong>Destino:</strong> {{ cotizacion.destino|default:'No informado' }}</div>
                     <div><strong>N° Edificios:</strong> {{ cotizacion.edificios|default:'No informado' }}</div>
