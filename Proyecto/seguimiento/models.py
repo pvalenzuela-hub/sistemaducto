@@ -388,7 +388,19 @@ class estadoproyecto(models.Model):
     
     class Meta:
         db_table = 'Estadoproyecto'
-        
+
+
+class tValorUF(models.Model):
+    Fecha = models.DateField(primary_key=True, db_column='Fecha')
+    ValorUF = models.FloatField(db_column='ValorUF', null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tValorUF'
+
+    def __str__(self):
+        return f'{self.Fecha} - {self.ValorUF}'
+
 class TDuracionProyecto(models.Model):
     idtamano = models.AutoField(db_column='IdTamano', primary_key=True)
     descripcion = models.CharField(db_column='Descripcion', max_length=100, null=True, blank=True)

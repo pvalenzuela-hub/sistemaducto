@@ -72,10 +72,11 @@
 						{% if user|has_group:"Director" %}
 							<li><h3>Configuración</h3></li>
 							<li class="slide">
-								<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-file-text"></i><span class="side-menu__label">tablas</span><span class="badge bg-success side-badge">5</span></a>
+								<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-file-text"></i><span class="side-menu__label">tablas</span><span class="badge bg-success side-badge">6</span></a>
 							<ul class="slide-menu">
 								<li><a href="{% url 'lista-categoria' %}" class="slide-item"> Categorías</a></li>
 								<li><a href="{% url 'lista-tipo-entrega' %}" class="slide-item"> Tipos de Entrega</a></li>
+								<li><a href="{% url 'lista-valor-uf' %}" class="slide-item"> Valores UF</a></li>
 							</ul>
 						</li>
 							<li class="slide">

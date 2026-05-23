@@ -1,0 +1,33 @@
+{% extends "components/base.html" %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-lg-6">
+        <h1 class="mb-4">{{ encabezado }}</h1>
+
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">{{ submenu }}</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">Vas a eliminar el valor UF del <strong>{{ valor_uf.Fecha|date:"d-m-Y" }}</strong>.</p>
+                <p class="mb-3"><strong>Valor UF:</strong> {{ valor_uf.ValorUF|default:"-" }}</p>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Confirmar eliminacion
+                    </button>
+                    <a href="{% url 'lista-valor-uf' %}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Cancelar
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

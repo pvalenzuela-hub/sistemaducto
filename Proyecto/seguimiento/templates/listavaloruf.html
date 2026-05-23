@@ -1,0 +1,83 @@
+{% extends "components/base.html" %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+            <h1 class="mb-0">{{ encabezado }}</h1>
+            <a href="{% url 'crear-valor-uf' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Nuevo valor UF
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ submenu }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped nowrap w-100" id="basic-datatable">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Valor UF</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for v in valores_uf %}
+                            <tr>
+                                <td data-order="{{ v.Fecha|date:'Y-m-d' }}">{{ v.Fecha|date:"d-m-Y" }}</td>
+                                <td>{{ v.ValorUF|default:"-" }}</td>
+                                <td class="text-center">
+                                    <a href="{% url 'editar-valor-uf' v.Fecha %}" class="btn btn-sm btn-warning">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </a>
+                                    <a href="{% url 'eliminar-valor-uf' v.Fecha %}" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center">No hay registros para mostrar.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+	$(document).ready(function() {
+		$("#basic-datatable").dataTable().fnDestroy();
+		$('#basic-datatable').DataTable({
+			order: [[0, 'desc']],
+			language: {
+				"search": "Buscar:",
+				"infoEmpty": "Mostrando 0 to 0 of 0 Entradas",
+				"info": "Mostrando _START_ a _END_ de _TOTAL_ Entradas",
+				"infoFiltered": "(Filtrado de _MAX_ total entradas)",
+				"lengthMenu": "Mostrar _MENU_ Entradas",
+				"loadingRecords": "Cargando...",
+				"processing": "Procesando...",
+				"paginate": {
+					"first": "Primero",
+					"last": "Ultimo",
+					"next": "Siguiente",
+					"previous": "Anterior"
+				},
+			},
+		});
+	})
+</script>
+{% endblock %}

@@ -31,7 +31,7 @@ from django.contrib import messages
 from django.template.loader import render_to_string
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
-from .forms import ClienteForm, ClienteContactoFormSet, ClienteSeguimientoForm, CotizacionForm, TipoEntregaForm, SeguimientoCotizacionForm
+from .forms import ClienteForm, ClienteContactoFormSet, ClienteSeguimientoForm, CotizacionForm, TipoEntregaForm, SeguimientoCotizacionForm, ValorUFForm
 from weasyprint import HTML
 
 
@@ -1293,6 +1293,85 @@ class ListaTipoEntrega(LoginRequiredMixin,ListView):
             'titulo': 'Tipos de Entrega',
         })
         return context
+
+
+class ListaValorUF(LoginRequiredMixin, ListView):
+    model = tValorUF
+    template_name = 'listavaloruf.html'
+    context_object_name = 'valores_uf'
+
+    def get_queryset(self):
+        return self.model.objects.all().order_by('-Fecha')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update({
+            'encabezado': 'Valores UF',
+            'menu': 'tablas',
+            'submenu': 'Valores UF',
+            'titulo': 'Valores UF',
+        })
+        return context
+
+
+@login_required
+def valor_uf_create(request):
+    if request.method == 'POST':
+        form = ValorUFForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('lista-valor-uf')
+    else:
+        form = ValorUFForm()
+
+    context = {
+        'titulo': 'Crear valor UF',
+        'encabezado': 'Crear valor UF',
+        'submenu': 'Nuevo registro',
+        'form': form,
+        'texto_boton': 'Guardar registro',
+    }
+    return render(request, 'valoruf_form.html', context)
+
+
+@login_required
+def valor_uf_update(request, pk):
+    valor_uf = get_object_or_404(tValorUF, pk=date.fromisoformat(pk))
+
+    if request.method == 'POST':
+        form = ValorUFForm(request.POST, instance=valor_uf)
+        if form.is_valid():
+            form.save()
+            return redirect('lista-valor-uf')
+    else:
+        form = ValorUFForm(instance=valor_uf)
+
+    context = {
+        'titulo': 'Modificar valor UF',
+        'encabezado': 'Modificar valor UF',
+        'submenu': 'Edicion de registro',
+        'form': form,
+        'valor_uf': valor_uf,
+        'texto_boton': 'Guardar cambios',
+    }
+    return render(request, 'valoruf_form.html', context)
+
+
+@login_required
+def valor_uf_delete(request, pk):
+    valor_uf = get_object_or_404(tValorUF, pk=date.fromisoformat(pk))
+
+    if request.method == 'POST':
+        valor_uf.delete()
+        return redirect('lista-valor-uf')
+
+    context = {
+        'titulo': 'Eliminar valor UF',
+        'encabezado': 'Eliminar valor UF',
+        'submenu': 'Confirmacion de eliminacion',
+        'valor_uf': valor_uf,
+    }
+    return render(request, 'valoruf_confirm_delete.html', context)
 
 
 @login_required

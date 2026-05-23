@@ -22,6 +22,7 @@ from .models import (
     Testadocliente,
     Tcomppago,
     TipoEntrega,
+    tValorUF,
 )
 
 
@@ -102,6 +103,26 @@ class TipoEntregaForm(forms.ModelForm):
     def clean_color(self):
         valor = (self.cleaned_data.get('color') or '').strip()
         return valor or None
+
+
+class ValorUFForm(forms.ModelForm):
+    class Meta:
+        model = tValorUF
+        fields = ['Fecha', 'ValorUF']
+        widgets = {
+            'Fecha': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        for _, field in self.fields.items():
+            field.widget.attrs['class'] = 'form-control'
+
+        self.fields['Fecha'].label = 'Fecha'
+        self.fields['ValorUF'].label = 'Valor UF'
+        self.fields['ValorUF'].widget.attrs.update({'step': '0.01', 'min': '0'})
+
 
 
 class SeguimientoCotizacionForm(forms.Form):
