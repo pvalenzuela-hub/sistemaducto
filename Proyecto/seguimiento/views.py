@@ -1740,14 +1740,34 @@ def formatear_numero_cl(valor):
     
 @login_required
 def proyectos_totales(request):
-    proyectos = list(
-        Proyecto.objects.select_related(
-            'idcotizacion',
-            'idcotizacion__idcliente',
-            'idcliente',
-            'estadoproyecto'
-        ).order_by('idcotizacion__codregion', 'idproyecto')
+    estado_id = request.GET.get('estado', '').strip()
+    mandante_id = request.GET.get('mandante', '').strip()
+    cliente_id = request.GET.get('cliente', '').strip()
+    numero_proyecto = request.GET.get('numero_proyecto', '').strip()
+
+    proyectos_qs = Proyecto.objects.select_related(
+        'idcotizacion',
+        'idcotizacion__idcliente',
+        'idcliente',
+        'estadoproyecto'
     )
+
+    if estado_id:
+        proyectos_qs = proyectos_qs.filter(estadoproyecto_id=estado_id)
+    if mandante_id:
+        proyectos_qs = proyectos_qs.filter(idcotizacion__idcliente_id=mandante_id)
+    if cliente_id:
+        proyectos_qs = proyectos_qs.filter(idcliente_id=cliente_id)
+    if numero_proyecto:
+        proyectos_qs = proyectos_qs.filter(idproyecto__icontains=numero_proyecto)
+
+    proyectos_qs = proyectos_qs.order_by('idcotizacion__codregion', 'idproyecto')
+
+    proyectos = list(proyectos_qs)
+
+    estados_proyecto = Estadoproyecto.objects.order_by('nombre')
+    mandantes = Cliente.objects.filter(proyectos_principales__isnull=False).distinct().order_by('razonsocial')
+    clientes = Cliente.objects.filter(proyectos_secundarios__isnull=False).distinct().order_by('razonsocial')
 
     regiones = {
         r.codregion: r.descrip
@@ -1798,6 +1818,13 @@ def proyectos_totales(request):
         'encabezado': 'Proyectos totales',
         'submenu': 'Lista total de proyectos',
         'proyectos': proyectos,
+        'estados_proyecto': estados_proyecto,
+        'mandantes': mandantes,
+        'clientes': clientes,
+        'filtro_estado': estado_id,
+        'filtro_mandante': mandante_id,
+        'filtro_cliente': cliente_id,
+        'filtro_numero_proyecto': numero_proyecto,
     }
     return render(request, 'project/proyectos_totales.html', context)
 

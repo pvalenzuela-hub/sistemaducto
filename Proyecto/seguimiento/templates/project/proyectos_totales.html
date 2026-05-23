@@ -6,6 +6,10 @@
 
 {% block extra_css %}
 <style>
+    .table-scroll-x {
+        overflow-x: auto;
+    }
+
     #basic-datatable th,
     #basic-datatable td {
         vertical-align: middle;
@@ -34,7 +38,44 @@
                 <h5 class="mb-0">{{ submenu }}</h5>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
+                <form method="get" class="row g-2 mb-3 align-items-end">
+                    <div class="col-12 col-md-3">
+                        <label for="estado" class="form-label mb-1">Estado del proyecto</label>
+                        <select name="estado" id="estado" class="form-select">
+                            <option value="">Todos</option>
+                            {% for estado in estados_proyecto %}
+                                <option value="{{ estado.idestadoproyecto }}" {% if filtro_estado == estado.idestadoproyecto|stringformat:"s" %}selected{% endif %}>{{ estado.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label for="mandante" class="form-label mb-1">Mandante</label>
+                        <select name="mandante" id="mandante" class="form-select">
+                            <option value="">Todos</option>
+                            {% for cliente in mandantes %}
+                                <option value="{{ cliente.idcliente }}" {% if filtro_mandante == cliente.idcliente|stringformat:"s" %}selected{% endif %}>{{ cliente.razonsocial }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label for="cliente" class="form-label mb-1">Cliente</label>
+                        <select name="cliente" id="cliente" class="form-select">
+                            <option value="">Todos</option>
+                            {% for cliente in clientes %}
+                                <option value="{{ cliente.idcliente }}" {% if filtro_cliente == cliente.idcliente|stringformat:"s" %}selected{% endif %}>{{ cliente.razonsocial }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-2">
+                        <label for="numero_proyecto" class="form-label mb-1">N° Proyecto</label>
+                        <input type="text" name="numero_proyecto" id="numero_proyecto" class="form-control" value="{{ filtro_numero_proyecto }}" placeholder="Buscar">
+                    </div>
+                    <div class="col-12 col-md-1 d-grid">
+                        <button type="submit" class="btn btn-primary">Filtrar</button>
+                    </div>
+                </form>
+
+                <div class="table-scroll-x">
                     <table class="table table-bordered table-striped nowrap w-100" id="basic-datatable">
                         <thead>
                             <tr>
@@ -131,6 +172,8 @@ $(document).ready(function () {
         scrollX: true,
         autoWidth: false,
         pageLength: 10,
+        lengthMenu: [10, 25, 50, 100],
+        order: [],
         language: {
             search: "Buscar:",
             infoEmpty: "Mostrando 0 a 0 de 0 entradas",
