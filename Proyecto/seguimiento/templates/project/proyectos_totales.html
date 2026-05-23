@@ -44,7 +44,7 @@
                         <select name="estado" id="estado" class="form-select">
                             <option value="">Todos</option>
                             {% for estado in estados_proyecto %}
-                                <option value="{{ estado.idestadoproyecto }}" {% if filtro_estado == estado.idestadoproyecto|stringformat:"s" %}selected{% endif %}>{{ estado.nombre }}</option>
+                                <option value="{{ estado.id }}" {% if filtro_estado == estado.id|stringformat:"s" %}selected{% endif %}>{{ estado.nombre }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -105,7 +105,6 @@
                                 <th>Ingreso SEREMI</th>
                                 <th>Aprob. SEREMI</th>
                                 <th>N° Cotización</th>
-                                <th>Correlativo</th>
                                 <th>Fecha Cot.</th>
                                 <th>Mt2</th>
                                
@@ -146,7 +145,7 @@
                                 <td class="text-end">{{ pro.valor_formateado }}</td>
                                 <td>{{ pro.fechaingresoseremi|date:"d-m-Y" }}</td>
                                 <td>{{ pro.fechaaprobseremi|date:"d-m-Y" }}</td>
-                                <td>{{ pro.numcotizacion_texto|default:"" }}-{{ pro.numcorr_texto|default:"000" }}</td>
+                                <td>{{ pro.numcotizacion_texto|default:"" }}</td>
                                 <td>{{ pro.fechacotizacion|date:"d-m-Y" }}</td>
                                 <td>{{ pro.mt2_texto|default:0 }}</td>
                               

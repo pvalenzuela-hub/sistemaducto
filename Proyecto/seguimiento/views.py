@@ -1765,9 +1765,10 @@ def proyectos_totales(request):
 
     proyectos = list(proyectos_qs)
 
-    estados_proyecto = Estadoproyecto.objects.order_by('nombre')
-    mandantes = Cliente.objects.filter(proyectos_principales__isnull=False).distinct().order_by('razonsocial')
-    clientes = Cliente.objects.filter(proyectos_secundarios__isnull=False).distinct().order_by('razonsocial')
+    estados_proyecto = estadoproyecto.objects.order_by('nombre')
+    clientes_proyecto = Cliente.objects.filter(
+        Q(proyectos_principales__isnull=False) | Q(proyectos_secundarios__isnull=False)
+    ).distinct().order_by('razonsocial')
 
     regiones = {
         r.codregion: r.descrip
@@ -1787,7 +1788,6 @@ def proyectos_totales(request):
             pro.numcotizacion_texto = f"{numcot}-{numcorr}"
         else:
             pro.numcotizacion_texto = ''
-        pro.numcorr_texto = ''
         pro.fechacotizacion = cot.fecha if cot else None
         pro.dirproyecto_texto = cot.dirproyecto or '' if cot else ''
         pro.edificios_texto = cot.edificios or 0 if cot else 0
@@ -1819,8 +1819,8 @@ def proyectos_totales(request):
         'submenu': 'Lista total de proyectos',
         'proyectos': proyectos,
         'estados_proyecto': estados_proyecto,
-        'mandantes': mandantes,
-        'clientes': clientes,
+        'mandantes': clientes_proyecto,
+        'clientes': clientes_proyecto,
         'filtro_estado': estado_id,
         'filtro_mandante': mandante_id,
         'filtro_cliente': cliente_id,
