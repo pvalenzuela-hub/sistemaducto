@@ -112,6 +112,12 @@ def _estado_cotizacion_style(estado):
         estilos.append(f'color: {estado.colortexto};')
     return ' '.join(estilos)
 
+
+def _direccion_mandante(cliente):
+    if not cliente:
+        return ''
+    return cliente.direcfactura or cliente.direccion or ''
+
 User = get_user_model()
 
 
@@ -462,7 +468,7 @@ def cotizacion_visor(request, pk):
     cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
     cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
     cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
-    cotizacion.mandante_direccion = cotizacion.idcliente.direccion if cotizacion.idcliente else ''
+    cotizacion.mandante_direccion = _direccion_mandante(cotizacion.idcliente)
     cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
     cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
@@ -699,7 +705,7 @@ def cotizacion_detalle(request, pk):
     cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
     cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
     cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
-    cotizacion.mandante_direccion = cotizacion.idcliente.direccion if cotizacion.idcliente else ''
+    cotizacion.mandante_direccion = _direccion_mandante(cotizacion.idcliente)
     cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
     cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
@@ -748,6 +754,7 @@ def cotizacion_reporte_pdf(request, pk):
     cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
     cotizacion.estadocotizacion_class = _estado_cotizacion_class(cotizacion.estadocotizacion_texto)
     cotizacion.mandante_texto = cotizacion.idcliente.razonsocial if cotizacion.idcliente else ''
+    cotizacion.mandante_direccion = _direccion_mandante(cotizacion.idcliente)
     cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
     cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
