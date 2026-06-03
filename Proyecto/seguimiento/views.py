@@ -3,6 +3,7 @@ import os
 import re
 from urllib.parse import urlencode
 from datetime import timezone as dt_timezone
+from urllib.request import urlopen
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from .models import *
@@ -13,6 +14,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.http import HttpResponseNotAllowed, HttpResponse
 from collections import defaultdict
 from datetime import date
+import json as _json
 
 from django.db.models import Max, Prefetch, F, OuterRef, Subquery, Count, IntegerField, CharField, Value, Q, Exists, Sum, DecimalField
 from django.db.models.functions import Cast
@@ -117,6 +119,36 @@ def _direccion_mandante(cliente):
     if not cliente:
         return ''
     return cliente.direcfactura or cliente.direccion or ''
+
+
+def _sincronizar_uf_faltantes():
+    try:
+        with urlopen('https://mindicador.cl/api/uf', timeout=20) as response:
+            payload = _json.loads(response.read().decode('utf-8'))
+    except Exception:
+        return 0
+
+    serie = payload.get('serie', [])
+    if not serie:
+        return 0
+
+    existentes = set(tValorUF.objects.values_list('Fecha', flat=True))
+    creados = 0
+
+    for item in serie:
+        fecha = (item.get('fecha') or '')[:10]
+        valor = item.get('valor')
+        if not fecha or valor is None:
+            continue
+
+        fecha_obj = date.fromisoformat(fecha)
+        if fecha_obj in existentes:
+            continue
+
+        tValorUF.objects.create(Fecha=fecha_obj, ValorUF=valor)
+        creados += 1
+
+    return creados
 
 User = get_user_model()
 
@@ -1308,6 +1340,7 @@ class ListaValorUF(LoginRequiredMixin, ListView):
     context_object_name = 'valores_uf'
 
     def get_queryset(self):
+        _sincronizar_uf_faltantes()
         return self.model.objects.all().order_by('-Fecha')
 
     def get_context_data(self, **kwargs):
