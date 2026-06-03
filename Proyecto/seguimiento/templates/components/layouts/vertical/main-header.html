@@ -149,24 +149,29 @@
 										<a href="#" class="dropdown-item text-center p-3 text-muted">See all Messages</a>
 									</div>
 								<div class="dropdown d-none d-md-flex profile-1">
-									<a href="#" data-bs-toggle="dropdown" class="nav-link pe-2 leading-none d-flex">
-										<span>
-											<img src="{% static ''%}assets/images/users/8.jpg" alt="profile-user" class="avatar profile-user brround cover-image">
-										</span>
-									</a>
-									<div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
-										<div class="drop-heading">
-											<div class="text-center">
-												<h5 class="text-dark mb-0">{{ user.first_name }} {{ user.last_name }}</h5>
-												<small class="text-muted">Usuario</small>
-											</div>
+								<a href="#" data-bs-toggle="dropdown" class="nav-link pe-2 leading-none d-flex align-items-center gap-2">
+									<span>
+										<img src="{% static ''%}assets/images/users/8.jpg" alt="profile-user" class="avatar profile-user brround cover-image">
+									</span>
+									<span class="text-white fw-semibold">{% if user.first_name or user.last_name %}{{ user.first_name }} {{ user.last_name }}{% else %}{{ user.username }}{% endif %}</span>
+								</a>
+								<div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
+									<div class="drop-heading">
+										<div class="text-center">
+											<h5 class="text-dark mb-0">{% if user.first_name or user.last_name %}{{ user.first_name }} {{ user.last_name }}{% else %}{{ user.username }}{% endif %}</h5>
+											<small class="text-muted">Usuario</small>
 										</div>
-										<div class="dropdown-divider m-0"></div>
+									</div>
+									<div class="dropdown-divider m-0"></div>
 
-										<form method="post" action="{% url 'logout' %}" class="m-0">
-											{% csrf_token %}
-											<button type="submit" class="dropdown-item">
-												<i class="dropdown-icon fe fe-log-out"></i> Salir
+									<a href="{% url 'password_change' %}" class="dropdown-item">
+										<i class="dropdown-icon fe fe-lock"></i> Cambiar contraseña
+									</a>
+
+									<form method="post" action="{% url 'logout' %}" class="m-0">
+										{% csrf_token %}
+										<button type="submit" class="dropdown-item">
+											<i class="dropdown-icon fe fe-log-out"></i> Salir
 											</button>
 										</form>
 									</div>
@@ -265,15 +270,20 @@
 									<a href="#" class="dropdown-item text-center p-3 text-muted">Todos los mensajes</a>
 								</div>
 							</div><!-- MESSAGE-BOX -->
-							<div class="dropdown d-md-flex profile-1">
-								<a href="#" data-bs-toggle="dropdown" class="nav-link pe-2 leading-none d-flex">
-									<span>
-										<img src="{% static ''%}assets/images/users/8.jpg" alt="profile-user" class="avatar  profile-user brround cover-image">
-									</span>
-								</a>
-								<div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
-									<div class="drop-heading">
-									</div>
+								<div class="dropdown d-md-flex profile-1">
+									<a href="#" data-bs-toggle="dropdown" class="nav-link pe-2 leading-none d-flex align-items-center gap-2">
+										<span>
+											<img src="{% static ''%}assets/images/users/8.jpg" alt="profile-user" class="avatar  profile-user brround cover-image">
+										</span>
+										<span class="text-white fw-semibold">{% if user.first_name or user.last_name %}{{ user.first_name }} {{ user.last_name }}{% else %}{{ user.username }}{% endif %}</span>
+									</a>
+									<div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
+										<div class="drop-heading">
+											<div class="text-center">
+												<h5 class="text-dark mb-0">{% if user.first_name or user.last_name %}{{ user.first_name }} {{ user.last_name }}{% else %}{{ user.username }}{% endif %}</h5>
+												<small class="text-muted">Usuario</small>
+											</div>
+										</div>
 									<div class="dropdown-divider m-0"></div>
 									<form method="post" action="{% url 'logout' %}" class="m-0">
 										{% csrf_token %}
