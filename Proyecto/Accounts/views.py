@@ -4,6 +4,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import Group, User
 from django.db import transaction, IntegrityError
+from django.db.models import Max
+from django.db import connection
 from django.shortcuts import get_object_or_404, redirect, render
 
 from Vacation.models import Persona
@@ -14,10 +16,48 @@ def _es_administrador(user):
 
 
 def _crear_persona_si_falta(usuario):
-    Persona.objects.get_or_create(
+    _asegurar_usuario_ducto(usuario)
+    if Persona.objects.filter(user_per=usuario).exists():
+        return
+
+    siguiente_id = (Persona.objects.aggregate(mx=Max('id'))['mx'] or 0) + 1
+    Persona.objects.create(
+        id=siguiente_id,
         user_per=usuario,
-        defaults={'feccon': date.today()},
+        feccon=date.today(),
+        suma_dias_vacaciones=0,
     )
+
+
+def _asegurar_usuario_ducto(usuario):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) FROM ducto.auth_user WHERE id = %s", [usuario.id])
+        existe = cursor.fetchone()[0]
+        if existe:
+            return
+
+        cursor.execute("SET IDENTITY_INSERT ducto.auth_user ON")
+        cursor.execute(
+            """
+            INSERT INTO ducto.auth_user
+            (id, password, last_login, is_superuser, username, first_name, last_name, email, is_staff, is_active, date_joined)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            [
+                usuario.id,
+                usuario.password,
+                usuario.last_login,
+                int(usuario.is_superuser),
+                usuario.username,
+                usuario.first_name or '',
+                usuario.last_name or '',
+                usuario.email or '',
+                int(usuario.is_staff),
+                int(usuario.is_active),
+                usuario.date_joined,
+            ],
+        )
+        cursor.execute("SET IDENTITY_INSERT ducto.auth_user OFF")
 
 
 @login_required
@@ -60,6 +100,7 @@ def usuario_create(request):
             usuario.save(update_fields=['is_staff'])
             if grupo_id:
                 usuario.groups.add(Group.objects.get(pk=grupo_id))
+            _asegurar_usuario_ducto(usuario)
             _crear_persona_si_falta(usuario)
             messages.success(request, 'Usuario creado correctamente.')
             return redirect('usuario_list')
@@ -93,14 +134,21 @@ def usuario_delete(request, pk):
 @transaction.atomic
 def usuario_crear_persona(request, pk):
     usuario = get_object_or_404(User, pk=pk)
-    persona, created = Persona.objects.get_or_create(
-        user_per=usuario,
-        defaults={'feccon': date.today()},
-    )
-
-    if created:
-        messages.success(request, f'Se creó la ficha de vacaciones para {usuario.username}.')
-    else:
+    if Persona.objects.filter(user_per=usuario).exists():
         messages.info(request, f'La ficha de vacaciones ya existía para {usuario.username}.')
+        return redirect('usuario_list')
+
+    try:
+        _asegurar_usuario_ducto(usuario)
+        siguiente_id = (Persona.objects.aggregate(mx=Max('id'))['mx'] or 0) + 1
+        Persona.objects.create(
+            id=siguiente_id,
+            user_per=usuario,
+            feccon=date.today(),
+            suma_dias_vacaciones=0,
+        )
+        messages.success(request, f'Se creó la ficha de vacaciones para {usuario.username}.')
+    except IntegrityError:
+        messages.error(request, 'La base de datos rechazó la creación de la ficha de vacaciones. Revise la restricción asociada al usuario.')
 
     return redirect('usuario_list')

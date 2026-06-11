@@ -27,11 +27,12 @@ class Persona(models.Model):
         meses = diferencia.years * 12 + diferencia.months
         if fecha.month == self.feccon.month:
             meses = meses + ((fecha.day - self.feccon.day)/30)
-        
+
         dias_totales = meses * 1.25
+        suma_vacaciones = self.suma_dias_vacaciones or 0
 
         self.dias_totales = dias_totales
-        self.dias_pendientes = dias_totales - self.suma_dias_vacaciones
+        self.dias_pendientes = dias_totales - suma_vacaciones
         self.meses_totales = meses
         super().save(*args, **kwargs)
 
@@ -68,4 +69,4 @@ class Registrovac(models.Model):
 
 @receiver(post_save, sender=Registrovac)
 def actualizar_dias_vacaciones(sender, instance, **kwargs):
-    instance.user_vac.calcular_dias_vacaciones()        
+    instance.user_vac.calcular_dias_vacaciones()
