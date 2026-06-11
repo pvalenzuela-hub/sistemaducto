@@ -86,3 +86,21 @@ def usuario_delete(request, pk):
         'encabezado': 'Eliminar usuario',
         'usuario': usuario,
     })
+
+
+@login_required
+@user_passes_test(_es_administrador)
+@transaction.atomic
+def usuario_crear_persona(request, pk):
+    usuario = get_object_or_404(User, pk=pk)
+    persona, created = Persona.objects.get_or_create(
+        user_per=usuario,
+        defaults={'feccon': date.today()},
+    )
+
+    if created:
+        messages.success(request, f'Se creó la ficha de vacaciones para {usuario.username}.')
+    else:
+        messages.info(request, f'La ficha de vacaciones ya existía para {usuario.username}.')
+
+    return redirect('usuario_list')
