@@ -1,0 +1,17 @@
+{% extends "components/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card border-danger">
+            <div class="card-body">
+                <h1 class="mb-3">{{ encabezado }}</h1>
+                <p>Vas a eliminar al usuario <strong>{{ usuario.username }}</strong>.</p>
+                <form method="post">{% csrf_token %}<button class="btn btn-danger" type="submit">Eliminar</button> <a href="{% url 'usuario_list' %}" class="btn btn-secondary">Cancelar</a></form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

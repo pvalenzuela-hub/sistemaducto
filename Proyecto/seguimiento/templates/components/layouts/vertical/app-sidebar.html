@@ -69,24 +69,32 @@
 
 							</ul>
 						</li>
-						{% if user|has_group:"Director" %}
-							<li><h3>Configuración</h3></li>
-							<li class="slide">
-								<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-file-text"></i><span class="side-menu__label">tablas</span><span class="badge bg-success side-badge">6</span></a>
-							<ul class="slide-menu">
-								<li><a href="{% url 'lista-categoria' %}" class="slide-item"> Categorías</a></li>
-								<li><a href="{% url 'lista-tipo-entrega' %}" class="slide-item"> Tipos de Entrega</a></li>
-								<li><a href="{% url 'lista-valor-uf' %}" class="slide-item"> Valores UF</a></li>
-							</ul>
-						</li>
-							<li class="slide">
-								<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-command"></i><span class="side-menu__label">Vacaciones</span><i class="angle fa fa-angle-right"></i></a>
+							{% if user|has_group:"Director" %}
+								<li><h3>Configuración</h3></li>
+								<li class="slide">
+									<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-file-text"></i><span class="side-menu__label">tablas</span><span class="badge bg-success side-badge">6</span></a>
 								<ul class="slide-menu">
-									<li><a href="{% url 'listado-vacaciones' %}" class="slide-item"> Listado resumen</a></li>
-									<li><a href="{% url 'registro-vacaciones' %}" class="slide-item"> Registro de Vacaciones</a></li>
+									<li><a href="{% url 'lista-categoria' %}" class="slide-item"> Categorías</a></li>
+									<li><a href="{% url 'lista-tipo-entrega' %}" class="slide-item"> Tipos de Entrega</a></li>
+									<li><a href="{% url 'lista-valor-uf' %}" class="slide-item"> Valores UF</a></li>
 								</ul>
 							</li>
-						{% endif %}
+							{% endif %}
+							{% if user|has_group:"Administrador" %}
+								<li class="slide">
+									<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-users"></i><span class="side-menu__label">Usuarios</span></a>
+									<ul class="slide-menu">
+										<li><a href="{% url 'usuario_list' %}" class="slide-item"> Listado usuarios</a></li>
+									</ul>
+								</li>
+								<li class="slide">
+									<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-command"></i><span class="side-menu__label">Vacaciones</span><i class="angle fa fa-angle-right"></i></a>
+									<ul class="slide-menu">
+										<li><a href="{% url 'listado-vacaciones' %}" class="slide-item"> Listado resumen</a></li>
+										<li><a href="{% url 'registro-vacaciones' %}" class="slide-item"> Registro de Vacaciones</a></li>
+									</ul>
+								</li>
+							{% endif %}
 						<!-- <li><h3>Pages</h3></li>
 						<li class="slide">
 							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-layers"></i><span class="side-menu__label">Pages</span><i class="angle fa fa-angle-right"></i></a>
