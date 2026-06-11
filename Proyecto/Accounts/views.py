@@ -10,7 +10,7 @@ from Vacation.models import Persona
 
 
 def _es_administrador(user):
-    return user.is_authenticated and user.groups.filter(name='Administrador').exists()
+    return user.is_authenticated and user.groups.filter(name='Director').exists()
 
 
 def _crear_persona_si_falta(usuario):
