@@ -58,8 +58,7 @@ def Registrovacaciones(request):
         if formulario.is_valid():
             formulario.save()
             # messages.success(request,'Usuario creado exitosamente!')
-            return redirect(to="personal")
+            return redirect('listado-vacaciones')
         mydict["form"] = formulario
     return render(request,'vacaciones.html', context=mydict)
-
 
