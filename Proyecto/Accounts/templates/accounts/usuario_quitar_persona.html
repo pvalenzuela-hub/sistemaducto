@@ -1,0 +1,22 @@
+{% extends "components/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card border-warning">
+            <div class="card-body">
+                <h1 class="mb-3">{{ encabezado }}</h1>
+                <p>Vas a quitar la ficha de vacaciones de <strong>{{ usuario.username }}</strong>.</p>
+                <p>Esto solo lo deja fuera del módulo de Vacaciones. No elimina el usuario de la aplicación.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <button class="btn btn-warning" type="submit">Quitar ficha</button>
+                    <a href="{% url 'usuario_list' %}" class="btn btn-secondary">Cancelar</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

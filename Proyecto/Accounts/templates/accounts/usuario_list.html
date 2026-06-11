@@ -31,6 +31,7 @@
                                 <td>{% for g in u.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
                                 <td class="d-flex gap-2 flex-wrap">
                                     <a href="{% url 'usuario_crear_persona' u.pk %}" class="btn btn-sm btn-primary">Crear ficha vacaciones</a>
+                                    <a href="{% url 'usuario_quitar_persona' u.pk %}" class="btn btn-sm btn-warning">Quitar ficha</a>
                                     <a href="{% url 'usuario_delete' u.pk %}" class="btn btn-sm btn-danger">Eliminar</a>
                                 </td>
                             </tr>

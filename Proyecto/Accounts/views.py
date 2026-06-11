@@ -152,3 +152,29 @@ def usuario_crear_persona(request, pk):
         messages.error(request, 'La base de datos rechazó la creación de la ficha de vacaciones. Revise la restricción asociada al usuario.')
 
     return redirect('usuario_list')
+
+
+@login_required
+@user_passes_test(_es_administrador)
+@transaction.atomic
+def usuario_quitar_persona(request, pk):
+    usuario = get_object_or_404(User, pk=pk)
+    persona = Persona.objects.filter(user_per=usuario).first()
+
+    if not persona:
+        messages.info(request, f'El usuario {usuario.username} no tiene ficha de vacaciones.')
+        return redirect('usuario_list')
+
+    if request.method == 'POST':
+        persona.delete()
+        with connection.cursor() as cursor:
+            cursor.execute('DELETE FROM ducto.auth_user WHERE id = %s', [usuario.id])
+        messages.success(request, f'Se quitó la ficha de vacaciones de {usuario.username}.')
+        return redirect('usuario_list')
+
+    return render(request, 'accounts/usuario_quitar_persona.html', {
+        'titulo': 'Quitar ficha vacaciones',
+        'encabezado': 'Quitar ficha vacaciones',
+        'usuario': usuario,
+        'persona': persona,
+    })
