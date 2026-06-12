@@ -16,5 +16,7 @@ urlpatterns = [
     path('listado/', views.PersonalListView.as_view() , name='listado-vacaciones'),
     # path('detalle/<int:id', views.PersonalListView.as_view() , name='personal'),
     path('detalle/<int:pk>',DetalleVacaciones.as_view(), name='detalle-vacaciones'),
+    path('detalle/<int:pk>/eliminar/<int:reg_id>/', views.eliminar_registro_vacaciones, name='eliminar-registro-vacaciones'),
+    path('eliminar/<int:pk>/', views.eliminar_persona_vacaciones, name='eliminar-persona-vacaciones'),
     path('registro/', views.Registrovacaciones,  name='registro-vacaciones'),
 ]

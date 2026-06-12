@@ -6,6 +6,7 @@ from .models import Persona, Registrovac
 from django.contrib.auth.models import User
 from .form import *
 from django.shortcuts import render, redirect,get_object_or_404
+from django.contrib import messages
 
 # Create your views here.
 
@@ -48,6 +49,31 @@ class DetalleVacaciones(DetailView):
         }
         return render(request, self.template_name, contexto)
 
+
+def eliminar_registro_vacaciones(request, pk, reg_id):
+    persona = get_object_or_404(Persona, pk=pk)
+    registro = get_object_or_404(Registrovac, pk=reg_id, user_vac=persona)
+
+    if request.method == 'POST':
+        registro.delete()
+        persona.calcular_dias_vacaciones()
+        messages.success(request, 'El registro de vacaciones fue eliminado correctamente.')
+        return redirect('detalle-vacaciones', pk=pk)
+
+    return redirect('detalle-vacaciones', pk=pk)
+
+
+def eliminar_persona_vacaciones(request, pk):
+    persona = get_object_or_404(Persona, pk=pk)
+
+    if request.method == 'POST':
+        persona.registrovac_set.all().delete()
+        persona.delete()
+        messages.success(request, 'La persona fue eliminada del módulo de vacaciones.')
+        return redirect('listado-vacaciones')
+
+    return redirect('listado-vacaciones')
+
 def Registrovacaciones(request):
     form = UserForm
     mydict = {
@@ -61,4 +87,3 @@ def Registrovacaciones(request):
             return redirect('listado-vacaciones')
         mydict["form"] = formulario
     return render(request,'vacaciones.html', context=mydict)
-

@@ -27,6 +27,7 @@
                                 <th class="text-end">Días Totales</th>
                                 <th class="text-end">Meses Totales</th>
                                 <th class="text-center">Detalle</th>
+                                <th class="text-center">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -53,10 +54,16 @@
                                         <i class="fa fa-address-card-o"></i>
                                     </a>
                                 </td>
+                                <td class="text-center">
+                                    <form method="post" action="{% url 'eliminar-persona-vacaciones' c.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+                                    </form>
+                                </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="7" class="text-center text-muted">No hay personas registradas.</td>
+                                <td colspan="8" class="text-center text-muted">No hay personas registradas.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -96,9 +103,9 @@
                 }
             },
             columnDefs: [
-                { orderable: false, targets: 6 },
+                { orderable: false, targets: [6, 7] },
                 { className: "text-end", targets: [2, 3, 4, 5] },
-                { className: "text-center", targets: [6] }
+                { className: "text-center", targets: [6, 7] }
             ]
         });
     });
