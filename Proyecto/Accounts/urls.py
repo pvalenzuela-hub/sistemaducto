@@ -7,5 +7,6 @@ urlpatterns = [
     path('usuarios/crear/', views.usuario_create, name='usuario_create'),
     path('usuarios/<int:pk>/crear-persona/', views.usuario_crear_persona, name='usuario_crear_persona'),
     path('usuarios/<int:pk>/quitar-persona/', views.usuario_quitar_persona, name='usuario_quitar_persona'),
+    path('usuarios/<int:pk>/editar-persona/', views.usuario_editar_persona, name='usuario_editar_persona'),
     path('usuarios/<int:pk>/eliminar/', views.usuario_delete, name='usuario_delete'),
 ]

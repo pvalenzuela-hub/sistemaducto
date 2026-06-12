@@ -178,3 +178,32 @@ def usuario_quitar_persona(request, pk):
         'usuario': usuario,
         'persona': persona,
     })
+
+
+@login_required
+@user_passes_test(_es_administrador)
+@transaction.atomic
+def usuario_editar_persona(request, pk):
+    usuario = get_object_or_404(User, pk=pk)
+    persona = Persona.objects.filter(user_per=usuario).first()
+
+    if not persona:
+        messages.error(request, f'El usuario {usuario.username} no tiene ficha de vacaciones.')
+        return redirect('usuario_list')
+
+    if request.method == 'POST':
+        feccon = request.POST.get('feccon')
+        if not feccon:
+            messages.error(request, 'Debe indicar la fecha de contrato.')
+        else:
+            persona.feccon = feccon
+            persona.save()
+            messages.success(request, f'Se actualizó la fecha de contrato de {usuario.username}.')
+            return redirect('usuario_list')
+
+    return render(request, 'accounts/usuario_editar_persona.html', {
+        'titulo': 'Editar fecha de contrato',
+        'encabezado': 'Editar fecha de contrato',
+        'usuario': usuario,
+        'persona': persona,
+    })
