@@ -185,11 +185,10 @@ def usuario_quitar_persona(request, pk):
 @transaction.atomic
 def usuario_editar_persona(request, pk):
     usuario = get_object_or_404(User, pk=pk)
-    persona = Persona.objects.filter(user_per=usuario).first()
-
-    if not persona:
-        messages.error(request, f'El usuario {usuario.username} no tiene ficha de vacaciones.')
-        return redirect('usuario_list')
+    persona, _ = Persona.objects.get_or_create(
+        user_per=usuario,
+        defaults={'feccon': date.today(), 'suma_dias_vacaciones': 0},
+    )
 
     if request.method == 'POST':
         feccon = request.POST.get('feccon')

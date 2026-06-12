@@ -31,7 +31,13 @@
                                 <td>{% for g in u.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
                                 <td class="d-flex gap-2 flex-wrap">
                                     <a href="{% url 'usuario_crear_persona' u.pk %}" class="btn btn-sm btn-primary">Crear ficha vacaciones</a>
-                                    <a href="{% url 'usuario_editar_persona' u.pk %}" class="btn btn-sm btn-info">Editar contrato</a>
+                                    <button type="button" class="btn btn-sm btn-info btn-editar-contrato"
+                                            data-user-name="{{ u.username }}"
+                                            data-user-id="{{ u.pk }}"
+                                            data-feccon="{% if u.persona %}{{ u.persona.feccon|date:'Y-m-d' }}{% endif %}"
+                                            data-url="{% url 'usuario_editar_persona' u.pk %}">
+                                        Editar contrato
+                                    </button>
                                     <a href="{% url 'usuario_quitar_persona' u.pk %}" class="btn btn-sm btn-warning">Quitar ficha</a>
                                     <a href="{% url 'usuario_delete' u.pk %}" class="btn btn-sm btn-danger">Eliminar</a>
                                 </td>
@@ -46,4 +52,53 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="modalEditarContrato" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="formEditarContrato" method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar contrato</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Usuario: <strong id="modalUsuarioNombre"></strong></p>
+                    <div class="mb-3">
+                        <label class="form-label" for="modalFeccon">Fecha de contrato</label>
+                        <input type="date" id="modalFeccon" name="feccon" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar cambio</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modalEl = document.getElementById('modalEditarContrato');
+    const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+    const form = document.getElementById('formEditarContrato');
+    const inputFeccon = document.getElementById('modalFeccon');
+    const labelUsuario = document.getElementById('modalUsuarioNombre');
+
+    document.querySelectorAll('.btn-editar-contrato').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const userId = btn.dataset.userId;
+            const userName = btn.dataset.userName;
+            const feccon = btn.dataset.feccon || '';
+            form.action = btn.dataset.url;
+            labelUsuario.textContent = userName;
+            inputFeccon.value = feccon;
+            modal.show();
+        });
+    });
+});
+</script>
 {% endblock %}
