@@ -1,10 +1,11 @@
 from datetime import date
+from dateutil.relativedelta import relativedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import Group, User
 from django.db import transaction, IntegrityError
-from django.db.models import Max
+from django.db.models import Max, Sum
 from django.db import connection
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -185,18 +186,40 @@ def usuario_quitar_persona(request, pk):
 @transaction.atomic
 def usuario_editar_persona(request, pk):
     usuario = get_object_or_404(User, pk=pk)
-    persona, _ = Persona.objects.get_or_create(
-        user_per=usuario,
-        defaults={'feccon': date.today(), 'suma_dias_vacaciones': 0},
-    )
+    persona = Persona.objects.filter(user_per_id=usuario.id).first()
+    if not persona:
+        _asegurar_usuario_ducto(usuario)
+        siguiente_id = (Persona.objects.aggregate(mx=Max('id'))['mx'] or 0) + 1
+        Persona.objects.create(
+            id=siguiente_id,
+            user_per_id=usuario.id,
+            feccon=date.today(),
+            suma_dias_vacaciones=0,
+        )
+        persona = Persona.objects.get(user_per_id=usuario.id)
 
     if request.method == 'POST':
         feccon = request.POST.get('feccon')
         if not feccon:
             messages.error(request, 'Debe indicar la fecha de contrato.')
         else:
-            persona.feccon = feccon
-            persona.save()
+            feccon_dt = date.fromisoformat(feccon)
+            hoy = date.today()
+            diferencia = relativedelta(hoy, feccon_dt)
+            meses = diferencia.years * 12 + diferencia.months
+            if hoy.month == feccon_dt.month:
+                meses = meses + ((hoy.day - feccon_dt.day) / 30)
+
+            dias_totales = meses * 1.25
+            suma_vacaciones = persona.registrovac_set.aggregate(total=Sum('dias_vacaciones'))['total'] or 0
+            # Mantiene los campos consistentes sin depender del save del modelo.
+            Persona.objects.filter(pk=persona.pk).update(
+                feccon=feccon_dt,
+                suma_dias_vacaciones=suma_vacaciones,
+                dias_totales=dias_totales,
+                dias_pendientes=dias_totales - suma_vacaciones,
+                meses_totales=meses,
+            )
             messages.success(request, f'Se actualizó la fecha de contrato de {usuario.username}.')
             return redirect('usuario_list')
 
