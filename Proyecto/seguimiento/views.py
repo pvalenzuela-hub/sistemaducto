@@ -93,6 +93,67 @@ def _cotizacion_estado_visual(cotizacion):
     }
 
 
+def _texto_seguimiento_proyectos(ids_proyecto):
+    ids_proyecto = [str(pid) for pid in ids_proyecto if pid is not None]
+    if not ids_proyecto:
+        return {}
+
+    placeholders = ",".join(["?"] * len(ids_proyecto))
+    filas = exec_query(
+        f"""
+            SELECT IdProyecto, Comentario, Fecha, ISNULL(IdUsuario,'')
+            FROM Proyecto_Seg
+            WHERE IdProyecto IN ({placeholders})
+            ORDER BY IdProyecto, Fecha
+        """,
+        tuple(ids_proyecto)
+    )
+
+    textos = defaultdict(list)
+    for idproyecto, comentario, fecha, idusuario in filas:
+        fecha_txt = fecha.strftime('%d/%m/%Y %H:%M') if fecha else ''
+        textos[str(idproyecto)].append(f"{fecha_txt} : ({idusuario or ''}) {str(comentario).rstrip()}")
+
+    return {k: "\n".join(v) for k, v in textos.items()}
+
+
+def _ultima_fecha_seguimiento_proyectos(ids_proyecto):
+    ids_proyecto = [str(pid) for pid in ids_proyecto if pid is not None]
+    if not ids_proyecto:
+        return {}
+
+    placeholders = ",".join(["?"] * len(ids_proyecto))
+    filas = exec_query(
+        f"""
+            SELECT IdProyecto, MAX(Fecha) AS FechaUltima
+            FROM Proyecto_Seg
+            WHERE IdProyecto IN ({placeholders})
+            GROUP BY IdProyecto
+        """,
+        tuple(ids_proyecto)
+    )
+    return {str(idproyecto): fecha for idproyecto, fecha in filas}
+
+
+def _saldo_por_facturar_proyectos(ids_proyecto):
+    ids_proyecto = [str(pid) for pid in ids_proyecto if pid is not None]
+    if not ids_proyecto:
+        return {}
+
+    placeholders = ",".join(["?"] * len(ids_proyecto))
+    filas = exec_query(
+        f"""
+            SELECT IdProyecto, 100 - ISNULL(SUM(PorcFact), 0) AS Saldo
+            FROM Factura
+            WHERE IdProyecto IN ({placeholders})
+              AND Estado IN (2,3,4,5,8)
+            GROUP BY IdProyecto
+        """,
+        tuple(ids_proyecto)
+    )
+    return {str(idproyecto): saldo for idproyecto, saldo in filas}
+
+
 def _estado_cotizacion_class(nombre):
     texto = (nombre or '').lower()
     if 'aprob' in texto:
@@ -1206,9 +1267,142 @@ class Vista1(LoginRequiredMixin,TemplateView):
             "encabezado": "DUCTO",
             "titulo": "PROYECTOS TERMINADOS",
             "menu": "Proyectos",
-            "submenu": "Listado de Proyectos Terminados para Facturar",
+            "submenu": "Listado de Proyectos Terminados",
         })
         return contexto
+
+
+class VistaSeguimiento(LoginRequiredMixin,TemplateView):
+    template_name = "proyectos_seguimiento.html"
+
+    def get_context_data(self, **kwargs):
+        contexto = super().get_context_data(**kwargs)
+
+        estado_id = (self.request.GET.get('estado') or '').strip()
+        mandante_id = (self.request.GET.get('mandante') or '').strip()
+        cliente_id = (self.request.GET.get('cliente') or '').strip()
+        numero_proyecto = (self.request.GET.get('numero_proyecto') or '').strip()
+
+        proyectos_qs = Proyecto.objects.select_related(
+            'idcotizacion',
+            'idcotizacion__idcliente',
+            'idcotizacion__idcontacto',
+            'idcliente',
+            'idcontactofacturacion',
+            'estadoproyecto',
+        )
+
+        if estado_id:
+            proyectos_qs = proyectos_qs.filter(estadoproyecto_id=estado_id)
+        if mandante_id:
+            proyectos_qs = proyectos_qs.filter(idcotizacion__idcliente_id=mandante_id)
+        if cliente_id:
+            proyectos_qs = proyectos_qs.filter(idcliente_id=cliente_id)
+        if numero_proyecto:
+            proyectos_qs = proyectos_qs.filter(idproyecto__icontains=numero_proyecto)
+
+        proyectos_qs = proyectos_qs.order_by('idcotizacion__codregion', 'idproyecto')
+        proyectos = list(proyectos_qs)
+
+        estados_proyecto = estadoproyecto.objects.order_by('nombre')
+        clientes_proyecto = Cliente.objects.filter(
+            Q(proyectos_principales__isnull=False) | Q(proyectos_secundarios__isnull=False)
+        ).distinct().order_by('razonsocial')
+
+        regiones = {r.codregion: r.descrip for r in Tregion.objects.all()}
+        seguimientos = _texto_seguimiento_proyectos([pro.idproyecto for pro in proyectos])
+        ultimas_fechas_seg = _ultima_fecha_seguimiento_proyectos([pro.idproyecto for pro in proyectos])
+        saldos_por_facturar = _saldo_por_facturar_proyectos([pro.idproyecto for pro in proyectos])
+
+        for pro in proyectos:
+            cot = pro.idcotizacion
+            pro.nombreproyecto = cot.nombreproyecto if cot else ''
+            pro.fecha_cot_texto = cot.fecha.strftime('%d/%m/%Y') if cot and cot.fecha else ''
+            pro.cotizacion_texto = ''
+            if cot and cot.numcotizacion is not None:
+                pro.cotizacion_texto = f"{int(cot.numcotizacion)}-{int(cot.numcorr or 0):03d}"
+            pro.moneda_texto = pro.moneda or ''
+            pro.dirproyecto_texto = cot.dirproyecto or '' if cot else ''
+            pro.destino_texto = cot.destino or '' if cot else ''
+            pro.fpago_texto = pro.fpago or ''
+            pro.numconf_texto = pro.numconf or ''
+            pro.medioconf_texto = pro.medioconf or ''
+            pro.fechaconf_texto = pro.fechaconf.strftime('%d/%m/%Y') if pro.fechaconf else ''
+            pro.mandante_texto = cot.idcliente.razonsocial if cot and cot.idcliente else ''
+            pro.contacto_mandante_texto = cot.idcontacto.nombrecontacto if cot and cot.idcontacto else ''
+            pro.email_mandante_texto = cot.idcontacto.email if cot and cot.idcontacto else ''
+            pro.telefono_mandante_texto = cot.idcontacto.telefono if cot and cot.idcontacto else ''
+            pro.cliente_texto = pro.idcliente.razonsocial if pro.idcliente else ''
+            pro.rut_texto = ''
+            if pro.idcliente and pro.idcliente.rut is not None and pro.idcliente.dvrut:
+                pro.rut_texto = f"{int(pro.idcliente.rut)}-{pro.idcliente.dvrut}"
+            pro.cliente_factura_texto = pro.idcontactofacturacion.nombrecontacto if pro.idcontactofacturacion else ''
+            pro.cargo_factura_texto = pro.idcontactofacturacion.cargo if pro.idcontactofacturacion else ''
+            pro.email_factura_texto = pro.idcontactofacturacion.email if pro.idcontactofacturacion else ''
+            pro.telefono_factura_texto = pro.idcontactofacturacion.telefono if pro.idcontactofacturacion else ''
+            pro.estado_texto = pro.estadoproyecto.nombre if pro.estadoproyecto else ''
+            pro.estado_color = pro.estadoproyecto.color if pro.estadoproyecto else ''
+            pro.estado_forcolor = pro.estadoproyecto.forcolor if pro.estadoproyecto else ''
+            pro.region_texto = regiones.get(cot.codregion, '') if cot else ''
+            fecha_ult_seg = ultimas_fechas_seg.get(str(pro.idproyecto))
+            if fecha_ult_seg:
+                pro.ultimoseg_texto = fecha_ult_seg.strftime('%d/%m/%Y')
+            elif pro.fechaultseg:
+                pro.ultimoseg_texto = pro.fechaultseg.strftime('%d/%m/%Y')
+            elif pro.fecharegistro:
+                pro.ultimoseg_texto = pro.fecharegistro.strftime('%d/%m/%Y')
+            else:
+                pro.ultimoseg_texto = ''
+            pro.valor_texto = formatear_numero_cl(pro.valor)
+            pro.x_facturar_texto = format(saldos_por_facturar.get(str(pro.idproyecto), 0), '.2f')
+            pro.conhes_texto = pro.conhes or ''
+            pro.coneepp_texto = pro.coneepp or ''
+            pro.conotro_texto = pro.conotro or ''
+            pro.seg_texto = seguimientos.get(str(pro.idproyecto), '')
+
+        contexto["proyecto"] = proyectos
+        contexto["estados_proyecto"] = estados_proyecto
+        contexto["mandantes"] = clientes_proyecto
+        contexto["clientes"] = clientes_proyecto
+        contexto["filtro_estado"] = estado_id
+        contexto["filtro_mandante"] = mandante_id
+        contexto["filtro_cliente"] = cliente_id
+        contexto["filtro_numero_proyecto"] = numero_proyecto
+
+        contexto.update({
+            "encabezado": "DUCTO",
+            "titulo": "PROYECTOS SEGUIMIENTO",
+            "menu": "Proyectos",
+            "submenu": "Seguimiento de Proyectos",
+        })
+        return contexto
+
+
+@login_required
+@require_POST
+def guardar_seguimiento_proyecto(request):
+    idproyecto = request.POST.get('idproyecto')
+    nuevo_estado_id = request.POST.get('nuevo_estado')
+    comentario = (request.POST.get('comentario') or '').strip()
+
+    if not idproyecto:
+        messages.error(request, 'No se recibió el proyecto.')
+        return redirect('seguimiento_proyectos')
+
+    proyecto = get_object_or_404(Proyecto, pk=idproyecto)
+
+    if nuevo_estado_id:
+        proyecto.estadoproyecto_id = nuevo_estado_id
+        proyecto.save(update_fields=['estadoproyecto'])
+
+    if comentario:
+        exec_non_query(
+            "INSERT INTO [ducto].[ProyectoFacturarSeg] (IdProyecto, Tabla, Comentario) VALUES (?, ?, ?)",
+            (idproyecto, 1, comentario),
+        )
+
+    messages.success(request, 'Seguimiento guardado correctamente.')
+    return redirect('seguimiento_proyectos')
 
 
 class Vista2(LoginRequiredMixin,TemplateView):

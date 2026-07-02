@@ -1,0 +1,300 @@
+{% extends 'components/base.html' %}
+{% load humanize %}
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-scroll-x { overflow-x: auto; }
+    #basic-datatable th, #basic-datatable td { vertical-align: middle; }
+    #basic-datatable th { white-space: normal; }
+    #basic-datatable td { white-space: normal; }
+    .col-numproyecto { min-width: 95px; max-width: 110px; }
+    .col-formapago { min-width: 120px; max-width: 160px; }
+    .col-nombreproyecto { min-width: 220px; max-width: 320px; }
+    .col-mandante { min-width: 180px; max-width: 260px; }
+    .col-estado { min-width: 120px; max-width: 160px; }
+    .col-cliente { min-width: 180px; max-width: 260px; }
+    .col-ultimo-seg { min-width: 110px; max-width: 130px; }
+    .estado-row { border-left: 6px solid transparent; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ encabezado }}</h1>
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="#">{{ menu }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ submenu }}</li>
+        </ol>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-12 col-md-3">
+                <label for="estado" class="form-label mb-1">Estado del proyecto</label>
+                <select name="estado" id="estado" class="form-select">
+                    <option value="">Todos</option>
+                    {% for estado in estados_proyecto %}
+                        <option value="{{ estado.id }}" {% if filtro_estado == estado.id|stringformat:"s" %}selected{% endif %}>{{ estado.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <label for="mandante" class="form-label mb-1">Mandante</label>
+                <select name="mandante" id="mandante" class="form-select">
+                    <option value="">Todos</option>
+                    {% for cliente in mandantes %}
+                        <option value="{{ cliente.idcliente }}" {% if filtro_mandante == cliente.idcliente|stringformat:"s" %}selected{% endif %}>{{ cliente.razonsocial }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <label for="cliente" class="form-label mb-1">Cliente</label>
+                <select name="cliente" id="cliente" class="form-select">
+                    <option value="">Todos</option>
+                    {% for cliente in clientes %}
+                        <option value="{{ cliente.idcliente }}" {% if filtro_cliente == cliente.idcliente|stringformat:"s" %}selected{% endif %}>{{ cliente.razonsocial }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-2">
+                <label for="numero_proyecto" class="form-label mb-1">N° Proyecto</label>
+                <input type="text" name="numero_proyecto" id="numero_proyecto" class="form-control" value="{{ filtro_numero_proyecto }}" placeholder="Buscar">
+            </div>
+            <div class="col-12 col-md-1 d-grid">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive table-scroll-x">
+        <table class="table table-bordered table-striped nowrap w-100" id="basic-datatable">
+            <thead>
+                <tr align="center">
+                    <th>VISOR</th>
+                    <th class="col-numproyecto">N° Proyecto</th>
+                    <th>Fecha Cot.</th>
+                    <th class="col-nombreproyecto">Nombre Proyecto</th>
+                    <th class="col-formapago">Forma de Pago</th>
+                    <th class="col-mandante">Mandante</th>
+                    <th class="col-ultimo-seg">Fec. Ultimo Seg.</th>
+                    <th class="col-estado">Estado</th>
+                    <th class="col-cliente">Cliente</th>
+                    <th>Por Fact.</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in proyecto %}
+                <tr class="estado-row" style="background-color: {{ c.estado_color|default:'#ffffff' }} !important; color: {{ c.estado_forcolor|default:'#000000' }} !important;">
+                    <td class="text-center">
+                    <button type="button"
+                            class="btn btn-primary btn-sm btn-visor-proyecto"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modalVisor"
+                            data-idproyecto="{{ c.idproyecto }}"
+                            data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}"
+                            data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}"
+                            data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}"
+                            data-moneda="{{ c.moneda_texto|default:''|escape }}"
+                            data-valor="{{ c.valor_texto|default:''|escape }}"
+                            data-mandante="{{ c.mandante_texto|default:''|escape }}"
+                            data-contacto-mandante="{{ c.contacto_mandante_texto|default:''|escape }}"
+                            data-email-mandante="{{ c.email_mandante_texto|default:''|escape }}"
+                            data-telefono-mandante="{{ c.telefono_mandante_texto|default:''|escape }}"
+                            data-cliente="{{ c.cliente_texto|default:''|escape }}"
+                            data-rut="{{ c.rut_texto|default:''|escape }}"
+                            data-contacto-fact="{{ c.cliente_factura_texto|default:''|escape }}"
+                            data-cargo-fact="{{ c.cargo_factura_texto|default:''|escape }}"
+                            data-email-fact="{{ c.email_factura_texto|default:''|escape }}"
+                            data-telefono-fact="{{ c.telefono_factura_texto|default:''|escape }}"
+                            data-fpago="{{ c.fpago_texto|default:''|escape }}"
+                            data-numconf="{{ c.numconf_texto|default:''|escape }}"
+                            data-medioconf="{{ c.medioconf_texto|default:''|escape }}"
+                            data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}"
+                            data-estado-id="{{ c.estado_id|default:'' }}"
+                            data-estado-texto="{{ c.estado_texto|default:''|escape }}"
+                            data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}"
+                            data-fechaprimerenvio="{{ c.fechaprimereenvio|date:'d/m/Y'|default:'' }}"
+                            data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}"
+                            data-region="{{ c.region_texto|default:''|escape }}"
+                            data-conhes="{{ c.conhes_texto|default:''|escape }}"
+                            data-coneepp="{{ c.coneepp_texto|default:''|escape }}"
+                            data-conotro="{{ c.conotro_texto|default:''|escape }}"
+                            data-seguimiento="{{ c.seg_texto|default:''|escape }}"
+                            data-xfacturar="{{ c.x_facturar_texto|default:''|escape }}">
+                            <i class="fa fa-address-card-o"></i>
+                        </button>
+                    </td>
+                    <td class="text-muted fs-12 fw-semibold col-numproyecto">{{ c.idproyecto }}</td>
+                    <td class="mb-0 fs-12 fw-semibold">{{ c.fecha_cot_texto }}</td>
+                    <td class="mb-0 fs-12 fw-semibold col-nombreproyecto">{{ c.nombreproyecto }}</td>
+                    <td class="mb-0 fs-12 fw-semibold col-formapago">{{ c.fpago_texto }}</td>
+                    <td class="mb-0 fs-12 fw-semibold col-mandante">{{ c.mandante_texto }}</td>
+                    <td class="mb-0 fs-12 fw-semibold col-ultimo-seg">
+                        <button type="button" class="btn btn-link p-0 btn-visor-proyecto" data-bs-toggle="modal" data-bs-target="#modalVisor" data-idproyecto="{{ c.idproyecto }}" data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}" data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}" data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}" data-moneda="{{ c.moneda_texto|default:''|escape }}" data-valor="{{ c.valor_texto|default:''|escape }}" data-mandante="{{ c.mandante_texto|default:''|escape }}" data-contacto-mandante="{{ c.contacto_mandante_texto|default:''|escape }}" data-email-mandante="{{ c.email_mandante_texto|default:''|escape }}" data-telefono-mandante="{{ c.telefono_mandante_texto|default:''|escape }}" data-cliente="{{ c.cliente_texto|default:''|escape }}" data-rut="{{ c.rut_texto|default:''|escape }}" data-contacto-fact="{{ c.cliente_factura_texto|default:''|escape }}" data-cargo-fact="{{ c.cargo_factura_texto|default:''|escape }}" data-email-fact="{{ c.email_factura_texto|default:''|escape }}" data-telefono-fact="{{ c.telefono_factura_texto|default:''|escape }}" data-fpago="{{ c.fpago_texto|default:''|escape }}" data-numconf="{{ c.numconf_texto|default:''|escape }}" data-medioconf="{{ c.medioconf_texto|default:''|escape }}" data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}" data-estado-id="{{ c.estado_id|default:'' }}" data-estado-texto="{{ c.estado_texto|default:''|escape }}" data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}" data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}" data-region="{{ c.region_texto|default:''|escape }}" data-conhes="{{ c.conhes_texto|default:''|escape }}" data-coneepp="{{ c.coneepp_texto|default:''|escape }}" data-conotro="{{ c.conotro_texto|default:''|escape }}" data-seguimiento="{{ c.seg_texto|default:''|escape }}" data-xfacturar="{{ c.x_facturar_texto|default:''|escape }}">{{ c.ultimoseg_texto }}</button>
+                    </td>
+                    <td class="fs-11 fw-semibold col-estado">{{ c.estado_texto }}</td>
+                    <td class="mb-0 fs-12 fw-semibold col-cliente">{{ c.cliente_texto }}</td>
+                    <td align="right" class="text-muted fs-12 fw-semibold">{{ c.x_facturar_texto }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted">No hay proyectos para mostrar.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="modalVisor" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">VISOR</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" action="{% url 'guardar_seguimiento_proyecto' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="idproyecto" id="visor_idproyecto">
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-8">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">N° Proyecto</label>
+                                    <input type="text" class="form-control" id="visor_numero" readonly>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Cotización</label>
+                                    <input type="text" class="form-control" id="visor_cotizacion" readonly>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Fecha Cot.</label>
+                                    <input type="text" class="form-control" id="visor_fechacot" readonly>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Nombre Proyecto</label>
+                                    <input type="text" class="form-control" id="visor_nombre" readonly>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Moneda</label>
+                                    <input type="text" class="form-control" id="visor_moneda" readonly>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Valor Proyecto</label>
+                                    <input type="text" class="form-control" id="visor_valor" readonly>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Mandante</label>
+                                    <input type="text" class="form-control" id="visor_mandante" readonly>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Forma de Pago</label>
+                                    <input type="text" class="form-control" id="visor_fpago" readonly>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Num. CONF</label>
+                                    <input type="text" class="form-control" id="visor_numconf" readonly>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Ultimo Seguimiento</label>
+                                    <input type="text" class="form-control" id="visor_ultimoseg" readonly>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Seguimiento histórico</label>
+                                    <textarea id="visor_seguimiento_hist" class="form-control" rows="8" readonly></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <div class="mb-3">
+                                <label class="form-label">Estado actual</label>
+                                <input type="text" class="form-control mb-2" id="visor_estado_actual" readonly>
+                                <select name="nuevo_estado" id="visor_nuevo_estado" class="form-select">
+                                    <option value="">Mantener estado</option>
+                                    {% for estado in estados_proyecto %}
+                                        <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">x Facturar</label>
+                                <input type="text" class="form-control" id="visor_xfacturar" readonly>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Comentario</label>
+                            <textarea name="comentario" id="visor_comentario" class="form-control" rows="4" placeholder="Escribe un comentario"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer px-0 pb-0">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    if ($.fn.DataTable.isDataTable('#basic-datatable')) {
+        $('#basic-datatable').DataTable().destroy();
+    }
+
+    $('#basic-datatable').DataTable({
+        scrollX: true,
+        autoWidth: false,
+        pageLength: 10,
+        lengthMenu: [10, 25, 50, 100],
+        order: [],
+        language: {
+            search: "Buscar:",
+            infoEmpty: "Mostrando 0 a 0 de 0 entradas",
+            info: "Mostrando _START_ a _END_ de _TOTAL_ entradas",
+            infoFiltered: "(Filtrado de _MAX_ entradas totales)",
+            lengthMenu: "Mostrar _MENU_ entradas",
+            loadingRecords: "Cargando...",
+            processing: "Procesando...",
+            zeroRecords: "No se encontraron resultados",
+            paginate: {
+                first: "Primero",
+                last: "Último",
+                next: "Siguiente",
+                previous: "Anterior"
+            }
+        }
+    });
+
+    $('#basic-datatable').on('click', '.btn-visor-proyecto', function() {
+        const btn = $(this);
+        const numeroFila = btn.closest('tr').find('td').eq(1).text().trim();
+        $('#visor_idproyecto').val(btn.data('idproyecto'));
+        $('#visor_numero').val(numeroFila);
+        $('#visor_cotizacion').val(btn.data('cotizacion'));
+        $('#visor_nombre').val(btn.data('nombreproyecto'));
+        $('#visor_mandante').val(btn.data('mandante'));
+        $('#visor_cliente').val(btn.data('cliente'));
+        $('#visor_fpago').val(btn.data('fpago'));
+        $('#visor_numconf').val(btn.data('numconf'));
+        $('#visor_estado_actual').val(btn.data('estado-texto'));
+        $('#visor_nuevo_estado').val(btn.data('estado-id'));
+        $('#visor_ultimoseg').val(btn.data('ultimoseg'));
+        $('#visor_xfacturar').val(btn.data('xfacturar'));
+        $('#visor_seguimiento_hist').val(btn.data('seguimiento') || '');
+        $('#visor_comentario').val('');
+    });
+});
+</script>
+{% endblock %}

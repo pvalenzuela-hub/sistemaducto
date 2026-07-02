@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import Vista1, Vista2, Vista3, VisorComentario
+from .views import Vista1, Vista2, Vista3, VistaSeguimiento, VisorComentario
 
 urlpatterns = [
     path('cotizaciones/', views.cotizaciones_home, name='cotizaciones_home'),
@@ -23,6 +23,8 @@ urlpatterns = [
     path('cotizaciones/api/forma-pago/', views.api_cotizaciones_formapago, name='api_cotizaciones_formapago'),
 
     path('terminados/', Vista1.as_view(), name='vista1'),
+    path('proyectos/seguimiento/', VistaSeguimiento.as_view(), name='seguimiento_proyectos'),
+    path('proyectos/seguimiento/guardar/', views.guardar_seguimiento_proyecto, name='guardar_seguimiento_proyecto'),
     path('vistobueno/', Vista2.as_view(), name='vista2'),
     path('desarrollo/', Vista3.as_view(), name='vista3'),
 
