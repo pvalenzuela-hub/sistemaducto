@@ -154,6 +154,84 @@ def _saldo_por_facturar_proyectos(ids_proyecto):
     return {str(idproyecto): saldo for idproyecto, saldo in filas}
 
 
+def _saldo_por_facturar_porcentaje(proyectos):
+    proyectos = list(proyectos or [])
+    if not proyectos:
+        return {}
+
+    ids_proyecto = [str(p.idproyecto) for p in proyectos if getattr(p, 'idproyecto', None) is not None]
+    if not ids_proyecto:
+        return {}
+
+    placeholders = ",".join(["?"] * len(ids_proyecto))
+    filas = exec_query(
+        f"""
+            SELECT IdProyecto, PorcFact, ValorTotal
+            FROM Factura
+            WHERE IdProyecto IN ({placeholders})
+              AND ISNULL(Estado, 1) <> 9
+        """,
+        tuple(ids_proyecto)
+    )
+
+    por_proyecto = defaultdict(Decimal)
+    for idproyecto, porc_fact, valor_total in filas:
+        if porc_fact is not None:
+            por_proyecto[str(idproyecto)] += Decimal(str(porc_fact))
+        elif valor_total is not None:
+            total_proyecto = next((Decimal(str(p.valor or 0)) for p in proyectos if str(p.idproyecto) == str(idproyecto)), Decimal('0'))
+            if total_proyecto > 0:
+                por_proyecto[str(idproyecto)] += (Decimal(str(valor_total)) / total_proyecto) * Decimal('100')
+
+    return {pid: max(Decimal('0'), Decimal('100') - total) for pid, total in por_proyecto.items()}
+
+
+def _facturacion_completa_proyecto(proyecto):
+    return all([
+        proyecto.idcliente_id,
+        proyecto.numconf,
+        proyecto.medioconf,
+        proyecto.fechaconf,
+        proyecto.conhes is not None,
+        proyecto.coneepp is not None,
+        proyecto.conotro is not None,
+    ])
+
+
+def _valor_uf_por_fecha(fecha):
+    if not fecha:
+        return None
+    row = tValorUF.objects.filter(Fecha=fecha).values('ValorUF').first()
+    return row['ValorUF'] if row else None
+
+
+def _siguiente_num_factura():
+    ultima = Factura.objects.order_by('-numfactura').first()
+    return (int(ultima.numfactura) + 1) if ultima else 1
+
+
+def _parse_date_ddmmyyyy(value):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, '%d/%m/%Y').date()
+    except ValueError:
+        return None
+
+
+@login_required
+def api_valor_uf_por_fecha(request):
+    fecha_txt = (request.GET.get('fecha') or '').strip()
+    fecha = _parse_date_ddmmyyyy(fecha_txt)
+    if not fecha:
+        return JsonResponse({'ok': False, 'message': 'Fecha inválida.'}, status=400)
+
+    row = tValorUF.objects.filter(Fecha=fecha).values('ValorUF').first()
+    if not row:
+        return JsonResponse({'ok': False, 'message': 'No existe UF para esa fecha.'}, status=404)
+    return JsonResponse({'ok': True, 'valoruf': row['ValorUF']})
+
+
 def _estado_cotizacion_class(nombre):
     texto = (nombre or '').lower()
     if 'aprob' in texto:
@@ -1304,15 +1382,23 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         proyectos_qs = proyectos_qs.order_by('idcotizacion__codregion', 'idproyecto')
         proyectos = list(proyectos_qs)
 
-        estados_proyecto = estadoproyecto.objects.order_by('nombre')
+        estados_proyecto = estadoproyecto.objects.order_by('id')
+        monedas = MonedaCotizacion.objects.order_by('nombre')
+        formas_pago = TFpago.objects.all().order_by('idfpago')
+        medios_conf = [
+            'Orden de Compra', 'Contrato', 'eMail', 'Orden de Trabajo', 'Carta Adjudicación', '........'
+        ]
+        booleanos_si_no = ['NO', 'SI']
+        valores_uf = tValorUF.objects.order_by('-Fecha')
         clientes_proyecto = Cliente.objects.filter(
             Q(proyectos_principales__isnull=False) | Q(proyectos_secundarios__isnull=False)
         ).distinct().order_by('razonsocial')
+        contactos_facturacion = Clientecontacto.objects.select_related('idcliente').order_by('nombrecontacto')
 
         regiones = {r.codregion: r.descrip for r in Tregion.objects.all()}
         seguimientos = _texto_seguimiento_proyectos([pro.idproyecto for pro in proyectos])
         ultimas_fechas_seg = _ultima_fecha_seguimiento_proyectos([pro.idproyecto for pro in proyectos])
-        saldos_por_facturar = _saldo_por_facturar_proyectos([pro.idproyecto for pro in proyectos])
+        saldos_por_facturar = _saldo_por_facturar_porcentaje(proyectos)
 
         for pro in proyectos:
             cot = pro.idcotizacion
@@ -1329,6 +1415,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
             pro.medioconf_texto = pro.medioconf or ''
             pro.fechaconf_texto = pro.fechaconf.strftime('%d/%m/%Y') if pro.fechaconf else ''
             pro.mandante_texto = cot.idcliente.razonsocial if cot and cot.idcliente else ''
+            pro.mandante_comentario_texto = cot.idcliente.comentario if cot and cot.idcliente and cot.idcliente.comentario else ''
             pro.contacto_mandante_texto = cot.idcontacto.nombrecontacto if cot and cot.idcontacto else ''
             pro.email_mandante_texto = cot.idcontacto.email if cot and cot.idcontacto else ''
             pro.telefono_mandante_texto = cot.idcontacto.telefono if cot and cot.idcontacto else ''
@@ -1336,6 +1423,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
             pro.rut_texto = ''
             if pro.idcliente and pro.idcliente.rut is not None and pro.idcliente.dvrut:
                 pro.rut_texto = f"{int(pro.idcliente.rut)}-{pro.idcliente.dvrut}"
+            pro.comentario_cliente_texto = pro.idcliente.comentario if pro.idcliente else ''
             pro.cliente_factura_texto = pro.idcontactofacturacion.nombrecontacto if pro.idcontactofacturacion else ''
             pro.cargo_factura_texto = pro.idcontactofacturacion.cargo if pro.idcontactofacturacion else ''
             pro.email_factura_texto = pro.idcontactofacturacion.email if pro.idcontactofacturacion else ''
@@ -1354,16 +1442,28 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
             else:
                 pro.ultimoseg_texto = ''
             pro.valor_texto = formatear_numero_cl(pro.valor)
-            pro.x_facturar_texto = format(saldos_por_facturar.get(str(pro.idproyecto), 0), '.2f')
+            pro.valor_raw = pro.valor or 0
+            saldo = saldos_por_facturar.get(str(pro.idproyecto))
+            pro.x_facturar_texto = format(100 if saldo is None else saldo, '.2f')
             pro.conhes_texto = pro.conhes or ''
             pro.coneepp_texto = pro.coneepp or ''
             pro.conotro_texto = pro.conotro or ''
             pro.seg_texto = seguimientos.get(str(pro.idproyecto), '')
+            pro.facturacion_lista = _facturacion_completa_proyecto(pro)
 
         contexto["proyecto"] = proyectos
         contexto["estados_proyecto"] = estados_proyecto
         contexto["mandantes"] = clientes_proyecto
         contexto["clientes"] = clientes_proyecto
+        contexto["contactos_facturacion"] = contactos_facturacion
+        contexto["monedas"] = monedas
+        contexto["formas_pago"] = formas_pago
+        contexto["medios_conf"] = medios_conf
+        contexto["booleanos_si_no"] = booleanos_si_no
+        contexto["valores_uf"] = valores_uf
+        contexto["detalles_factura"] = DetalleFactura.objects.all().order_by('nombre')
+        contexto["siguiente_num_factura"] = _siguiente_num_factura()
+        contexto["mostrar_crear_factura"] = False
         contexto["filtro_estado"] = estado_id
         contexto["filtro_mandante"] = mandante_id
         contexto["filtro_cliente"] = cliente_id
@@ -1390,9 +1490,14 @@ def guardar_seguimiento_proyecto(request):
         return redirect('seguimiento_proyectos')
 
     proyecto = get_object_or_404(Proyecto, pk=idproyecto)
+    estado_anterior = proyecto.estadoproyecto_id
+
+    if nuevo_estado_id and int(nuevo_estado_id) != estado_anterior and not comentario:
+        messages.error(request, 'Debe ingresar comentario del seguimiento.')
+        return redirect('seguimiento_proyectos')
 
     if nuevo_estado_id:
-        proyecto.estadoproyecto_id = nuevo_estado_id
+        proyecto.estadoproyecto_id = int(nuevo_estado_id)
         proyecto.save(update_fields=['estadoproyecto'])
 
     if comentario:
@@ -1402,6 +1507,107 @@ def guardar_seguimiento_proyecto(request):
         )
 
     messages.success(request, 'Seguimiento guardado correctamente.')
+    return redirect('seguimiento_proyectos')
+
+
+@login_required
+@require_POST
+def guardar_datos_facturacion_proyecto(request):
+    proyecto = get_object_or_404(Proyecto, pk=request.POST.get('idproyecto'))
+
+    proyecto.idcliente_id = request.POST.get('idcliente') or None
+    proyecto.moneda = request.POST.get('moneda') or None
+    valor = request.POST.get('valor')
+    proyecto.valor = float(valor) if valor not in (None, '') else None
+    proyecto.medioconf = request.POST.get('medioconf') or None
+    proyecto.fpago = request.POST.get('fpago') or None
+    proyecto.numconf = request.POST.get('numconf') or None
+    fechaconf = request.POST.get('fechaconf')
+    proyecto.fechaconf = datetime.strptime(fechaconf, '%d/%m/%Y').date() if fechaconf else None
+    proyecto.conhes = request.POST.get('conhes') or None
+    proyecto.coneepp = request.POST.get('coneepp') or None
+    proyecto.conotro = request.POST.get('conotro') or None
+    proyecto.idcontactofacturacion_id = request.POST.get('idcontactofacturacion') or None
+    proyecto.emailcontactofacturacion = request.POST.get('emailcontactofacturacion') or None
+    proyecto.fechaact = timezone.now().date()
+    proyecto.estadoproyecto_id = 2
+    proyecto.save()
+
+    comentario = (request.POST.get('comentario') or '').strip()
+    if comentario:
+        exec_non_query(
+            "INSERT INTO [ducto].[ProyectoFacturarSeg] (IdProyecto, Tabla, Comentario) VALUES (?, ?, ?)",
+            (proyecto.idproyecto, 1, comentario),
+        )
+
+    messages.success(request, 'Datos de facturación guardados correctamente.')
+    return redirect('seguimiento_proyectos')
+
+
+@login_required
+@require_POST
+def crear_factura_proyecto(request):
+    proyecto = get_object_or_404(Proyecto.objects.select_related('idcliente', 'idcontactofacturacion', 'estadoproyecto'), pk=request.POST.get('idproyecto'))
+    if not _facturacion_completa_proyecto(proyecto):
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'ok': False, 'message': 'El proyecto no tiene datos de facturación completos.'}, status=400)
+        messages.error(request, 'El proyecto no tiene datos de facturación completos.')
+        return redirect('seguimiento_proyectos')
+
+    numfactura = request.POST.get('numfactura')
+    try:
+        numfactura_int = int(str(numfactura).strip())
+    except (TypeError, ValueError):
+        numfactura_int = None
+    if not numfactura_int or numfactura_int <= 0:
+        msg = 'N° de Factura no válido.'
+        return JsonResponse({'ok': False, 'message': msg}, status=400) if request.headers.get('x-requested-with') == 'XMLHttpRequest' else redirect('seguimiento_proyectos')
+    if Factura.objects.filter(numfactura=numfactura).exists():
+        msg = f'Factura N° {numfactura} ya existe.'
+        return JsonResponse({'ok': False, 'message': msg}, status=400) if request.headers.get('x-requested-with') == 'XMLHttpRequest' else redirect('seguimiento_proyectos')
+
+    detalle_id = request.POST.get('detallefactura')
+    detalle = DetalleFactura.objects.filter(pk=detalle_id).first()
+    porc_fact = request.POST.get('porcfact')
+    vencimiento = request.POST.get('vencimiento') or 30
+    fecha_emision = _parse_date_ddmmyyyy(request.POST.get('fechaemision')) or timezone.now().date()
+    fecha_uf = _parse_date_ddmmyyyy(request.POST.get('fecha_uf')) or fecha_emision
+    valor_uf = _valor_uf_por_fecha(fecha_uf)
+    descripcion = (request.POST.get('descripcionfactura') or '').strip()
+    comentario = (request.POST.get('comentario') or '').strip()
+    detalle_texto = detalle.nombre if detalle else (proyecto.idcotizacion.nombreproyecto if proyecto.idcotizacion else '')
+    if descripcion:
+        detalle_texto = descripcion
+    if comentario:
+        detalle_texto = f"{detalle_texto} | {comentario}"
+    monto_total = None
+    try:
+        monto_total = float(proyecto.valor or 0) * (float(porc_fact) / 100.0) if porc_fact else None
+    except (TypeError, ValueError):
+        monto_total = None
+    factura = Factura.objects.create(
+        numfactura=numfactura_int,
+        fechaemision=fecha_emision,
+        idcliente=proyecto.idcliente,
+        idproyecto=proyecto,
+        numhes_eepp=request.POST.get('numhes_eepp') or proyecto.numconf,
+        fechahes_eepp=_parse_date_ddmmyyyy(request.POST.get('fechahes_eepp')) or proyecto.fechaconf,
+        valortotal=monto_total,
+        valoruf=valor_uf,
+        valortotalpesos=monto_total * float(valor_uf) if (monto_total is not None and valor_uf is not None) else None,
+        porcfact=float(porc_fact) if porc_fact else None,
+        estado=1,
+        detalle=detalle_texto[:255],
+        idcontacto=proyecto.idcontactofacturacion,
+        moneda=proyecto.moneda,
+        montomonorig=proyecto.valor,
+        fechaact=timezone.now(),
+        fecharegistro=timezone.now(),
+        vencimiento=int(vencimiento) if vencimiento else 30,
+    )
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse({'ok': True, 'message': f'Factura creada: {factura.numfactura}', 'numfactura': str(factura.numfactura)})
+    messages.success(request, f'Factura creada: {factura.numfactura}')
     return redirect('seguimiento_proyectos')
 
 

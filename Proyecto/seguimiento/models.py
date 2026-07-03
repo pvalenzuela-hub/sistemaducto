@@ -65,15 +65,15 @@ class Tcomppago(models.Model):
 
 
 class TFpago(models.Model):
-    idfpago = models.AutoField(db_column='IdFpago', primary_key=True)
-    codfp = models.IntegerField(db_column='CodFP', null=True, blank=True)
+    idfpago = models.IntegerField(db_column='CodFP', primary_key=True)
+    porcentaje = models.CharField(db_column='Porcentaje', max_length=50, null=True, blank=True)
     concepto = models.CharField(db_column='Concepto', max_length=255)
-    regionrm = models.IntegerField(db_column='RegionRM', null=True, blank=True)
+    regionrm = models.BooleanField(db_column='RegionRM', null=True, blank=True)
 
     class Meta:
         managed = False
         db_table = 'tFpago'
-        ordering = ['codfp']
+        ordering = ['idfpago']
 
     def __str__(self):
         return self.concepto
@@ -388,6 +388,58 @@ class estadoproyecto(models.Model):
     
     class Meta:
         db_table = 'Estadoproyecto'
+
+
+class Factura(models.Model):
+    idfactura = models.AutoField(db_column='IdFactura', primary_key=True)
+    numfactura = models.DecimalField(db_column='NumFactura', max_digits=10, decimal_places=0)
+    fechaemision = models.DateField(db_column='FechaEmision', null=True, blank=True)
+    idcliente = models.ForeignKey(Cliente, db_column='IdCliente', on_delete=models.DO_NOTHING, null=True, blank=True)
+    idproyecto = models.ForeignKey('Proyecto', db_column='IdProyecto', on_delete=models.DO_NOTHING, null=True, blank=True)
+    numhes_eepp = models.CharField(db_column='NumHES_EEPP', max_length=50, null=True, blank=True)
+    fechahes_eepp = models.DateField(db_column='FechaHES_EEPP', null=True, blank=True)
+    valortotal = models.FloatField(db_column='ValorTotal', null=True, blank=True)
+    valoruf = models.DecimalField(db_column='ValorUF', max_digits=18, decimal_places=6, null=True, blank=True)
+    valortotalpesos = models.FloatField(db_column='ValorTotalPesos', null=True, blank=True)
+    porcfact = models.FloatField(db_column='PorcFact', null=True, blank=True)
+    estado = models.IntegerField(db_column='Estado', null=True, blank=True)
+    fechapago = models.DateField(db_column='FechaPago', null=True, blank=True)
+    detalle = models.CharField(db_column='Detalle', max_length=255, null=True, blank=True)
+    idcontacto = models.ForeignKey(Clientecontacto, db_column='IdContacto', on_delete=models.DO_NOTHING, null=True, blank=True)
+    moneda = models.CharField(db_column='Moneda', max_length=10, null=True, blank=True)
+    montomonorig = models.FloatField(db_column='MontoMonOrig', null=True, blank=True)
+    fechaact = models.DateTimeField(db_column='FechaACT', null=True, blank=True)
+    correo_1 = models.BooleanField(db_column='Correo_1', null=True, blank=True)
+    fechaenviocorreo_1 = models.DateField(db_column='FechaEnvioCorreo_1', null=True, blank=True)
+    fechapendiente = models.DateTimeField(db_column='FechaPendiente', null=True, blank=True)
+    marca = models.IntegerField(db_column='Marca', null=True, blank=True)
+    vencimiento = models.IntegerField(db_column='Vencimiento', null=True, blank=True)
+    pruebasrobot = models.CharField(db_column='pruebasRobot', max_length=255, null=True, blank=True)
+    alertaprovisoria = models.BooleanField(db_column='Alerta_Provisoria', null=True, blank=True)
+    robotpendientepago = models.BooleanField(db_column='RobotPendientePago', null=True, blank=True)
+    fecharegistro = models.DateTimeField(db_column='FechaRegistro', null=True, blank=True)
+    correoaviso_pago = models.BooleanField(db_column='CorreoAvisoPago', null=True, blank=True)
+    fechaavisopago = models.DateTimeField(db_column='FechaAvisoPago', null=True, blank=True)
+    fechasegeepp = models.DateField(db_column='FechaSegEEPP', null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'Factura'
+
+    def __str__(self):
+        return f"Factura {self.numfactura}"
+
+
+class DetalleFactura(models.Model):
+    iddetallefactura = models.AutoField(db_column='Id', primary_key=True)
+    nombre = models.CharField(db_column='Nombre', max_length=100)
+
+    class Meta:
+        db_table = 'detallefactura'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
 
 
 class tValorUF(models.Model):

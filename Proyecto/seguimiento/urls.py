@@ -25,6 +25,9 @@ urlpatterns = [
     path('terminados/', Vista1.as_view(), name='vista1'),
     path('proyectos/seguimiento/', VistaSeguimiento.as_view(), name='seguimiento_proyectos'),
     path('proyectos/seguimiento/guardar/', views.guardar_seguimiento_proyecto, name='guardar_seguimiento_proyecto'),
+    path('proyectos/seguimiento/guardar-facturacion/', views.guardar_datos_facturacion_proyecto, name='guardar_datos_facturacion_proyecto'),
+    path('proyectos/seguimiento/crear-factura/', views.crear_factura_proyecto, name='crear_factura_proyecto'),
+    path('proyectos/seguimiento/api/valor-uf/', views.api_valor_uf_por_fecha, name='api_valor_uf_por_fecha'),
     path('vistobueno/', Vista2.as_view(), name='vista2'),
     path('desarrollo/', Vista3.as_view(), name='vista3'),
 
