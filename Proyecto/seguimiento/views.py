@@ -1485,36 +1485,62 @@ def guardar_seguimiento_proyecto(request):
     idproyecto = request.POST.get('idproyecto')
     nuevo_estado_id = request.POST.get('nuevo_estado')
     comentario = (request.POST.get('comentario') or '').strip()
+    filtros = {
+        'estado': (request.POST.get('filtro_estado') or '').strip(),
+        'mandante': (request.POST.get('filtro_mandante') or '').strip(),
+        'cliente': (request.POST.get('filtro_cliente') or '').strip(),
+        'numero_proyecto': (request.POST.get('filtro_numero_proyecto') or '').strip(),
+    }
+
+    def _redirigir_con_filtros(mensaje=None, nivel='success'):
+        if mensaje:
+            getattr(messages, nivel)(request, mensaje)
+        params = {k: v for k, v in filtros.items() if v}
+        return redirect(f"{reverse('seguimiento_proyectos')}?{urlencode(params)}" if params else reverse('seguimiento_proyectos'))
 
     if not idproyecto:
-        messages.error(request, 'No se recibió el proyecto.')
-        return redirect('seguimiento_proyectos')
+        return _redirigir_con_filtros('No se recibió el proyecto.', 'error')
 
     proyecto = get_object_or_404(Proyecto, pk=idproyecto)
     estado_anterior = proyecto.estadoproyecto_id
 
     if nuevo_estado_id and int(nuevo_estado_id) != estado_anterior and not comentario:
-        messages.error(request, 'Debe ingresar comentario del seguimiento.')
-        return redirect('seguimiento_proyectos')
+        return _redirigir_con_filtros('Debe ingresar comentario del seguimiento.', 'error')
 
     if nuevo_estado_id:
         proyecto.estadoproyecto_id = int(nuevo_estado_id)
-        proyecto.save(update_fields=['estadoproyecto'])
+        proyecto.estado = int(nuevo_estado_id)
+        proyecto.save(update_fields=['estadoproyecto', 'estado'])
 
     if comentario:
-        exec_non_query(
-            "INSERT INTO [ducto].[ProyectoFacturarSeg] (IdProyecto, Tabla, Comentario) VALUES (?, ?, ?)",
-            (idproyecto, 1, comentario),
-        )
+        ultimo_idreg = ProyectoSeg.objects.filter(idproyecto_id=idproyecto).aggregate(mx=Max('idreg'))['mx'] or 0
+        data = {
+            'idproyecto_id': idproyecto,
+            'idreg': int(ultimo_idreg) + 1,
+            'fecha': _ahora_santiago_naive(),
+            'comentario': comentario,
+            'idusuario': (request.user.username or '')[:15],
+            'estado': proyecto.estadoproyecto_id or 0,
+        }
+        if request.POST.get('es_recordatorio'):
+            data['esrecordatorio'] = True
+            fecha_recordatorio = request.POST.get('fecha_recordatorio')
+            data['fecharecordatorio'] = datetime.strptime(fecha_recordatorio, '%Y-%m-%d').date() if fecha_recordatorio else None
+        ProyectoSeg.objects.create(**data)
 
-    messages.success(request, 'Seguimiento guardado correctamente.')
-    return redirect('seguimiento_proyectos')
+    return _redirigir_con_filtros('Seguimiento guardado correctamente.')
 
 
 @login_required
 @require_POST
 def guardar_datos_facturacion_proyecto(request):
     proyecto = get_object_or_404(Proyecto, pk=request.POST.get('idproyecto'))
+    filtros = {
+        'estado': (request.POST.get('filtro_estado') or '').strip(),
+        'mandante': (request.POST.get('filtro_mandante') or '').strip(),
+        'cliente': (request.POST.get('filtro_cliente') or '').strip(),
+        'numero_proyecto': (request.POST.get('filtro_numero_proyecto') or '').strip(),
+    }
 
     proyecto.idcliente_id = request.POST.get('idcliente') or None
     proyecto.moneda = request.POST.get('moneda') or None
@@ -1532,17 +1558,24 @@ def guardar_datos_facturacion_proyecto(request):
     proyecto.emailcontactofacturacion = request.POST.get('emailcontactofacturacion') or None
     proyecto.fechaact = timezone.now().date()
     proyecto.estadoproyecto_id = 2
+    proyecto.estado = 2
     proyecto.save()
 
     comentario = (request.POST.get('comentario') or '').strip()
     if comentario:
-        exec_non_query(
-            "INSERT INTO [ducto].[ProyectoFacturarSeg] (IdProyecto, Tabla, Comentario) VALUES (?, ?, ?)",
-            (proyecto.idproyecto, 1, comentario),
+        ultimo_idreg = ProyectoSeg.objects.filter(idproyecto_id=proyecto.idproyecto).aggregate(mx=Max('idreg'))['mx'] or 0
+        ProyectoSeg.objects.create(
+            idproyecto_id=proyecto.idproyecto,
+            idreg=int(ultimo_idreg) + 1,
+            fecha=_ahora_santiago_naive(),
+            comentario=comentario,
+            idusuario=(request.user.username or '')[:15],
+            estado=proyecto.estadoproyecto_id or 0,
         )
 
     messages.success(request, 'Datos de facturación guardados correctamente.')
-    return redirect('seguimiento_proyectos')
+    params = {k: v for k, v in filtros.items() if v}
+    return redirect(f"{reverse('seguimiento_proyectos')}?{urlencode(params)}" if params else reverse('seguimiento_proyectos'))
 
 
 @login_required
@@ -1684,10 +1717,11 @@ class VisorComentario(LoginRequiredMixin,DetailView):
 
         consulta_seg = """
             SELECT IdProyecto, Comentario, Fecha
-            FROM [ducto].[ProyectoFacturarSeg]
-            WHERE IdProyecto = ? AND Tabla = ?
+            FROM [ducto].[Proyecto_Seg]
+            WHERE IdProyecto = ?
+            ORDER BY Fecha
         """
-        rows = exec_query(consulta_seg, (pk, tabla))
+        rows = exec_query(consulta_seg, (pk,))
 
         contexto = {
             "filas": rows,
@@ -1698,6 +1732,7 @@ class VisorComentario(LoginRequiredMixin,DetailView):
         }
         return render(request, self.template_name, contexto)
 
+
 @login_required
 def guardacomentario(request):
     if request.method != "POST":
@@ -1707,11 +1742,15 @@ def guardacomentario(request):
     idproyecto = request.POST.get("idproyecto")
     tabla = request.POST.get("tabla")
 
-    consulta = """
-        INSERT INTO [ducto].[ProyectoFacturarSeg] (IdProyecto, Tabla, Comentario)
-        VALUES (?, ?, ?)
-    """
-    exec_non_query(consulta, (idproyecto, tabla, comentario))
+    ultimo_idreg = ProyectoSeg.objects.filter(idproyecto_id=idproyecto).aggregate(mx=Max('idreg'))['mx'] or 0
+    ProyectoSeg.objects.create(
+        idproyecto_id=idproyecto,
+        idreg=int(ultimo_idreg) + 1,
+        fecha=_ahora_santiago_naive(),
+        comentario=comentario,
+        idusuario=(request.user.username or '')[:15],
+        estado=0,
+    )
 
     return redirect(f"{idproyecto}/{tabla}")
 

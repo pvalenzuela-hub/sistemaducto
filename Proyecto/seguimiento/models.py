@@ -270,6 +270,24 @@ class CotizacionSeg(models.Model):
         return f"Seguimiento {self.idcotizacion_id}-{self.idreg}"
 
 
+class ProyectoSeg(models.Model):
+    idproyecto = models.ForeignKey('Proyecto', db_column='IdProyecto', on_delete=models.DO_NOTHING)
+    idreg = models.IntegerField(db_column='IdReg', primary_key=True)
+    fecha = models.DateTimeField(db_column='Fecha', null=True, blank=True)
+    comentario = models.TextField(db_column='Comentario', null=True, blank=True)
+    esrecordatorio = models.BooleanField(db_column='EsRecordatorio', null=True, blank=True)
+    fecharecordatorio = models.DateField(db_column='FechaRecordatorio', null=True, blank=True)
+    idusuario = models.CharField(db_column='IdUsuario', max_length=15, null=True, blank=True)
+    estado = models.IntegerField(db_column='Estado', null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'Proyecto_Seg'
+
+    def __str__(self):
+        return f"Seguimiento proyecto {self.idproyecto_id}-{self.idreg}"
+
+
 class DestinoCotizacion(models.Model):
     iddestino = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=50)

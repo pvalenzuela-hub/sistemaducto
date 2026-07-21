@@ -200,8 +200,8 @@
                             data-numconf="{{ c.numconf_texto|default:''|escape }}"
                             data-medioconf="{{ c.medioconf_texto|default:''|escape }}"
                             data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}"
-                            data-estado-id="{{ c.estado_id|default:'' }}"
-                            data-estado-texto="{{ c.estado_texto|default:''|escape }}"
+                            data-estadoproyecto-id="{{ c.estado_id|default:'' }}"
+                            data-estadoproyecto-texto="{{ c.estado_texto|default:''|escape }}"
                             data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}"
                             data-fechaprimerenvio="{{ c.fechaprimereenvio|date:'d/m/Y'|default:'' }}"
                             data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}"
@@ -222,7 +222,7 @@
                     <td class="mb-0 fs-12 fw-semibold col-formapago">{{ c.fpago_texto }}</td>
                     <td class="mb-0 fs-12 fw-semibold col-mandante">{{ c.mandante_texto }}</td>
                     <td class="mb-0 fs-12 fw-semibold col-ultimo-seg">
-                        <button type="button" class="btn btn-link p-0 btn-visor-proyecto" data-bs-toggle="modal" data-bs-target="#modalVisor" data-idproyecto="{{ c.idproyecto }}" data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}" data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}" data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}" data-moneda="{{ c.moneda_texto|default:''|escape }}" data-valor="{{ c.valor_texto|default:''|escape }}" data-mandante="{{ c.mandante_texto|default:''|escape }}" data-contacto-mandante="{{ c.contacto_mandante_texto|default:''|escape }}" data-email-mandante="{{ c.email_mandante_texto|default:''|escape }}" data-telefono-mandante="{{ c.telefono_mandante_texto|default:''|escape }}" data-cliente="{{ c.cliente_texto|default:''|escape }}" data-rut="{{ c.rut_texto|default:''|escape }}" data-comentario-cliente="{{ c.comentario_cliente_texto|default:''|escape }}" data-contacto-fact="{{ c.cliente_factura_texto|default:''|escape }}" data-cargo-fact="{{ c.cargo_factura_texto|default:''|escape }}" data-email-fact="{{ c.email_factura_texto|default:''|escape }}" data-telefono-fact="{{ c.telefono_factura_texto|default:''|escape }}" data-fpago="{{ c.fpago_texto|default:''|escape }}" data-numconf="{{ c.numconf_texto|default:''|escape }}" data-medioconf="{{ c.medioconf_texto|default:''|escape }}" data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}" data-estado-id="{{ c.estado_id|default:'' }}" data-estado-texto="{{ c.estado_texto|default:''|escape }}" data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}" data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}" data-region="{{ c.region_texto|default:''|escape }}" data-conhes="{{ c.conhes_texto|default:''|escape }}" data-coneepp="{{ c.coneepp_texto|default:''|escape }}" data-conotro="{{ c.conotro_texto|default:''|escape }}" data-seguimiento="{{ c.seg_texto|default:''|escape }}" data-xfacturar="{{ c.x_facturar_texto|default:''|escape }}" data-facturacion-completa="{{ c.facturacion_lista|yesno:'1,0' }}">{{ c.ultimoseg_texto }}</button>
+                        <button type="button" class="btn btn-link p-0 btn-visor-proyecto" data-bs-toggle="modal" data-bs-target="#modalVisor" data-idproyecto="{{ c.idproyecto }}" data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}" data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}" data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}" data-moneda="{{ c.moneda_texto|default:''|escape }}" data-valor="{{ c.valor_texto|default:''|escape }}" data-mandante="{{ c.mandante_texto|default:''|escape }}" data-contacto-mandante="{{ c.contacto_mandante_texto|default:''|escape }}" data-email-mandante="{{ c.email_mandante_texto|default:''|escape }}" data-telefono-mandante="{{ c.telefono_mandante_texto|default:''|escape }}" data-cliente="{{ c.cliente_texto|default:''|escape }}" data-rut="{{ c.rut_texto|default:''|escape }}" data-comentario-cliente="{{ c.comentario_cliente_texto|default:''|escape }}" data-contacto-fact="{{ c.cliente_factura_texto|default:''|escape }}" data-cargo-fact="{{ c.cargo_factura_texto|default:''|escape }}" data-email-fact="{{ c.email_factura_texto|default:''|escape }}" data-telefono-fact="{{ c.telefono_factura_texto|default:''|escape }}" data-fpago="{{ c.fpago_texto|default:''|escape }}" data-numconf="{{ c.numconf_texto|default:''|escape }}" data-medioconf="{{ c.medioconf_texto|default:''|escape }}" data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}" data-estadoproyecto-id="{{ c.estado_id|default:'' }}" data-estadoproyecto-texto="{{ c.estado_texto|default:''|escape }}" data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}" data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}" data-region="{{ c.region_texto|default:''|escape }}" data-conhes="{{ c.conhes_texto|default:''|escape }}" data-coneepp="{{ c.coneepp_texto|default:''|escape }}" data-conotro="{{ c.conotro_texto|default:''|escape }}" data-seguimiento="{{ c.seg_texto|default:''|escape }}" data-xfacturar="{{ c.x_facturar_texto|default:''|escape }}" data-idcliente-fact="{{ c.idcliente_id|default: }}" data-valorraw="{{ c.valor_raw }}" data-facturacion-completa="{{ c.facturacion_lista|yesno:'1,0' }}">{{ c.ultimoseg_texto }}</button>
                     </td>
                     <td class="fs-11 fw-semibold col-estado">{{ c.estado_texto }}</td>
                     <td class="mb-0 fs-12 fw-semibold col-cliente">{{ c.cliente_texto }}</td>
@@ -249,6 +249,10 @@
                 <form method="post" action="{% url 'guardar_seguimiento_proyecto' %}" id="formVisorSeguimiento">
                     {% csrf_token %}
                     <input type="hidden" name="idproyecto" id="visor_idproyecto">
+                    <input type="hidden" name="filtro_estado" value="{{ filtro_estado }}">
+                    <input type="hidden" name="filtro_mandante" value="{{ filtro_mandante }}">
+                    <input type="hidden" name="filtro_cliente" value="{{ filtro_cliente }}">
+                    <input type="hidden" name="filtro_numero_proyecto" value="{{ filtro_numero_proyecto }}">
                     <div class="row g-2">
                         <div class="col-12 col-lg-8">
                             <div class="row g-3">
@@ -308,6 +312,7 @@
                                         <option value="{{ estado.id }}">{{ estado.nombre }}</option>
                                     {% endfor %}
                                 </select>
+                                <div class="form-text">El estado <strong>Proyecto con Datos de Facturación</strong> se actualiza desde <strong>Actualizar Datos de Facturación</strong>.</div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">x Facturar</label>
@@ -322,7 +327,7 @@
                 </form>
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" class="btn btn-warning" id="btnDatosFacturacion">Datos Facturación</button>
+                <button type="button" class="btn btn-warning" id="btnDatosFacturacion">Actualizar Datos de Facturación</button>
                     <button type="button" class="btn btn-success" id="btnAbrirCrearFactura" hidden>Crear Factura</button>
                     <button type="submit" form="formVisorSeguimiento" class="btn btn-primary">Guardar</button>
                 </div>
@@ -361,6 +366,9 @@
                     <div class="row g-3">
                         <div class="col-12 proj-fixed">
                             <div class="border rounded-2 p-2">
+                                <div class="alert alert-info py-2 px-3 mb-2 small">
+                                    Presione <strong>Datos de Facturación</strong> para editar los datos del proyecto. Al guardar, el proyecto quedará en <strong>Proyecto con Datos de Facturación</strong>.
+                                </div>
                                 <div class="row g-2">
                                     <div class="col-12 col-md-6"><label class="form-label mb-1">Nombre Proyecto</label><input type="text" id="proj_nombre" class="form-control form-control-sm" readonly></div>
                                     <div class="col-12 col-md-3"><label class="form-label mb-1">N° Cotización</label><input type="text" id="proj_cotizacion" class="form-control form-control-sm" readonly></div>
@@ -482,21 +490,116 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Datos de Facturación</h5>
+                <h5 class="modal-title">Actualizar Datos de Facturación</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="row g-3">
-                    <div class="col-12 col-md-6"><label class="form-label">Cliente</label><input type="text" id="datosfact_cliente" class="form-control" readonly></div>
-                    <div class="col-12 col-md-6"><label class="form-label">Contacto</label><input type="text" id="datosfact_contacto" class="form-control" readonly></div>
-                    <div class="col-12 col-md-6"><label class="form-label">Cargo</label><input type="text" id="datosfact_cargo" class="form-control" readonly></div>
-                    <div class="col-12 col-md-6"><label class="form-label">Correo</label><input type="text" id="datosfact_email" class="form-control" readonly></div>
-                    <div class="col-12 col-md-6"><label class="form-label">Teléfono</label><input type="text" id="datosfact_telefono" class="form-control" readonly></div>
-                    <div class="col-12"><label class="form-label">Observación</label><textarea id="datosfact_observacion" class="form-control" rows="4" readonly></textarea></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                <form method="post" action="{% url 'guardar_datos_facturacion_proyecto' %}" id="formDatosFacturacion">
+                    {% csrf_token %}
+                    <input type="hidden" name="idproyecto" id="datosfact_idproyecto">
+                    <input type="hidden" name="filtro_estado" value="{{ filtro_estado }}">
+                    <input type="hidden" name="filtro_mandante" value="{{ filtro_mandante }}">
+                    <input type="hidden" name="filtro_cliente" value="{{ filtro_cliente }}">
+                    <input type="hidden" name="filtro_numero_proyecto" value="{{ filtro_numero_proyecto }}">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Cliente</label>
+                            <select name="idcliente" id="datosfact_idcliente" class="form-select">
+                                <option value="">Seleccione</option>
+                                {% for cliente in clientes %}
+                                    <option value="{{ cliente.idcliente }}">{{ cliente.razonsocial }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Contacto Facturación</label>
+                            <select name="idcontactofacturacion" id="datosfact_idcontactofacturacion" class="form-select">
+                                <option value="">Seleccione</option>
+                                {% for contacto in contactos_facturacion %}
+                                    <option value="{{ contacto.idcontacto }}" data-cliente="{{ contacto.idcliente_id }}" data-email="{{ contacto.email|default:'' }}">{{ contacto.nombrecontacto }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Moneda</label>
+                            <select name="moneda" id="datosfact_moneda" class="form-select">
+                                <option value="">Seleccione</option>
+                                {% for moneda in monedas %}
+                                    <option value="{{ moneda.nombre }}">{{ moneda.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Valor</label>
+                            <input type="text" name="valor" id="datosfact_valor" class="form-control">
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Forma de Pago</label>
+                            <select name="fpago" id="datosfact_fpago" class="form-select">
+                                <option value="">Seleccione</option>
+                                {% for forma in formas_pago %}
+                                    <option value="{{ forma.nombre }}">{{ forma.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Medio Conf.</label>
+                            <select name="medioconf" id="datosfact_medioconf" class="form-select">
+                                <option value="">Seleccione</option>
+                                {% for medio in medios_conf %}
+                                    <option value="{{ medio }}">{{ medio }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Fecha Conf.</label>
+                            <input type="date" name="fechaconf" id="datosfact_fechaconf" class="form-control">
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">N° CONF</label>
+                            <input type="text" name="numconf" id="datosfact_numconf" class="form-control">
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label">Con HES</label>
+                            <select name="conhes" id="datosfact_conhes" class="form-select">
+                                <option value="">Seleccione</option>
+                                {% for opcion in booleanos_si_no %}
+                                    <option value="{{ opcion }}">{{ opcion }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label">Con EEPP</label>
+                            <select name="coneepp" id="datosfact_coneepp" class="form-select">
+                                <option value="">Seleccione</option>
+                                {% for opcion in booleanos_si_no %}
+                                    <option value="{{ opcion }}">{{ opcion }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label">Con Otro</label>
+                            <select name="conotro" id="datosfact_conotro" class="form-select">
+                                <option value="">Seleccione</option>
+                                {% for opcion in booleanos_si_no %}
+                                    <option value="{{ opcion }}">{{ opcion }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Email Contacto Facturación</label>
+                            <input type="text" name="emailcontactofacturacion" id="datosfact_emailcontactofacturacion" class="form-control">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Comentario</label>
+                            <textarea name="comentario" id="datosfact_comentario" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer px-0 pb-0">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -546,18 +649,22 @@ $(document).ready(function() {
         $('#visor_cliente').val(btn.data('cliente'));
         $('#visor_fpago').val(btn.data('fpago'));
         $('#visor_numconf').val(btn.data('numconf'));
-        $('#visor_estado_actual').val(btn.data('estado-texto'));
-        $('#visor_nuevo_estado').val(btn.data('estado-id'));
+        $('#visor_estado_actual').val(btn.data('estadoproyecto-texto'));
+        $('#visor_nuevo_estado').val(btn.data('estadoproyecto-id'));
+        $('#visor_nuevo_estado option').each(function() {
+            const $opt = $(this);
+            $opt.prop('disabled', ($opt.text() || '').trim() === 'Proyecto con Datos de Facturación');
+        });
         $('#visor_ultimoseg').val(btn.data('ultimoseg'));
         $('#visor_xfacturar').val(btn.data('xfacturar'));
         $('#visor_seguimiento_hist').val(btn.data('seguimiento') || '');
         $('#visor_comentario').val('');
         $('#proj_numero').val(numeroFila);
-        $('#proj_estado').val(btn.data('estado-texto'));
+        $('#proj_estado').val(btn.data('estadoproyecto-texto'));
         $('#proj_moneda').val(btn.data('moneda'));
         $('#proj_valor').val(btn.data('valor'));
         $('#fact_head_numproyecto').text('N° Proyecto ' + numeroFila).data('numero-proyecto', numeroFila);
-        $('#fact_head_estado').text('Estado ' + (btn.data('estado-texto') || ''));
+        $('#fact_head_estado').text('Estado ' + (btn.data('estadoproyecto-texto') || ''));
         $('#fact_head_moneda').text('Moneda ' + (btn.data('moneda') || ''));
         const monedaCabezal = (btn.data('moneda') || '').trim();
         const valorCabezal = monedaCabezal === 'UF' ? (btn.data('valor') || 0) : (btn.data('valorraw') || 0);
@@ -588,47 +695,51 @@ $(document).ready(function() {
         $('#fact_coneepp_hidden').val(btn.data('coneepp') || '');
         $('#fact_conotro_hidden').val(btn.data('conotro') || '');
         $('#fact_idcontacto_hidden').val(btn.data('contacto-fact') || '');
+        const estadoproyectoId = parseInt(btn.data('estadoproyecto-id') || 0, 10);
         const factCompleta = !!btn.data('idcliente-fact') && !!btn.data('numconf') && !!btn.data('medioconf') && !!btn.data('fechaconf') && !!btn.data('conhes') && !!btn.data('coneepp') && !!btn.data('conotro');
-        $('#btnAbrirCrearFactura').prop('hidden', !factCompleta);
-        $('#btnAbrirCrearFactura').data('valor-raw', btn.data('valorraw') || 0);
-        $('#btnNuevoContactoFacturacion').attr('href', '#').toggleClass('disabled', true);
-        $('#btnAbrirCrearFactura').prop('hidden', !factCompleta);
+        $('#btnAbrirCrearFactura').prop('hidden', !(factCompleta && (estadoproyectoId === 1 || estadoproyectoId === 2)));
         $('#btnAbrirCrearFactura').data('valor-raw', btn.data('valorraw') || 0);
     });
 
-    $('#fact_idcliente').on('change', function() {
-        const clienteId = $(this).val();
-        const $contactos = $('#fact_idcontacto');
-        $contactos.val('');
-        $('#fact_cargo').val('');
-        $('#fact_telefono').val('');
-        $('#fact_emailvista').val('');
-        $('#fact_emailcontacto').val('');
-        const clienteUpdateBase = "{% url 'cliente_update' 0 %}".replace('/0/', '/' + clienteId + '/');
-        $('#btnNuevoContactoFacturacion').attr('href', clienteId ? clienteUpdateBase : '#').toggleClass('disabled', !clienteId);
-        $contactos.find('option').each(function() {
+    $('#datosfact_idcliente').on('change', function() {
+        const clienteId = ($(this).val() || '').toString();
+        $('#datosfact_idcontactofacturacion option').each(function() {
             const opt = $(this);
             if (!opt.val()) return;
-            const visible = !clienteId || opt.data('cliente').toString() === clienteId.toString();
+            const clienteOpt = (opt.data('cliente') || '').toString();
+            const visible = !clienteId || clienteOpt === clienteId;
             opt.toggle(visible);
         });
+        if ($('#datosfact_idcontactofacturacion').val()) {
+            $('#datosfact_idcontactofacturacion').trigger('change');
+        }
     });
 
-    $('#fact_idcontacto').on('change', function() {
+    $('#datosfact_idcontactofacturacion').on('change', function() {
         const opt = $(this).find('option:selected');
-        $('#fact_cargo').val(opt.data('cargo') || '');
-        $('#fact_telefono').val(opt.data('telefono') || '');
-        $('#fact_emailvista').val(opt.data('email') || '');
-        $('#fact_emailcontacto').val(opt.data('email') || '');
+        $('#datosfact_emailcontactofacturacion').val(opt.data('email') || '');
     });
 
     $('#btnDatosFacturacion').on('click', function() {
-        $('#datosfact_cliente').val($('#proj_razonsocial_cliente').val() || '');
-        $('#datosfact_contacto').val($('#proj_mandante').val() || '');
-        $('#datosfact_cargo').val($('#proj_fpago').val() || '');
-        $('#datosfact_email').val($('#proj_medioconf').val() || '');
-        $('#datosfact_telefono').val($('#proj_numconf').val() || '');
-        $('#datosfact_observacion').val($('#proj_notas_cliente').val() || '');
+        const fechaConf = ($('#fact_fechaconf_hidden').val() || '').trim();
+        const fechaConfISO = fechaConf.includes('/') ? (function(valor) {
+            const partes = valor.split('/');
+            return partes.length === 3 ? `${partes[2]}-${partes[1]}-${partes[0]}` : '';
+        })(fechaConf) : fechaConf;
+        $('#datosfact_idproyecto').val($('#visor_idproyecto').val() || '');
+        $('#datosfact_idcliente').val($('#fact_idcliente_hidden').val() || '').trigger('change');
+        $('#datosfact_moneda').val($('#fact_moneda_hidden').val() || '');
+        $('#datosfact_valor').val($('#proj_valor').val() || '');
+        $('#datosfact_medioconf').val($('#fact_medioconf_hidden').val() || '');
+        $('#datosfact_fpago').val($('#fact_fpago_hidden').val() || '');
+        $('#datosfact_numconf').val($('#fact_numconf_hidden').val() || '');
+        $('#datosfact_fechaconf').val(fechaConfISO);
+        $('#datosfact_conhes').val($('#fact_conhes_hidden').val() || '');
+        $('#datosfact_coneepp').val($('#fact_coneepp_hidden').val() || '');
+        $('#datosfact_conotro').val($('#fact_conotro_hidden').val() || '');
+        $('#datosfact_idcontactofacturacion').val($('#fact_idcontacto_hidden').val() || '').trigger('change');
+        $('#datosfact_emailcontactofacturacion').val('');
+        $('#datosfact_comentario').val($('#proj_notas_cliente').val() || '');
         const modal = new bootstrap.Modal(document.getElementById('modalDatosFacturacion'));
         modal.show();
     });
