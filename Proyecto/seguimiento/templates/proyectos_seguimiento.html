@@ -132,21 +132,12 @@
                 <label for="mandante" class="form-label mb-1">Mandante</label>
                 <select name="mandante" id="mandante" class="form-select">
                     <option value="">Todos</option>
-                    {% for cliente in mandantes %}
-                        <option value="{{ cliente.idcliente }}" {% if filtro_mandante == cliente.idcliente|stringformat:"s" %}selected{% endif %}>{{ cliente.razonsocial }}</option>
+                    {% for mandante in mandantes %}
+                        <option value="{{ mandante.idcliente }}" {% if filtro_mandante == mandante.idcliente|stringformat:"s" %}selected{% endif %}>{{ mandante.razonsocial }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="col-12 col-md-3">
-                <label for="cliente" class="form-label mb-1">Cliente</label>
-                <select name="cliente" id="cliente" class="form-select">
-                    <option value="">Todos</option>
-                    {% for cliente in clientes %}
-                        <option value="{{ cliente.idcliente }}" {% if filtro_cliente == cliente.idcliente|stringformat:"s" %}selected{% endif %}>{{ cliente.razonsocial }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-12 col-md-2">
                 <label for="numero_proyecto" class="form-label mb-1">N° Proyecto</label>
                 <input type="text" name="numero_proyecto" id="numero_proyecto" class="form-control" value="{{ filtro_numero_proyecto }}" placeholder="Buscar">
             </div>
@@ -256,7 +247,6 @@
                     <input type="hidden" name="idproyecto" id="visor_idproyecto">
                     <input type="hidden" name="filtro_estado" value="{{ filtro_estado }}">
                     <input type="hidden" name="filtro_mandante" value="{{ filtro_mandante }}">
-                    <input type="hidden" name="filtro_cliente" value="{{ filtro_cliente }}">
                     <input type="hidden" name="filtro_numero_proyecto" value="{{ filtro_numero_proyecto }}">
                     <div class="row g-2">
                         <div class="col-12 col-lg-8">
@@ -504,7 +494,6 @@
                     <input type="hidden" name="idproyecto" id="datosfact_idproyecto">
                     <input type="hidden" name="filtro_estado" value="{{ filtro_estado }}">
                     <input type="hidden" name="filtro_mandante" value="{{ filtro_mandante }}">
-                    <input type="hidden" name="filtro_cliente" value="{{ filtro_cliente }}">
                     <input type="hidden" name="filtro_numero_proyecto" value="{{ filtro_numero_proyecto }}">
                     <div class="row g-3">
                         <div class="col-12 col-md-6">
@@ -615,7 +604,7 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(document).ready(function() {
-    $('#mandante, #cliente').select2({
+    $('#mandante').select2({
         placeholder: 'Buscar...',
         allowClear: true,
         width: '100%'

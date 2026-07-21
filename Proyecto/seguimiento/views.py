@@ -1359,7 +1359,6 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
 
         estado_id = (self.request.GET.get('estado') or '').strip()
         mandante_id = (self.request.GET.get('mandante') or '').strip()
-        cliente_id = (self.request.GET.get('cliente') or '').strip()
         numero_proyecto = (self.request.GET.get('numero_proyecto') or '').strip()
 
         proyectos_qs = Proyecto.objects.select_related(
@@ -1375,8 +1374,6 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
             proyectos_qs = proyectos_qs.filter(estadoproyecto_id=estado_id)
         if mandante_id:
             proyectos_qs = proyectos_qs.filter(idcotizacion__idcliente_id=mandante_id)
-        if cliente_id:
-            proyectos_qs = proyectos_qs.filter(idcliente_id=cliente_id)
         if numero_proyecto:
             proyectos_qs = proyectos_qs.filter(idproyecto__icontains=numero_proyecto)
 
@@ -1391,6 +1388,9 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         ]
         booleanos_si_no = ['NO', 'SI']
         valores_uf = tValorUF.objects.order_by('-Fecha')
+        mandantes = Cliente.objects.filter(
+            idcliente__in=Proyecto.objects.values('idcotizacion__idcliente_id').distinct()
+        ).distinct().order_by('razonsocial')
         clientes_proyecto = Cliente.objects.filter(
             Q(proyectos_principales__isnull=False) | Q(proyectos_secundarios__isnull=False)
         ).distinct().order_by('razonsocial')
@@ -1454,7 +1454,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
 
         contexto["proyecto"] = proyectos
         contexto["estados_proyecto"] = estados_proyecto
-        contexto["mandantes"] = clientes_proyecto
+        contexto["mandantes"] = mandantes
         contexto["clientes"] = clientes_proyecto
         contexto["contactos_facturacion"] = contactos_facturacion
         contexto["monedas"] = monedas
@@ -1467,7 +1467,6 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         contexto["mostrar_crear_factura"] = False
         contexto["filtro_estado"] = estado_id
         contexto["filtro_mandante"] = mandante_id
-        contexto["filtro_cliente"] = cliente_id
         contexto["filtro_numero_proyecto"] = numero_proyecto
 
         contexto.update({
@@ -1488,7 +1487,6 @@ def guardar_seguimiento_proyecto(request):
     filtros = {
         'estado': (request.POST.get('filtro_estado') or '').strip(),
         'mandante': (request.POST.get('filtro_mandante') or '').strip(),
-        'cliente': (request.POST.get('filtro_cliente') or '').strip(),
         'numero_proyecto': (request.POST.get('filtro_numero_proyecto') or '').strip(),
     }
 
@@ -1538,7 +1536,6 @@ def guardar_datos_facturacion_proyecto(request):
     filtros = {
         'estado': (request.POST.get('filtro_estado') or '').strip(),
         'mandante': (request.POST.get('filtro_mandante') or '').strip(),
-        'cliente': (request.POST.get('filtro_cliente') or '').strip(),
         'numero_proyecto': (request.POST.get('filtro_numero_proyecto') or '').strip(),
     }
 
