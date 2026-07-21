@@ -609,6 +609,12 @@ $(document).ready(function() {
         allowClear: true,
         width: '100%'
     });
+    $('#datosfact_idcliente').select2({
+        placeholder: 'Buscar...',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#modalDatosFacturacion')
+    });
     if ($.fn.DataTable.isDataTable('#basic-datatable')) {
         $('#basic-datatable').DataTable().destroy();
     }
