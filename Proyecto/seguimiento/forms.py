@@ -627,7 +627,7 @@ class TFpagoForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields['concepto'].choices = [('', 'Seleccione forma de pago')] + [
             (fp.concepto, fp.concepto)
-            for fp in TFpago.objects.filter(regionrm=0).order_by('codfp')
+            for fp in TFpago.objects.filter(regionrm=0).order_by('idfpago')
         ]
 
 

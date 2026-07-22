@@ -607,7 +607,7 @@ def cotizaciones_ingreso(request):
             })
         form = CotizacionForm(initial=initial)
 
-    formapago_catalogo = list(TFpago.objects.filter(regionrm=0).order_by('codfp').values('concepto'))
+    formapago_catalogo = list(TFpago.objects.filter(regionrm=0).order_by('idfpago').values('concepto'))
 
     return render(request, 'cotizaciones/form.html', {
         'titulo': 'Ingreso de Cotizaciones',
@@ -803,7 +803,7 @@ def cotizacion_editar(request, pk):
     else:
         form = CotizacionForm(instance=cotizacion, initial={'fecha': cotizacion.fecha})
 
-    formapago_catalogo = list(TFpago.objects.filter(regionrm=0).order_by('codfp').values('concepto'))
+    formapago_catalogo = list(TFpago.objects.filter(regionrm=0).order_by('idfpago').values('concepto'))
 
     return render(request, 'cotizaciones/form.html', {
         'titulo': 'Editar Cotización',
@@ -1063,7 +1063,7 @@ def api_cotizaciones_notas(request):
 @login_required
 @require_GET
 def api_cotizaciones_formapago(request):
-    qs = TFpago.objects.filter(regionrm=0).order_by('codfp')
+    qs = TFpago.objects.filter(regionrm=0).order_by('idfpago')
     data = [{'id': fp.idfpago, 'text': fp.concepto} for fp in qs]
     return JsonResponse({'results': data})
 
