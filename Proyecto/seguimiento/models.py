@@ -646,7 +646,9 @@ class Proyecto(models.Model):
         blank=True,
         related_name='proyecto',
         db_constraint=False)
-    
+
+    codregion = models.IntegerField(db_column='CodRegion', null=True, blank=True)
+
     class Meta:
         managed = False
         db_table = 'Proyecto'
