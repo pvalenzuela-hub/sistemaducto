@@ -734,7 +734,6 @@ def cotizacion_seguimiento(request, pk):
                                 emailadjudicacion=email_adjudicacion or None,
                                 fechaadjudicacion=fecha_adjudicacion,
                                 moneda=cotizacion.moneda,
-                                codregion=cotizacion.codregion,
                                 fecharegistro=_ahora_santiago_naive(),
                             )
                     cotizacion.fechaact = _ahora_santiago_naive()
