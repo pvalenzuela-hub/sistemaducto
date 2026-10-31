@@ -14,6 +14,7 @@ class ApiKey(models.Model):
     prefijo = models.CharField(max_length=8)
     key_hash = models.CharField(max_length=64, unique=True)
     activa = models.BooleanField(default=True)
+    escritura = models.BooleanField(default=False, help_text='Permite cambiar estado y comentarios de facturas')
     creada = models.DateTimeField(auto_now_add=True)
     ultimo_uso = models.DateTimeField(null=True, blank=True)
 
@@ -23,8 +24,13 @@ class ApiKey(models.Model):
     def __str__(self):
         return f"{self.nombre} ({self.prefijo}...)"
 
+    @property
+    def usuario_seg(self):
+        """Valor para Factura_Seg.IdUsuario (varchar 15)."""
+        return f"api:{self.nombre}"[:15]
+
     @classmethod
-    def generar(cls, nombre):
+    def generar(cls, nombre, escritura=False):
         raw_key = secrets.token_urlsafe(32)
-        obj = cls.objects.create(nombre=nombre, prefijo=raw_key[:8], key_hash=hash_key(raw_key))
+        obj = cls.objects.create(nombre=nombre, prefijo=raw_key[:8], key_hash=hash_key(raw_key), escritura=escritura)
         return obj, raw_key

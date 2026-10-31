@@ -25,20 +25,22 @@ python manage.py runserver
 ## Git
 - Remote: git@github.com:pvalenzuela-hub/sistemaducto.git
 
-## API externa (solo lectura)
-App `Proyecto/api/`. Autenticación con header `X-API-Key`.
+## API externa
+App `Proyecto/api/`. Autenticación con header `X-API-Key`. Guía de integración para terceros: doc "API de Facturas – Sistema Ducto".
 
 ```bash
-python manage.py migrate api                # crea la tabla api_apikey
-python manage.py apikey crear "Sistema ERP"  # muestra la clave una sola vez
+python manage.py migrate api                                   # tabla api_apikey
+python manage.py apikey crear "Sistema ERP"                    # solo lectura; muestra la clave una vez
+python manage.py apikey crear "Conciliador" --escritura        # lectura y escritura
+python manage.py apikey permisos "Sistema ERP" --escritura si
 python manage.py apikey listar
 python manage.py apikey revocar "Sistema ERP"
 ```
 
-Endpoints:
-- `GET /api/v1/facturas/` — filtros: `desde`, `hasta` (fecha emisión), `modificado_desde` (FechaACT), `idcliente`, `rut`, `idproyecto`, `numfactura`, `estado`, `page`, `page_size` (máx. 500)
-- `GET /api/v1/facturas/<idfactura>/`
+Endpoints (`/api/v1/`):
+- `GET facturas/` — filtros: `estado` (lista con comas), `desde`, `hasta`, `rut`, `idcliente`, `idproyecto`, `folio`, `monto_min`, `monto_max`, `monto` + `tolerancia` / `tolerancia_pct`, `modificado_desde`, `page`, `page_size` (máx. 500)
+- `GET|PATCH facturas/<idfactura>/` — PATCH acepta `estado`, `fecha_pago`, `comentario`; estados 5 y 8 exigen `fecha_pago`
+- `GET|POST facturas/<idfactura>/comentarios/` y `PATCH .../comentarios/<idreg>/` — sobre `Factura_Seg`, usuario `api:<nombre>`
+- `GET clientes/` — filtros `q`, `rut`
 
-```bash
-curl -H "X-API-Key: <clave>" "https://<host>/api/v1/facturas/?desde=2026-01-01"
-```
+Notas: facturas exentas de IVA (`neto` = `total` = `ValorTotalPesos`, `iva` = 0). Nombres de estado desde `tEstado` con `TipoEstado = 3`.

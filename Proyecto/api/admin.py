@@ -5,5 +5,5 @@ from .models import ApiKey
 
 @admin.register(ApiKey)
 class ApiKeyAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'prefijo', 'activa', 'creada', 'ultimo_uso')
+    list_display = ('nombre', 'prefijo', 'activa', 'escritura', 'creada', 'ultimo_uso')
     readonly_fields = ('prefijo', 'key_hash', 'creada', 'ultimo_uso')
