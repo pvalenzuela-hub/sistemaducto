@@ -24,6 +24,7 @@ urlpatterns = [
     path('accounts/', include('Accounts.urls')),
     path('vacaciones/', include('Vacation.urls')),
     path('seg/', include('seguimiento.urls')),
+    path('api/', include('api.urls')),
     path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('password-change/', auth_views.PasswordChangeView.as_view(template_name='seguimiento/password_change_form.html'), name='password_change'),

@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'Vacation',
     'Accounts',
     'seguimiento',
+    'api',
 
 ]
 
