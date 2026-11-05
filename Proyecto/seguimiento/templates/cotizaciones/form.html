@@ -279,6 +279,10 @@
                                 <option value="">Seleccione item</option>
                             </select>
                         </div>
+                        <div class="col-lg-7 d-none" id="item_glosa_wrap">
+                            <label class="form-label" for="item_glosa">Texto del item</label>
+                            <input type="text" id="item_glosa" class="form-control" maxlength="255">
+                        </div>
                         <div class="col-lg-3">
                             <label class="form-label" for="item_valor">Valor</label>
                             <input type="number" id="item_valor" class="form-control" step="0.01" min="0">
@@ -595,15 +599,25 @@
         }
 
         $itemSelector.on('change', function () {
-            const selectedText = $itemSelector.find('option:selected').text() || '';
-            if (selectedText && $itemSelector.val()) {
-                $('#item_valor').focus();
+            if ($itemSelector.val()) {
+                $('#item_glosa_wrap').removeClass('d-none');
+                $('#item_glosa').val($itemSelector.find('option:selected').text()).trigger('focus').trigger('select');
+            } else {
+                $('#item_glosa_wrap').addClass('d-none');
+                $('#item_glosa').val('');
+            }
+        });
+
+        $('#item_glosa').on('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                $itemValor.trigger('focus');
             }
         });
 
         $btnAgregarItem.on('click', function () {
             const itemId = $itemSelector.val();
-            const glosa = $itemSelector.find('option:selected').text();
+            const glosa = ($('#item_glosa').val() || '').trim();
             const valor = $itemValor.val();
             if (!itemId || !glosa) return;
             const items = leerItems();
