@@ -935,6 +935,7 @@ def cotizacion_reporte_pdf(request, pk):
         region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
         cotizacion.region_texto = region.descrip if region else ''
     cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
+    cotizacion.mt2_texto = cotizacion.mt2 if cotizacion.mt2 is not None else 'No informado'
     cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
     cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
 
