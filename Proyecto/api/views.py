@@ -13,6 +13,7 @@ from seguimiento.models import Cliente, Factura
 
 from . import seg
 from .auth import api_key_required
+from .models import ApiCambio
 
 PAGE_SIZE_DEFAULT = 100
 PAGE_SIZE_MAX = 500
@@ -152,7 +153,7 @@ def _serialize_factura(f, estados, comentario):
 def _serialize_factura_detalle(f, estados):
     data = _serialize_factura(f, estados, None)
     contacto = f.idcontacto
-    comentarios = seg.listar(f.idfactura)
+    comentarios = seg.factura.listar(f.idfactura)
     data.update({
         'comentario': comentarios[0]['comentario'] if comentarios else None,
         'glosa': f.detalle,
@@ -218,7 +219,7 @@ def _filtrar_facturas(params, qs):
 
 @csrf_exempt
 @require_http_methods(['GET'])
-@api_key_required
+@api_key_required()
 def facturas_list(request):
     try:
         qs = _filtrar_facturas(request.GET, _facturas_qs())
@@ -233,7 +234,7 @@ def facturas_list(request):
         return _error(str(e))
 
     estados = _estados_factura()
-    comentarios = seg.ultimos([f.idfactura for f in facturas])
+    comentarios = seg.factura.ultimos([f.idfactura for f in facturas])
     results = [_serialize_factura(f, estados, comentarios.get(f.idfactura)) for f in facturas]
     if request.GET.get('monto'):
         monto = float(request.GET['monto'])
@@ -244,7 +245,7 @@ def facturas_list(request):
 
 @csrf_exempt
 @require_http_methods(['GET', 'PATCH'])
-@api_key_required
+@api_key_required({'PATCH': 'editar'})
 def factura_detail(request, idfactura):
     factura = _facturas_qs().filter(pk=idfactura).first()
     if factura is None:
@@ -299,16 +300,21 @@ def _actualizar_factura(request, factura):
         if cambios:
             Factura.objects.filter(pk=factura.pk).update(
                 estado=nuevo_estado, fechapago=nueva_fecha_pago, fechaact=timezone.now())
-            seg.agregar(factura.pk, f"[API] {'; '.join(cambios)}", usuario)
+            seg.factura.agregar(factura.pk, f"[API] {'; '.join(cambios)}", usuario)
+            ApiCambio.registrar(request, 'factura', factura.pk, 'editar',
+                                antes={'estado': factura.estado, 'fecha_pago': factura.fechapago},
+                                despues={'estado': nuevo_estado, 'fecha_pago': nueva_fecha_pago})
         if comentario:
-            seg.agregar(factura.pk, comentario, usuario)
+            nuevo = seg.factura.agregar(factura.pk, comentario, usuario)
+            ApiCambio.registrar(request, 'factura_comentario', f"{factura.pk}/{nuevo['idreg']}", 'comentar',
+                                despues={'comentario': comentario})
             if not cambios:
                 Factura.objects.filter(pk=factura.pk).update(fechaact=timezone.now())
 
 
 @csrf_exempt
 @require_http_methods(['GET', 'POST'])
-@api_key_required
+@api_key_required({'POST': 'comentar'})
 def factura_comentarios(request, idfactura):
     if not Factura.objects.filter(pk=idfactura).exists():
         return _error('Factura no encontrada', 404)
@@ -319,18 +325,20 @@ def factura_comentarios(request, idfactura):
         except ParamError as e:
             return _error(str(e))
         with transaction.atomic():
-            nuevo = seg.agregar(idfactura, comentario, request.api_key.usuario_seg)
+            nuevo = seg.factura.agregar(idfactura, comentario, request.api_key.usuario_seg)
             Factura.objects.filter(pk=idfactura).update(fechaact=timezone.now())
+            ApiCambio.registrar(request, 'factura_comentario', f"{idfactura}/{nuevo['idreg']}", 'comentar',
+                                despues={'comentario': comentario})
         return _json(nuevo, status=201)
 
-    return _json(seg.listar(idfactura))
+    return _json(seg.factura.listar(idfactura))
 
 
 @csrf_exempt
 @require_http_methods(['GET', 'PATCH'])
-@api_key_required
+@api_key_required({'PATCH': 'comentar'})
 def factura_comentario_detail(request, idfactura, idreg):
-    actual = seg.obtener(idfactura, idreg)
+    actual = seg.factura.obtener(idfactura, idreg)
     if actual is None:
         return _error('Comentario no encontrado', 404)
 
@@ -342,15 +350,18 @@ def factura_comentario_detail(request, idfactura, idreg):
         except ParamError as e:
             return _error(str(e))
         with transaction.atomic():
-            actual = seg.editar(idfactura, idreg, comentario)
+            anterior = actual['comentario']
+            actual = seg.factura.editar(idfactura, idreg, comentario)
             Factura.objects.filter(pk=idfactura).update(fechaact=timezone.now())
+            ApiCambio.registrar(request, 'factura_comentario', f"{idfactura}/{idreg}", 'editar_comentario',
+                                antes={'comentario': anterior}, despues={'comentario': comentario})
 
     return _json(actual)
 
 
 @csrf_exempt
 @require_http_methods(['GET'])
-@api_key_required
+@api_key_required()
 def clientes_list(request):
     """Filtros: q (razón social o RUT), rut."""
     qs = Cliente.objects.all()
