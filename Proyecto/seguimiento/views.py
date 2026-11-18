@@ -198,11 +198,34 @@ def _facturacion_completa_proyecto(proyecto):
     ])
 
 
+MINDICADOR_UF_URL = 'https://mindicador.cl/api/uf'
+
+
+def _uf_desde_mindicador(fecha):
+    """Valor UF de una fecha según mindicador.cl, o None si no está publicado o el servicio no responde."""
+    try:
+        with urlopen(f"{MINDICADOR_UF_URL}/{fecha:%d-%m-%Y}", timeout=15) as response:
+            payload = _json.loads(response.read().decode('utf-8'))
+    except Exception:
+        return None
+    for item in payload.get('serie') or []:
+        if (item.get('fecha') or '')[:10] == fecha.isoformat() and item.get('valor') is not None:
+            return float(item['valor'])
+    return None
+
+
 def _valor_uf_por_fecha(fecha):
+    """UF de la fecha desde tValorUF; si falta, la busca en mindicador.cl y la guarda."""
     if not fecha:
         return None
     row = tValorUF.objects.filter(Fecha=fecha).values('ValorUF').first()
-    return row['ValorUF'] if row else None
+    if row:
+        return row['ValorUF']
+    valor = _uf_desde_mindicador(fecha)
+    if valor is None:
+        return None
+    obj, _ = tValorUF.objects.get_or_create(Fecha=fecha, defaults={'ValorUF': valor})
+    return obj.ValorUF
 
 
 def _siguiente_num_factura():
@@ -226,10 +249,10 @@ def api_valor_uf_por_fecha(request):
     if not fecha:
         return JsonResponse({'ok': False, 'message': 'Fecha inválida.'}, status=400)
 
-    row = tValorUF.objects.filter(Fecha=fecha).values('ValorUF').first()
-    if not row:
-        return JsonResponse({'ok': False, 'message': 'No existe UF para esa fecha.'}, status=404)
-    return JsonResponse({'ok': True, 'valoruf': row['ValorUF']})
+    valor = _valor_uf_por_fecha(fecha)
+    if valor is None:
+        return JsonResponse({'ok': False, 'message': 'No existe UF para esa fecha, ni en el sistema ni en mindicador.cl.'}, status=404)
+    return JsonResponse({'ok': True, 'valoruf': valor})
 
 
 def _estado_cotizacion_class(nombre):
