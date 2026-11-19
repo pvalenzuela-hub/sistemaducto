@@ -1168,13 +1168,11 @@ def _guardar_items_cotizacion(cotizacion, items_json):
     except json.JSONDecodeError:
         datos = []
 
+    # Item = número de línea (1, 2, 3...), como en el sistema anterior. La llave de Cotizacion_Valor es
+    # (IdCotizacion, Item): usar el código del catálogo impedía repetir un item y limitaba las líneas al catálogo.
     items = []
     for dato in datos:
         if not isinstance(dato, dict):
-            continue
-        try:
-            item_num = int(dato.get('item'))
-        except (TypeError, ValueError):
             continue
         glosa = (dato.get('glosa') or '').strip()
         if not glosa:
@@ -1184,7 +1182,7 @@ def _guardar_items_cotizacion(cotizacion, items_json):
         except (TypeError, ValueError):
             valor = 0
         opcional = 'S' if dato.get('opcional') == 'S' else 'N'
-        items.append((item_num, glosa, valor, opcional))
+        items.append((len(items) + 1, glosa, valor, opcional))
 
     CotizacionValor.objects.filter(idcotizacion=cotizacion).delete()
     for item_num, glosa, valor, opcional in items:
