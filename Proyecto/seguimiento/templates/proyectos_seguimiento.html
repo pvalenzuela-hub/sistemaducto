@@ -866,6 +866,8 @@ $(document).ready(function() {
 
     $('#fact_porcfact').on('input', recalcularFactura);
 
+    let consultaValorUF = 0;
+
     function actualizarValorUF() {
         const usarFactura = $('#uf_origen_factura').is(':checked');
         const ufSelector = $('#fact_uf_selector');
@@ -876,22 +878,26 @@ $(document).ready(function() {
         const fechaHoy = String(hoy.getDate()).padStart(2, '0') + '/' + String(hoy.getMonth() + 1).padStart(2, '0') + '/' + hoy.getFullYear();
         const fecha = usarFactura ? (fechaUf || fechaFactura || fechaHoy) : (fechaSelector || fechaUf || fechaFactura || fechaHoy);
         if (!fecha) return;
+        // Si falta en el sistema, el servidor la busca en mindicador.cl (puede tardar unos segundos).
+        // Solo se aplica la respuesta de la última fecha pedida.
+        const consulta = ++consultaValorUF;
+        const $valorUf = $('#fact_valor_uf');
+        $valorUf.val('').attr('placeholder', 'Buscando UF...');
+        recalcularFactura();
         fetch("{% url 'api_valor_uf_por_fecha' %}?fecha=" + encodeURIComponent(fecha), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(async (resp) => {
                 const data = await resp.json().catch(() => ({}));
+                if (consulta !== consultaValorUF) return;
                 if (!resp.ok || !data.ok) {
-                    if (fecha !== fechaHoy) {
-                        return fetch("{% url 'api_valor_uf_por_fecha' %}?fecha=" + encodeURIComponent(fechaHoy), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                    }
-                    $('#fact_valor_uf').val('');
-                    recalcularFactura();
-                    return;
+                    $valorUf.val('').attr('placeholder', 'Sin UF para ' + fecha);
+                } else {
+                    $valorUf.val(data.valoruf).attr('placeholder', '');
                 }
-                $('#fact_valor_uf').val(data.valoruf);
                 recalcularFactura();
             })
             .catch(() => {
-                $('#fact_valor_uf').val('');
+                if (consulta !== consultaValorUF) return;
+                $valorUf.val('').attr('placeholder', 'Sin UF para ' + fecha);
                 recalcularFactura();
             });
     }
