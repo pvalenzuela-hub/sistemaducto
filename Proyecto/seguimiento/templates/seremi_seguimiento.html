@@ -1,0 +1,317 @@
+{% extends 'components/base.html' %}
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tabla-seremi th { white-space: nowrap; font-size: .8rem; }
+    .tabla-seremi td { font-size: .82rem; vertical-align: middle; }
+    .tabla-seremi tbody tr td { background-color: var(--fila-color) !important; color: var(--fila-texto); }
+    .tabla-seremi td.acciones { white-space: nowrap; background-color: #fff !important; }
+    .tabla-seremi .col-nombre { min-width: 230px; }
+    .estado-dot { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; border: 1px solid #999; vertical-align: middle; margin-right: .3rem; }
+    #modalSeremi .modal-dialog { max-width: 1000px; }
+    #modalSeremi .dato { font-size: .82rem; }
+    #modalSeremi .dato .lbl { color: #6b7280; display: block; font-size: .72rem; text-transform: uppercase; }
+    .comentario-item { border-bottom: 1px solid #e5e7eb; padding: .45rem 0; }
+    .comentario-item .meta { font-size: .75rem; color: #6b7280; }
+    .comentario-item pre { white-space: pre-wrap; font-family: inherit; font-size: .85rem; margin: .2rem 0 0; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ encabezado }}</h1>
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="#">{{ menu }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ submenu }}</li>
+        </ol>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" id="formFiltros" class="row g-2 align-items-end">
+            <div class="col-12 col-md-4">
+                <label class="form-label mb-1" for="filtroEstado">Estado</label>
+                <select name="estado" id="filtroEstado" class="form-select">
+                    <option value="">Estados SEREMI en curso</option>
+                    {% for e in estados %}
+                        <option value="{{ e.codigo }}" {% if filtro_estado == e.codigo|stringformat:"s" and not todo %}selected{% endif %}>{{ e.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6 col-md-1">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="todo" value="1" id="chkTodo" {% if todo %}checked{% endif %}>
+                    <label class="form-check-label" for="chkTodo">Todo</label>
+                </div>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label mb-1">Buscar por</label>
+                <div>
+                    {% for valor, nombre in tipos_filtro %}
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="tipo" id="tipo{{ valor }}" value="{{ valor }}" {% if filtro_tipo == valor %}checked{% endif %}>
+                            <label class="form-check-label" for="tipo{{ valor }}">{{ nombre }}</label>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-12 col-md-2">
+                <input type="text" name="texto" class="form-control" value="{{ filtro_texto }}" placeholder="Texto a buscar">
+            </div>
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Buscar</button>
+                <a href="{% url 'seremi_seguimiento' %}" class="btn btn-outline-secondary">Limpiar</a>
+            </div>
+            {% if error %}<div class="col-12 text-danger">{{ error }}</div>{% endif %}
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="text-muted small">Use los botones de cada fila: <b>Datos SEREMI</b>, <b>Estado</b> y <b>Seguimiento</b>.</div>
+            <div class="fw-semibold">Proyectos: {{ filas|length }}</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm tabla-seremi mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Acciones</th>
+                        <th>N° Proyecto</th>
+                        <th class="col-nombre">Proyecto</th>
+                        <th>Propietario - RUT</th>
+                        <th>Operador</th>
+                        <th>N° Trámite</th>
+                        <th>Estado del Proyecto</th>
+                        <th>Seguimiento</th>
+                        <th>Mandante</th>
+                        <th>Ingreso SEREMI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in filas %}
+                        <tr style="--fila-color: {{ f.color }}; --fila-texto: {% if f.texto_claro %}#fff{% else %}#1f2733{% endif %}">
+                            <td class="acciones">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-primary btn-accion" data-tab="datos" data-id="{{ f.idproyecto }}">Datos SEREMI</button>
+                                    <button type="button" class="btn btn-outline-primary btn-accion" data-tab="estado" data-id="{{ f.idproyecto }}">Estado</button>
+                                    <button type="button" class="btn btn-primary btn-accion" data-tab="seguimiento" data-id="{{ f.idproyecto }}">Seguimiento</button>
+                                </div>
+                            </td>
+                            <td>{{ f.idproyecto }}</td>
+                            <td class="col-nombre">{{ f.nombre }}</td>
+                            <td>{{ f.propietario_rut }}</td>
+                            <td>{{ f.operador }}</td>
+                            <td>{{ f.n_tramite }}</td>
+                            <td>{{ f.estado }}</td>
+                            <td>{{ f.ultimo_seg }}</td>
+                            <td>{{ f.mandante }}</td>
+                            <td>{{ f.ingreso_seremi }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="10" class="text-center text-muted py-4">No hay proyectos para los filtros elegidos.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalSeremi" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="srTitulo">Proyecto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="srCargando" class="text-center text-muted py-4">Cargando...</div>
+                <div id="srContenido" class="d-none">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6 col-md-2 dato"><span class="lbl">N° Proyecto</span><span id="srNum"></span></div>
+                        <div class="col-6 col-md-4 dato"><span class="lbl">Estado actual</span><span id="srEstado"></span></div>
+                        <div class="col-6 col-md-3 dato"><span class="lbl">Región</span><span id="srRegion"></span></div>
+                        <div class="col-6 col-md-3 dato"><span class="lbl">Contacto mandante</span><span id="srContacto"></span></div>
+                        <div class="col-12 dato"><span class="lbl">Mandante</span><span id="srMandante"></span></div>
+                    </div>
+                    <ul class="nav nav-tabs" role="tablist">
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDatos" type="button">Datos SEREMI</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabEstado" type="button">Estado</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSeguimiento" type="button">Seguimiento (<span id="srCant">0</span>)</button></li>
+                    </ul>
+                    <div class="tab-content border border-top-0 p-3">
+                        <div class="tab-pane fade" id="tabDatos">
+                            <form id="formDatos" autocomplete="off">
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-6"><label class="form-label small mb-0">Propietario</label><input name="propietario" class="form-control form-control-sm" maxlength="100"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">RUT propietario</label><input name="rut_propietario" class="form-control form-control-sm" maxlength="13"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Operador</label><select name="operador" id="srOperador" class="form-select form-select-sm"></select></div>
+                                    <div class="col-12 col-md-6"><label class="form-label small mb-0">Representante legal</label><input name="nombre_rep_legal" class="form-control form-control-sm" maxlength="80"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">RUT representante</label><input name="rut_rep_legal" class="form-control form-control-sm" maxlength="13"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">N° trámite SEREMI</label><input name="n_tramite" class="form-control form-control-sm" maxlength="50"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Transferencia arancel</label><input name="transfer_arancel" class="form-control form-control-sm" maxlength="50"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Arancel $</label><input name="arancel" class="form-control form-control-sm" inputmode="decimal"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Solicitud acreditación</label><input type="date" name="fecha_sol_acreditacion" class="form-control form-control-sm"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Solicitud ingreso</label><input type="date" name="fecha_sol_ingreso" class="form-control form-control-sm"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Carga expediente</label><input type="date" name="fecha_carga_exp" class="form-control form-control-sm"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Pago arancel</label><input type="date" name="fecha_pago_arancel" class="form-control form-control-sm"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Ingreso SEREMI</label><input type="date" name="fecha_ingreso_seremi" class="form-control form-control-sm"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Aprobación SEREMI</label><input type="date" name="fecha_aprob_seremi" class="form-control form-control-sm"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Ingreso timbraje</label><input type="date" name="fecha_ingreso_timbraje" class="form-control form-control-sm"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Aprobación timbraje</label><input type="date" name="fecha_aprob_timbraje" class="form-control form-control-sm"></div>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-3">
+                                    <span class="small text-muted">Como en el escritorio, un campo vacío no borra el dato guardado.</span>
+                                    <div><span id="msgDatos" class="small me-2"></span><button type="submit" class="btn btn-primary">Grabar</button></div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="tab-pane fade" id="tabEstado">
+                            <form id="formEstado">
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label small mb-0">Nuevo estado *</label>
+                                        <select name="estado" class="form-select">
+                                            <option value="">Seleccione...</option>
+                                            {% for e in estados %}<option value="{{ e.codigo }}">{{ e.nombre }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small mb-0">Comentario *</label>
+                                        <textarea name="comentario" class="form-control" rows="3" maxlength="2000"></textarea>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-end align-items-center mt-2">
+                                    <span id="msgEstado" class="small me-2"></span>
+                                    <button type="submit" class="btn btn-primary">Cambiar estado</button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="tab-pane fade" id="tabSeguimiento">
+                            <form id="formSeg" class="row g-2 mb-3">
+                                <div class="col-12 col-md-3"><label class="form-label small mb-0">Fecha</label><input type="date" name="fecha" class="form-control form-control-sm"></div>
+                                <div class="col-12 col-md-9"><label class="form-label small mb-0">Comentario *</label><textarea name="comentario" class="form-control form-control-sm" rows="2" maxlength="2000"></textarea></div>
+                                <div class="col-12 d-flex justify-content-end align-items-center">
+                                    <span id="msgSeg" class="small me-2"></span>
+                                    <button type="submit" class="btn btn-sm btn-primary">Grabar comentario</button>
+                                </div>
+                            </form>
+                            <div id="srComentarios"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% csrf_token %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const URL_PROY = "{% url 'seremi_proyecto' 0 %}";
+    const URL_DATOS = "{% url 'seremi_guardar_datos' 0 %}";
+    const URL_ESTADO = "{% url 'seremi_cambiar_estado' 0 %}";
+    const URL_COM = "{% url 'seremi_comentario_agregar' 0 %}";
+    const URL_COM_DEL = "{% url 'seremi_comentario_eliminar' 0 0 %}";
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const modalEl = document.getElementById('modalSeremi');
+    const modal = new bootstrap.Modal(modalEl);
+    const u = (base, id) => base.replace('/0/', '/' + id + '/');
+    const esc = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    const hoy = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+    let actual = null;
+    let huboCambios = false;
+
+    // Filtros: elegir un estado o marcar "Todo" busca de inmediato, como en el escritorio
+    $('#filtroEstado').on('change', function () { $('#chkTodo').prop('checked', false); $('[name=texto]').val(''); $('#formFiltros').trigger('submit'); });
+    $('#chkTodo').on('change', function () { if (this.checked) { $('#filtroEstado').val(''); $('[name=texto]').val(''); $('#formFiltros').trigger('submit'); } });
+
+    async function postForm(url, data) {
+        const resp = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' }, body: data });
+        const json = await resp.json().catch(() => ({ ok: false, message: 'Error del servidor.' }));
+        if (!resp.ok || !json.ok) throw new Error(json.message || 'No se pudo guardar.');
+        return json;
+    }
+    function msg(sel, texto, error) { $(sel).text(texto || '').toggleClass('text-danger', !!error).toggleClass('text-success', !error); }
+
+    function renderComentarios(lista) {
+        $('#srCant').text(lista.length);
+        $('#srComentarios').html(lista.length ? lista.map(c => `
+            <div class="comentario-item" data-id="${c.id}">
+                <div class="d-flex justify-content-between">
+                    <div class="meta">${esc(c.fecha)} · ${esc(c.usuario)}</div>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-del">Eliminar</button>
+                </div>
+                <pre>${esc(c.comentario)}</pre>
+            </div>`).join('') : '<div class="text-muted small">Sin comentarios.</div>');
+    }
+
+    async function abrir(idproyecto, tab) {
+        $('#srCargando').removeClass('d-none').text('Cargando...');
+        $('#srContenido').addClass('d-none');
+        ['#msgDatos', '#msgEstado', '#msgSeg'].forEach(s => msg(s, ''));
+        modal.show();
+        try {
+            const resp = await fetch(u(URL_PROY, idproyecto), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!resp.ok) throw new Error();
+            actual = await resp.json();
+        } catch (e) { $('#srCargando').text('No se pudo cargar el proyecto.'); return; }
+        $('#srTitulo').text(`Proyecto ${actual.idproyecto} · ${actual.nombre}`);
+        $('#srNum').text(actual.idproyecto); $('#srEstado').text(actual.estado);
+        $('#srRegion').text(actual.region); $('#srContacto').text(actual.contacto_mandante); $('#srMandante').text(actual.mandante);
+        const $op = $('#srOperador').empty().append(new Option('Sin operador', ''));
+        actual.operadores.forEach(o => $op.append(new Option(o.nombre, o.id)));
+        const f = document.getElementById('formDatos');
+        Object.entries(actual.datos).forEach(([k, v]) => { if (f.elements[k]) f.elements[k].value = (v ?? ''); });
+        document.getElementById('formEstado').reset();
+        const fs = document.getElementById('formSeg'); fs.reset(); fs.fecha.value = hoy();
+        renderComentarios(actual.comentarios);
+        bootstrap.Tab.getOrCreateInstance(document.querySelector(`[data-bs-target="#tab${tab.charAt(0).toUpperCase() + tab.slice(1)}"]`)).show();
+        $('#srCargando').addClass('d-none'); $('#srContenido').removeClass('d-none');
+    }
+
+    $(document).on('click', '.btn-accion', function () { abrir($(this).data('id'), $(this).data('tab')); });
+
+    $('#formDatos').on('submit', async function (e) {
+        e.preventDefault();
+        try { const j = await postForm(u(URL_DATOS, actual.idproyecto), new FormData(this)); huboCambios = true; msg('#msgDatos', j.message, false); }
+        catch (err) { msg('#msgDatos', err.message, true); }
+    });
+    $('#formEstado').on('submit', async function (e) {
+        e.preventDefault();
+        try {
+            const j = await postForm(u(URL_ESTADO, actual.idproyecto), new FormData(this));
+            huboCambios = true; msg('#msgEstado', j.message, false);
+            $('#srEstado').text($(this).find('[name=estado] option:selected').text());
+            renderComentarios(j.comentarios); this.reset();
+        } catch (err) { msg('#msgEstado', err.message, true); }
+    });
+    $('#formSeg').on('submit', async function (e) {
+        e.preventDefault();
+        try {
+            const j = await postForm(u(URL_COM, actual.idproyecto), new FormData(this));
+            huboCambios = true; renderComentarios(j.comentarios); this.comentario.value = ''; msg('#msgSeg', 'Comentario grabado.', false);
+        } catch (err) { msg('#msgSeg', err.message, true); }
+    });
+    $('#srComentarios').on('click', '.btn-del', async function () {
+        const $item = $(this).closest('.comentario-item');
+        if (!window.confirm('¿Está seguro de eliminar el comentario: "' + $item.find('pre').text().slice(0, 80) + '"?')) return;
+        try {
+            const url = URL_COM_DEL.replace('/0/comentarios/0/', '/' + actual.idproyecto + '/comentarios/' + $item.data('id') + '/');
+            const j = await postForm(url, new FormData()); huboCambios = true; renderComentarios(j.comentarios);
+        } catch (err) { alert(err.message); }
+    });
+
+    // Al cerrar, recarga el listado si hubo cambios (el escritorio también refrescaba la grilla)
+    modalEl.addEventListener('hidden.bs.modal', function () { if (huboCambios) window.location.reload(); });
+})();
+</script>
+{% endblock %}

@@ -1530,7 +1530,7 @@ def guardar_seguimiento_proyecto(request):
 
     if nuevo_estado_id:
         proyecto.estadoproyecto_id = int(nuevo_estado_id)
-        proyecto.estado = int(nuevo_estado_id)
+        proyecto.estado = int(nuevo_estado_id) - 1  # Estado usa el código de tEstado (= estadoproyecto_id - 1)
         proyecto.save(update_fields=['estadoproyecto', 'estado'])
 
     if comentario:
@@ -1578,7 +1578,7 @@ def guardar_datos_facturacion_proyecto(request):
     proyecto.emailcontactofacturacion = request.POST.get('emailcontactofacturacion') or None
     proyecto.fechaact = timezone.now().date()
     proyecto.estadoproyecto_id = 2
-    proyecto.estado = 2
+    proyecto.estado = 1  # código tEstado de 'Proyecto con Datos de Facturación'
     proyecto.save()
 
     comentario = (request.POST.get('comentario') or '').strip()

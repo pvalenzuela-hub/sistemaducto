@@ -298,8 +298,8 @@ def _actualizar_proyecto(request, proyecto):
     usuario = request.api_key.usuario_seg
     with transaction.atomic():
         if cambia_estado:
-            # La web guarda el mismo valor en Estado y estadoproyecto_id
-            Proyecto.objects.filter(pk=proyecto.pk).update(estadoproyecto_id=nuevo_estado, estado=nuevo_estado)
+            # Estado guarda el código de tEstado (= estadoproyecto_id - 1), como el sistema de escritorio
+            Proyecto.objects.filter(pk=proyecto.pk).update(estadoproyecto_id=nuevo_estado, estado=nuevo_estado - 1)
             ApiCambio.registrar(request, 'proyecto', int(proyecto.pk), 'editar',
                                 antes={'estado': estado_actual}, despues={'estado': nuevo_estado})
         if comentario:

@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, views_facturas
+from . import views, views_facturas, views_seremi
 from .views import Vista1, Vista2, Vista3, VistaSeguimiento, VisorComentario
 
 urlpatterns = [
@@ -28,6 +28,12 @@ urlpatterns = [
     path('proyectos/seguimiento/guardar-facturacion/', views.guardar_datos_facturacion_proyecto, name='guardar_datos_facturacion_proyecto'),
     path('proyectos/seguimiento/crear-factura/', views.crear_factura_proyecto, name='crear_factura_proyecto'),
     path('proyectos/seguimiento/api/valor-uf/', views.api_valor_uf_por_fecha, name='api_valor_uf_por_fecha'),
+    path('proyectos/seremi/', views_seremi.seremi_seguimiento, name='seremi_seguimiento'),
+    path('proyectos/seremi/<int:idproyecto>/', views_seremi.seremi_proyecto, name='seremi_proyecto'),
+    path('proyectos/seremi/<int:idproyecto>/datos/', views_seremi.seremi_guardar_datos, name='seremi_guardar_datos'),
+    path('proyectos/seremi/<int:idproyecto>/estado/', views_seremi.seremi_cambiar_estado, name='seremi_cambiar_estado'),
+    path('proyectos/seremi/<int:idproyecto>/comentarios/', views_seremi.seremi_comentario_agregar, name='seremi_comentario_agregar'),
+    path('proyectos/seremi/<int:idproyecto>/comentarios/<int:idcomentario>/eliminar/', views_seremi.seremi_comentario_eliminar, name='seremi_comentario_eliminar'),
     path('facturas/seguimiento/', views_facturas.facturas_seguimiento, name='facturas_seguimiento'),
     path('facturas/<int:idfactura>/seguimiento/', views_facturas.factura_seguimiento_detalle, name='factura_seguimiento_detalle'),
     path('facturas/<int:idfactura>/seguimiento/guardar/', views_facturas.factura_seguimiento_guardar, name='factura_seguimiento_guardar'),

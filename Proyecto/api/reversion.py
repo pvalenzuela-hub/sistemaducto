@@ -59,7 +59,7 @@ def revertir(cambio, motivo=''):
                 raise NoReversible('El proyecto ya no existe')
             if p.estadoproyecto_id != despues['estado']:
                 raise NoReversible(f"El proyecto cambió después (estado={p.estadoproyecto_id}); revise y corrija a mano")
-            Proyecto.objects.filter(pk=p.pk).update(estadoproyecto_id=antes['estado'], estado=antes['estado'])
+            Proyecto.objects.filter(pk=p.pk).update(estadoproyecto_id=antes['estado'], estado=antes['estado'] - 1)
             seg.proyecto.agregar(p.pk, f"[API] Revertido cambio #{cambio.pk}. {motivo}".strip(), USUARIO_REVERSION,
                                  estado=antes['estado'])
 
