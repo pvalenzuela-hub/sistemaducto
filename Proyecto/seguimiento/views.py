@@ -2601,9 +2601,9 @@ def proyectos_totales(request):
         pro.valor_formateado = formatear_numero_cl(pro.valor)
 
     context = {
-        'titulo': 'Proyectos',
-        'encabezado': 'Proyectos totales',
-        'submenu': 'Lista total de proyectos',
+        'titulo': 'Reporte de Proyectos',
+        'encabezado': 'Reporte de Proyectos',
+        'submenu': 'Reporte de Proyectos',
         'proyectos': proyectos,
         'estados_proyecto': estados_proyecto,
         'mandantes': clientes_proyecto,
