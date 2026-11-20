@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, views_facturas, views_seremi
+from . import views, views_facturas, views_seremi, views_reportes
 from .views import Vista1, Vista2, Vista3, VistaSeguimiento, VisorComentario
 
 urlpatterns = [
@@ -35,6 +35,7 @@ urlpatterns = [
     path('proyectos/seremi/<int:idproyecto>/comentarios/', views_seremi.seremi_comentario_agregar, name='seremi_comentario_agregar'),
     path('proyectos/seremi/<int:idproyecto>/comentarios/<int:idcomentario>/eliminar/', views_seremi.seremi_comentario_eliminar, name='seremi_comentario_eliminar'),
     path('facturas/seguimiento/', views_facturas.facturas_seguimiento, name='facturas_seguimiento'),
+    path('facturas/reporte/', views_reportes.reporte_facturas, name='reporte_facturas'),
     path('facturas/<int:idfactura>/seguimiento/', views_facturas.factura_seguimiento_detalle, name='factura_seguimiento_detalle'),
     path('facturas/<int:idfactura>/seguimiento/guardar/', views_facturas.factura_seguimiento_guardar, name='factura_seguimiento_guardar'),
     path('facturas/<int:idfactura>/comentarios/<int:idreg>/editar/', views_facturas.factura_comentario_editar, name='factura_comentario_editar'),
