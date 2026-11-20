@@ -105,8 +105,8 @@ def _fila(row):
         'telefono': _texto(row[15]),
         'email': email,
         'cargo': cargo,
-        'saldo_por_facturar': row[32],
-        'porc_fact': row[34],
+        'saldo_por_facturar': _porcentaje(row[32]),  # PorcFact es real: evita 30,15999984741211
+        'porc_fact': _porcentaje(row[34]),
         'vencimiento': row[39],
         'color': COLOR_ESTADO.get(estado, '#ffffff'),
     }
