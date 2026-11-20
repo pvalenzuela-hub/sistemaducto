@@ -36,10 +36,12 @@
     <div class="page">
         <div class="page-main">
 
+            {% if not popup %}
             {% include "components/layouts/vertical/main-header.html" %}
             {% include "components/layouts/vertical/app-sidebar.html" %}
+            {% endif %}
 
-            <div class="main-content app-content">
+            <div class="main-content app-content"{% if popup %} style="margin-left:0;margin-top:0;padding-top:.5rem"{% endif %}>
                 <div class="side-app">
                     <div class="main-container container-fluid">
                         {% block body %}

@@ -26,6 +26,7 @@ from datetime import timedelta, datetime, time
 from decimal import Decimal
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
@@ -2230,10 +2231,13 @@ def cliente_create(request):
 
 
 @login_required
+@xframe_options_sameorigin
 @transaction.atomic
 def cliente_update(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk)
     notas_pendientes = []
+    # ?popup=1: se abre dentro de una ventana emergente (p. ej. desde Seguimiento Facturas)
+    popup = request.GET.get('popup') == '1'
 
     if request.method == 'POST':
         post_data = _completar_post_data_cliente(request.POST.copy(), cliente=cliente)
@@ -2298,6 +2302,8 @@ def cliente_update(request, pk):
                     nota=nota,
                 )
 
+            if popup:
+                return render(request, 'clientes/cliente_popup_guardado.html', {'cliente': cliente})
             messages.success(request, 'Cliente modificado correctamente.')
             return redirect('clientes_totales')
 
@@ -2325,6 +2331,7 @@ def cliente_update(request, pk):
         'notas_pendientes': notas_pendientes,
         'cliente': cliente,
         'volver_url_name': 'clientes_totales',
+        'popup': popup,
     }
     return render(request, 'clientes/cliente_form.html', context)
     

@@ -124,7 +124,7 @@
                                     <button type="button" class="btn btn-primary btn-accion" data-accion="seguimiento" data-id="{{ f.idfactura }}" title="Seguimiento de la factura">Seguimiento</button>
                                     <button type="button" class="btn btn-outline-primary btn-accion" data-accion="comentarios" data-id="{{ f.idfactura }}" title="Comentarios de la factura">Comentarios</button>
                                     <button type="button" class="btn btn-outline-success btn-accion" data-accion="facturar" data-id="{{ f.idfactura }}" title="Creación de facturas del proyecto">Facturar</button>
-                                    {% if f.idcliente %}<a class="btn btn-outline-secondary" href="{% url 'cliente_update' f.idcliente %}" target="_blank" rel="noopener" title="Mantenimiento del cliente">Cliente</a>{% endif %}
+                                    {% if f.idcliente %}<button type="button" class="btn btn-outline-secondary btn-cliente" data-url="{% url 'cliente_update' f.idcliente %}?popup=1" data-nombre="{{ f.cliente }}" title="Mantenimiento del cliente">Cliente</button>{% endif %}
                                 </div>
                             </td>
                             <td>{{ f.numfactura }}</td>
@@ -367,6 +367,19 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="modalCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width: 1200px;">
+        <div class="modal-content" style="height: 90vh;">
+            <div class="modal-header py-2">
+                <h5 class="modal-title">Cliente: <span id="clienteTitulo"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="clienteFrame" title="Ficha del cliente" style="border:0;width:100%;height:100%;"></iframe>
             </div>
         </div>
     </div>
@@ -810,6 +823,31 @@
             const json = await postForm(urlFactura(URL_NOTAS, fact.proyecto.cliente.idcliente), datos);
             $('#msgNotas').text(json.message).removeClass('text-danger').addClass('text-success');
         } catch (err) { $('#msgNotas').text(err.message).removeClass('text-success').addClass('text-danger'); }
+    });
+
+    // ---------------- Cliente (ventana emergente) ----------------
+    const modalClienteEl = document.getElementById('modalCliente');
+    const modalCliente = new bootstrap.Modal(modalClienteEl);
+    let clienteGuardado = false;
+    $(document).on('click', '.btn-cliente', function () {
+        clienteGuardado = false;
+        $('#clienteTitulo').text($(this).data('nombre') || '');
+        document.getElementById('clienteFrame').src = $(this).data('url');
+        modalCliente.show();
+    });
+    window.addEventListener('message', function (ev) {
+        if (ev.origin !== window.location.origin || !ev.data) return;
+        if (ev.data.tipo === 'cliente-guardado') {
+            clienteGuardado = true;
+            modalCliente.hide();
+            if (typeof mostrarMensaje === 'function') mostrarMensaje('Cliente modificado correctamente.');
+        } else if (ev.data.tipo === 'cliente-cerrar') {
+            modalCliente.hide();
+        }
+    });
+    modalClienteEl.addEventListener('hidden.bs.modal', function () {
+        document.getElementById('clienteFrame').src = 'about:blank';
+        if (clienteGuardado) { setTimeout(() => window.location.reload(), 1200); }  // el nombre del cliente puede haber cambiado
     });
 
     modalFactEl.addEventListener('hidden.bs.modal', function () {
