@@ -2525,7 +2525,9 @@ def formatear_numero_cl(valor):
     
 @login_required
 def proyectos_totales(request):
-    estado_id = request.GET.get('estado', '').strip()
+    # Estados con selección múltiple; sin ninguno marcado se muestran todos
+    estados_sel = sorted({int(e) for e in request.GET.getlist('estado') if e.strip().isdigit()})
+    estado_id = ','.join(str(e) for e in estados_sel)
     mandante_id = request.GET.get('mandante', '').strip()
     cliente_id = request.GET.get('cliente', '').strip()
     numero_proyecto = request.GET.get('numero_proyecto', '').strip()
@@ -2537,8 +2539,8 @@ def proyectos_totales(request):
         'estadoproyecto'
     )
 
-    if estado_id:
-        proyectos_qs = proyectos_qs.filter(estadoproyecto_id=estado_id)
+    if estados_sel:
+        proyectos_qs = proyectos_qs.filter(estadoproyecto_id__in=estados_sel)
     if mandante_id:
         proyectos_qs = proyectos_qs.filter(idcotizacion__idcliente_id=mandante_id)
     if cliente_id:
@@ -2607,6 +2609,7 @@ def proyectos_totales(request):
         'mandantes': clientes_proyecto,
         'clientes': clientes_proyecto,
         'filtro_estado': estado_id,
+        'estados_marcados': estados_sel,
         'filtro_mandante': mandante_id,
         'filtro_cliente': cliente_id,
         'filtro_numero_proyecto': numero_proyecto,

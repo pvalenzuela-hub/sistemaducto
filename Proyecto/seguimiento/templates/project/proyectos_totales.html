@@ -41,10 +41,9 @@
                 <form method="get" class="row g-2 mb-3 align-items-end">
                     <div class="col-12 col-md-3">
                         <label for="estado" class="form-label mb-1">Estado del proyecto</label>
-                        <select name="estado" id="estado" class="form-select">
-                            <option value="">Todos</option>
+                        <select name="estado" id="estado" multiple class="select-check" data-texto="estados" data-vacio="Todos">
                             {% for estado in estados_proyecto %}
-                                <option value="{{ estado.id }}" {% if filtro_estado == estado.id|stringformat:"s" %}selected{% endif %}>{{ estado.nombre }}</option>
+                                <option value="{{ estado.id }}" data-color="{{ estado.color|default:'#ffffff' }}" {% if estado.id in estados_marcados %}selected{% endif %}>{{ estado.nombre }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -161,6 +160,8 @@
 {% endblock %}
 
 {% block extra_js %}
+{% load static %}
+<script src="{% static 'assets/js/select-check.js' %}"></script>
 <script>
 $(document).ready(function () {
     if ($.fn.DataTable.isDataTable('#basic-datatable')) {

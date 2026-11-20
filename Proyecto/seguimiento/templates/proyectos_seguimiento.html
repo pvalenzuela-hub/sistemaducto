@@ -122,20 +122,13 @@
     <div class="card-body">
         <form method="get" class="row g-2 align-items-end">
             <input type="hidden" name="filtrado" value="1">
-            <div class="col-12">
-                <label class="form-label mb-1">Estado del proyecto</label>
-                <span class="small ms-2">
-                    <a href="#" class="filtro-estados" data-cual="defecto">Por defecto</a> ·
-                    <a href="#" class="filtro-estados" data-cual="todos">Todos</a> ·
-                    <a href="#" class="filtro-estados" data-cual="ninguno">Ninguno</a>
-                </span>
-                <div>
+            <div class="col-12 col-md-3">
+                <label for="estado" class="form-label mb-1">Estado del proyecto</label>
+                <select name="estado" id="estado" multiple class="select-check" data-texto="estados" data-defecto="{{ estados_defecto|join:',' }}">
                     {% for estado in estados_proyecto %}
-                        <label class="estado-chip" style="background: {{ estado.color|default:'#ffffff' }}; color: {{ estado.forcolor|default:'#000000' }};">
-                            <input type="checkbox" name="estado" value="{{ estado.id }}" class="chk-estado-proy" {% if estado.id in estados_marcados %}checked{% endif %}> {{ estado.nombre }}
-                        </label>
+                        <option value="{{ estado.id }}" data-color="{{ estado.color|default:'#ffffff' }}" {% if estado.id in estados_marcados %}selected{% endif %}>{{ estado.nombre }}</option>
                     {% endfor %}
-                </div>
+                </select>
             </div>
             <div class="col-12 col-md-3">
                 <label for="mandante" class="form-label mb-1">Mandante</label>
@@ -652,6 +645,8 @@
 {% endblock %}
 
 {% block extra_js %}
+{% load static %}
+<script src="{% static 'assets/js/select-check.js' %}"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(document).ready(function() {
@@ -766,16 +761,6 @@ $(document).ready(function() {
         const factCompleta = !!btn.data('idcliente-fact') && !!btn.data('numconf') && !!btn.data('medioconf') && !!btn.data('fechaconf') && !!btn.data('conhes') && !!btn.data('coneepp') && !!btn.data('conotro');
         $('#btnAbrirCrearFactura').prop('hidden', !(factCompleta && (estadoproyectoId === 1 || estadoproyectoId === 2)));
         $('#btnAbrirCrearFactura').data('valor-raw', btn.data('valorraw') || 0);
-    });
-
-    // Filtro de estados: atajos Por defecto / Todos / Ninguno
-    const ESTADOS_DEFECTO = {{ estados_defecto|safe }};
-    $('.filtro-estados').on('click', function (e) {
-        e.preventDefault();
-        const cual = $(this).data('cual');
-        $('.chk-estado-proy').each(function () {
-            this.checked = cual === 'todos' ? true : cual === 'ninguno' ? false : ESTADOS_DEFECTO.includes(Number(this.value));
-        });
     });
 
     // Fecha que pide el escritorio según el nuevo estado: Entrega Versión Revisión, Ingresado a SEREMI, Aprobado en SEREMI

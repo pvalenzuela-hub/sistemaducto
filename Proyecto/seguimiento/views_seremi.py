@@ -80,13 +80,19 @@ def _fila(r):
 def seremi_seguimiento(request):
     estados = _estados_seremi()
     validos = {cod for cod, _ in estados}
-    todo = request.GET.get('todo') == '1'
+    # Estados con selección múltiple. Al abrir: los del listado por defecto del escritorio.
+    filtrado = 'filtrado' in request.GET or 'estado' in request.GET
+    if request.GET.get('todo') == '1':
+        estados_sel = sorted(validos)
+    elif filtrado:
+        estados_sel = sorted({int(e) for e in request.GET.getlist('estado') if e.strip().isdigit()} & validos)
+    else:
+        estados_sel = list(ESTADOS_SEREMI_LISTADO)
     try:
         tipo = int(request.GET.get('tipo') or 0)
     except ValueError:
         tipo = 0
     texto = (request.GET.get('texto') or '').strip()
-    estado_txt = (request.GET.get('estado') or '').strip()
     error = ''
 
     if texto and tipo in dict(TIPOS_FILTRO):
@@ -95,10 +101,13 @@ def seremi_seguimiento(request):
             filas = []
         else:
             filas = _consultar(tipo, None, texto[:80])
-    elif estado_txt.isdigit() and int(estado_txt) in validos and not todo:
-        filas = _consultar(0, int(estado_txt), None)
+    elif sorted(estados_sel) == sorted(ESTADOS_SEREMI_LISTADO):
+        filas = _consultar(None, None, None)  # mismo listado por defecto del escritorio
     else:
-        filas = _consultar(None, None, None)
+        filas = []
+        for cod in estados_sel:  # el procedimiento filtra un estado a la vez
+            filas += _consultar(0, cod, None)
+        filas.sort(key=lambda r: -int(r['N° Proyecto']))
 
     colores = _colores_estado()
     return render(request, 'seremi_seguimiento.html', {
@@ -108,10 +117,10 @@ def seremi_seguimiento(request):
         'submenu': 'Seguimiento Ingreso SEREMI',
         'filas': [_fila(r) for r in filas],
         'estados': [{'codigo': c, 'nombre': n, 'color': colores.get(c, 'White')} for c, n in estados],
-        'filtro_estado': estado_txt,
+        'estados_marcados': estados_sel,
+        'estados_defecto': list(ESTADOS_SEREMI_LISTADO),
         'filtro_tipo': tipo if tipo in dict(TIPOS_FILTRO) else 1,
         'filtro_texto': texto,
-        'todo': todo,
         'tipos_filtro': TIPOS_FILTRO,
         'error': error,
     })

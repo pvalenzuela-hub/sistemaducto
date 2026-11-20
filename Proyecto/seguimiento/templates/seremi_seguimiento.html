@@ -36,20 +36,14 @@
 <div class="card mb-3">
     <div class="card-body">
         <form method="get" id="formFiltros" class="row g-2 align-items-end">
+            <input type="hidden" name="filtrado" value="1">
             <div class="col-12 col-md-4">
                 <label class="form-label mb-1" for="filtroEstado">Estado</label>
-                <select name="estado" id="filtroEstado" class="form-select">
-                    <option value="">Estados SEREMI en curso</option>
+                <select name="estado" id="filtroEstado" multiple class="select-check" data-texto="estados" data-defecto="{{ estados_defecto|join:',' }}">
                     {% for e in estados %}
-                        <option value="{{ e.codigo }}" {% if filtro_estado == e.codigo|stringformat:"s" and not todo %}selected{% endif %}>{{ e.nombre }}</option>
+                        <option value="{{ e.codigo }}" data-color="{{ e.color }}" {% if e.codigo in estados_marcados %}selected{% endif %}>{{ e.nombre }}</option>
                     {% endfor %}
                 </select>
-            </div>
-            <div class="col-6 col-md-1">
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" name="todo" value="1" id="chkTodo" {% if todo %}checked{% endif %}>
-                    <label class="form-check-label" for="chkTodo">Todo</label>
-                </div>
             </div>
             <div class="col-12 col-md-3">
                 <label class="form-label mb-1">Buscar por</label>
@@ -218,6 +212,7 @@
 {% block extra_js %}
 {% load static %}
 <script src="{% static 'assets/js/tabla-ordenable.js' %}"></script>
+<script src="{% static 'assets/js/select-check.js' %}"></script>
 <script>
 (function () {
     const URL_PROY = "{% url 'seremi_proyecto' 0 %}";
@@ -235,8 +230,6 @@
     let huboCambios = false;
 
     // Filtros: elegir un estado o marcar "Todo" busca de inmediato, como en el escritorio
-    $('#filtroEstado').on('change', function () { $('#chkTodo').prop('checked', false); $('[name=texto]').val(''); $('#formFiltros').trigger('submit'); });
-    $('#chkTodo').on('change', function () { if (this.checked) { $('#filtroEstado').val(''); $('[name=texto]').val(''); $('#formFiltros').trigger('submit'); } });
 
     async function postForm(url, data) {
         const resp = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' }, body: data });
