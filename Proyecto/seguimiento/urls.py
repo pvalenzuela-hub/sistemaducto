@@ -36,6 +36,7 @@ urlpatterns = [
     path('proyectos/seremi/<int:idproyecto>/comentarios/<int:idcomentario>/eliminar/', views_seremi.seremi_comentario_eliminar, name='seremi_comentario_eliminar'),
     path('facturas/seguimiento/', views_facturas.facturas_seguimiento, name='facturas_seguimiento'),
     path('facturas/reporte/', views_reportes.reporte_facturas, name='reporte_facturas'),
+    path('proyectos/reporte/adjudicaciones/', views_reportes.reporte_adjudicaciones, name='reporte_adjudicaciones'),
     path('facturas/<int:idfactura>/seguimiento/', views_facturas.factura_seguimiento_detalle, name='factura_seguimiento_detalle'),
     path('facturas/<int:idfactura>/seguimiento/guardar/', views_facturas.factura_seguimiento_guardar, name='factura_seguimiento_guardar'),
     path('facturas/<int:idfactura>/comentarios/<int:idreg>/editar/', views_facturas.factura_comentario_editar, name='factura_comentario_editar'),

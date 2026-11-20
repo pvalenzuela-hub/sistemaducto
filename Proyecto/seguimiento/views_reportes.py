@@ -162,3 +162,93 @@ def _csv(filas, campo_fecha, desde, hasta):
     w.writerow([])
     w.writerow(['', '', '', '', '', '', '', '', '', 'Total', round(sum(f['total'] for f in filas))])
     return resp
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Reporte de Adjudicaciones (REP_Adjudicacion / Report4 del escritorio)
+# ---------------------------------------------------------------------------------------------------------------
+
+def _uf(valor):
+    return f"{float(valor or 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _anios_adjudicacion():
+    with connection.cursor() as cursor:
+        cursor.execute('SET NOCOUNT ON; EXEC Consulta_AgnoAdjudicacion')
+        return [int(r[0]) for r in cursor.fetchall()]
+
+
+def _adjudicaciones(desde_anio):
+    with connection.cursor() as cursor:
+        cursor.execute('SET NOCOUNT ON; EXEC REP_Adjudicacion %s', [desde_anio])
+        return [{
+            'agno': int(r[0]),
+            'mes': (r[1] or '').strip(),
+            'idproyecto': int(r[2]),
+            'cotizacion': r[3] or '',
+            'proyecto': r[4] or '',
+            'moneda': r[5] or '',
+            'valor_uf': float(r[6] or 0),
+            'valor_peso': float(r[7] or 0),
+            'mandante': r[8] or '',
+            'estado': (r[9] or '').strip(),
+            'adjudicacion': r[10] or '',
+        } for r in cursor.fetchall()]
+
+
+@login_required
+@require_GET
+def reporte_adjudicaciones(request):
+    anios = _anios_adjudicacion()
+    try:
+        desde_anio = int(request.GET.get('desde') or 0)
+    except ValueError:
+        desde_anio = 0
+    if desde_anio not in anios:
+        desde_anio = anios[0] if anios else timezone.localdate().year  # al abrir: el año más reciente
+    filas = _adjudicaciones(desde_anio)
+
+    if request.GET.get('formato') == 'csv':
+        resp = HttpResponse(content_type='text/csv; charset=utf-8')
+        resp['Content-Disposition'] = f'attachment; filename="adjudicaciones_desde_{desde_anio}.csv"'
+        resp.write('﻿')
+        w = csv.writer(resp, delimiter=';')
+        w.writerow(['Año', 'Mes', 'N° Proyecto', 'N° Cot.', 'Proyecto', 'Moneda', 'Valor UF', 'Valor Peso', 'Mandante',
+                    'Estado', 'Adjudicación'])
+        for f in filas:
+            w.writerow([f['agno'], f['mes'], f['idproyecto'], f['cotizacion'], f['proyecto'], f['moneda'],
+                        str(round(f['valor_uf'], 2)).replace('.', ','), round(f['valor_peso']), f['mandante'],
+                        f['estado'], f['adjudicacion']])
+        w.writerow([])
+        w.writerow(['', '', '', '', f'Total ({len(filas)} proyectos)', '',
+                    str(round(sum(f['valor_uf'] for f in filas), 2)).replace('.', ','),
+                    round(sum(f['valor_peso'] for f in filas))])
+        return resp
+
+    grupos = OrderedDict()
+    for f in filas:
+        anio = grupos.setdefault(f['agno'], {'meses': OrderedDict(), 'uf': 0.0, 'peso': 0.0, 'cantidad': 0})
+        mes = anio['meses'].setdefault(f['mes'], {'filas': [], 'uf': 0.0, 'peso': 0.0})
+        mes['filas'].append({**f, 'uf_texto': _uf(f['valor_uf']), 'peso_texto': _pesos(f['valor_peso'])})
+        for g in (mes, anio):
+            g['uf'] += f['valor_uf']
+            g['peso'] += f['valor_peso']
+        anio['cantidad'] += 1
+    for anio in grupos.values():
+        anio['uf_texto'], anio['peso_texto'] = _uf(anio['uf']), _pesos(anio['peso'])
+        for mes in anio['meses'].values():
+            mes['cantidad'] = len(mes['filas'])
+            mes['uf_texto'], mes['peso_texto'] = _uf(mes['uf']), _pesos(mes['peso'])
+
+    return render(request, 'reporte_adjudicaciones.html', {
+        'titulo': 'Reporte de Adjudicaciones',
+        'encabezado': 'Reporte de Proyectos Adjudicados',
+        'menu': 'Proyectos',
+        'submenu': 'Reporte de Adjudicaciones',
+        'anios': anios,
+        'desde_anio': desde_anio,
+        'grupos': grupos,
+        'cantidad': len(filas),
+        'total_uf': _uf(sum(f['valor_uf'] for f in filas)),
+        'total_peso': _pesos(sum(f['valor_peso'] for f in filas)),
+    })

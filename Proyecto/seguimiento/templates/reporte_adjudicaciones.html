@@ -1,0 +1,93 @@
+{% extends 'components/base.html' %}
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tabla-reporte th, .tabla-reporte td { font-size: .82rem; vertical-align: middle; }
+    .tabla-reporte tr.fila-anio td { background: #dfe7f3; font-weight: 700; }
+    .tabla-reporte tr.fila-mes td { background: #f1f4f9; font-weight: 600; }
+    .tabla-reporte tr.subtotal td { background: #fafafa; font-weight: 600; }
+    .tabla-reporte tr.total td { background: #173052; color: #fff; font-weight: 700; }
+    @media print {
+        .no-print, .app-sidebar, .app-header, .page-header .breadcrumb { display: none !important; }
+        .main-content { margin: 0 !important; padding: 0 !important; }
+        .card { border: 0 !important; box-shadow: none !important; }
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ encabezado }}</h1>
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="#">{{ menu }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ submenu }}</li>
+        </ol>
+    </div>
+</div>
+
+<div class="card mb-3 no-print">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-6 col-md-2">
+                <label class="form-label mb-1" for="desde">Desde el año</label>
+                <select name="desde" id="desde" class="form-select" onchange="this.form.submit()">
+                    {% for a in anios %}<option value="{{ a }}" {% if a == desde_anio %}selected{% endif %}>{{ a }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-6 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Generar</button>
+                <a href="?desde={{ desde_anio }}&formato=csv" class="btn btn-outline-success">Exportar a Excel (CSV)</a>
+                <button type="button" class="btn btn-outline-secondary" onclick="window.print()">Imprimir</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between mb-2">
+            <div class="fw-semibold">Proyectos adjudicados desde {{ desde_anio }}</div>
+            <div class="fw-semibold">Proyectos: {{ cantidad }} · UF {{ total_uf }} · ${{ total_peso }}</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm tabla-reporte mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>N° Proyecto</th><th>N° Cot.</th><th>Proyecto</th><th>Moneda</th>
+                        <th class="text-end">Valor UF</th><th class="text-end">Valor Peso</th><th>Mandante</th><th>Estado</th><th>Adjudicación</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for anio, da in grupos.items %}
+                        <tr class="fila-anio"><td colspan="9">Año {{ anio }}</td></tr>
+                        {% for mes, dm in da.meses.items %}
+                            <tr class="fila-mes"><td colspan="9">{{ mes }} {{ anio }}</td></tr>
+                            {% for f in dm.filas %}
+                                <tr>
+                                    <td>{{ f.idproyecto }}</td><td>{{ f.cotizacion }}</td><td>{{ f.proyecto }}</td><td>{{ f.moneda }}</td>
+                                    <td class="text-end">{{ f.uf_texto }}</td><td class="text-end">${{ f.peso_texto }}</td>
+                                    <td>{{ f.mandante }}</td><td>{{ f.estado }}</td><td>{{ f.adjudicacion }}</td>
+                                </tr>
+                            {% endfor %}
+                            <tr class="subtotal"><td colspan="4" class="text-end">{{ mes }} {{ anio }}: {{ dm.cantidad }} proyecto{{ dm.cantidad|pluralize }}</td>
+                                <td class="text-end">{{ dm.uf_texto }}</td><td class="text-end">${{ dm.peso_texto }}</td><td colspan="3"></td></tr>
+                        {% endfor %}
+                        <tr class="subtotal"><td colspan="4" class="text-end">Año {{ anio }}: {{ da.cantidad }} proyecto{{ da.cantidad|pluralize }}</td>
+                            <td class="text-end">{{ da.uf_texto }}</td><td class="text-end">${{ da.peso_texto }}</td><td colspan="3"></td></tr>
+                    {% empty %}
+                        <tr><td colspan="9" class="text-center text-muted py-4">No hay proyectos adjudicados desde {{ desde_anio }}.</td></tr>
+                    {% endfor %}
+                    {% if cantidad %}
+                        <tr class="total"><td colspan="4" class="text-end">Total: {{ cantidad }} proyectos</td>
+                            <td class="text-end">{{ total_uf }}</td><td class="text-end">${{ total_peso }}</td><td colspan="3"></td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
