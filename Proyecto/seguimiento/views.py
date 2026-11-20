@@ -1607,60 +1607,98 @@ def crear_factura_proyecto(request):
         messages.error(request, 'El proyecto no tiene datos de facturación completos.')
         return redirect('seguimiento_proyectos')
 
-    numfactura = request.POST.get('numfactura')
-    try:
-        numfactura_int = int(str(numfactura).strip())
-    except (TypeError, ValueError):
-        numfactura_int = None
-    if not numfactura_int or numfactura_int <= 0:
-        msg = 'N° de Factura no válido.'
-        return JsonResponse({'ok': False, 'message': msg}, status=400) if request.headers.get('x-requested-with') == 'XMLHttpRequest' else redirect('seguimiento_proyectos')
-    if Factura.objects.filter(numfactura=numfactura).exists():
-        msg = f'Factura N° {numfactura} ya existe.'
-        return JsonResponse({'ok': False, 'message': msg}, status=400) if request.headers.get('x-requested-with') == 'XMLHttpRequest' else redirect('seguimiento_proyectos')
+    es_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
 
-    detalle_id = request.POST.get('detallefactura')
-    detalle = DetalleFactura.objects.filter(pk=detalle_id).first()
-    porc_fact = request.POST.get('porcfact')
-    vencimiento = request.POST.get('vencimiento') or 30
-    fecha_emision = _parse_date_ddmmyyyy(request.POST.get('fechaemision')) or timezone.now().date()
-    fecha_uf = _parse_date_ddmmyyyy(request.POST.get('fecha_uf')) or fecha_emision
-    valor_uf = _valor_uf_por_fecha(fecha_uf)
-    descripcion = (request.POST.get('descripcionfactura') or '').strip()
-    comentario = (request.POST.get('comentario') or '').strip()
-    detalle_texto = detalle.nombre if detalle else (proyecto.idcotizacion.nombreproyecto if proyecto.idcotizacion else '')
-    if descripcion:
-        detalle_texto = descripcion
-    if comentario:
-        detalle_texto = f"{detalle_texto} | {comentario}"
-    monto_total = None
+    def _error(msg):
+        if es_ajax:
+            return JsonResponse({'ok': False, 'message': msg}, status=400)
+        messages.error(request, msg)
+        return redirect('seguimiento_proyectos')
+
+    def _fecha_form(valor):
+        """Acepta AAAA-MM-DD (campo date) o DD/MM/AAAA."""
+        valor = (valor or '').strip()
+        if not valor:
+            return None
+        try:
+            return date.fromisoformat(valor)
+        except ValueError:
+            return _parse_date_ddmmyyyy(valor)
+
+    def _numero(valor):
+        texto = str(valor or '').strip()
+        if ',' in texto:
+            texto = texto.replace('.', '').replace(',', '.')
+        try:
+            return float(texto)
+        except ValueError:
+            return None
+
+    # Mismas reglas y mismo procedimiento (GR_CreaFactura) que Creación de Facturas del sistema de escritorio
+    from .views_facturas import DETALLES_FACTURA, _calculo_factura
+
     try:
-        monto_total = float(proyecto.valor or 0) * (float(porc_fact) / 100.0) if porc_fact else None
-    except (TypeError, ValueError):
-        monto_total = None
-    factura = Factura.objects.create(
-        numfactura=numfactura_int,
-        fechaemision=fecha_emision,
-        idcliente=proyecto.idcliente,
-        idproyecto=proyecto,
-        numhes_eepp=request.POST.get('numhes_eepp') or proyecto.numconf,
-        fechahes_eepp=_parse_date_ddmmyyyy(request.POST.get('fechahes_eepp')) or proyecto.fechaconf,
-        valortotal=monto_total,
-        valoruf=valor_uf,
-        valortotalpesos=monto_total * float(valor_uf) if (monto_total is not None and valor_uf is not None) else None,
-        porcfact=float(porc_fact) if porc_fact else None,
-        estado=1,
-        detalle=detalle_texto[:255],
-        idcontacto=proyecto.idcontactofacturacion,
-        moneda=proyecto.moneda,
-        montomonorig=proyecto.valor,
-        fechaact=timezone.now(),
-        fecharegistro=timezone.now(),
-        vencimiento=int(vencimiento) if vencimiento else 30,
-    )
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({'ok': True, 'message': f'Factura creada: {factura.numfactura}', 'numfactura': str(factura.numfactura)})
-    messages.success(request, f'Factura creada: {factura.numfactura}')
+        numfactura_int = int(str(request.POST.get('numfactura') or '').strip())
+    except ValueError:
+        numfactura_int = 0
+    if numfactura_int <= 0:
+        return _error('N° de Factura no válido.')
+    existente = Factura.objects.filter(numfactura=numfactura_int).first()
+    if existente:
+        return _error(f'Factura N° {numfactura_int} existe por un valor ${formatear_numero_cl(existente.valortotalpesos)}.')
+    if not proyecto.idcliente_id:
+        return _error('No es posible crear la factura: falta la identificación del cliente.')
+
+    fecha_emision = _fecha_form(request.POST.get('fechaemision'))
+    if not fecha_emision:
+        return _error('Debe ingresar la fecha de la factura.')
+
+    porc = _numero(request.POST.get('porcfact'))
+    if not porc or porc <= 0:
+        return _error('% a Facturar debe ser mayor a cero.')
+
+    detalle = (request.POST.get('detallefactura') or '').strip()
+    if detalle.isdigit():  # compatibilidad con el formulario anterior, que enviaba un número
+        idx = int(detalle) - 1
+        detalle = DETALLES_FACTURA[idx] if 0 <= idx < len(DETALLES_FACTURA) else ''
+    if not detalle:
+        return _error('Debe ingresar el detalle a facturar.')
+
+    if (proyecto.moneda or '') == 'UF':
+        valor_uf = _numero(request.POST.get('valor_uf'))
+        if not valor_uf or valor_uf <= 0:
+            fecha_uf = _fecha_form(request.POST.get('fecha_uf')) or fecha_emision
+            valor_uf = _valor_uf_por_fecha(fecha_uf)
+        if not valor_uf or valor_uf <= 0:
+            return _error('Valor U.F. debe ser mayor a cero: no hay UF para la fecha indicada.')
+    else:
+        valor_uf = 1.0
+
+    num_hes = (request.POST.get('numhes_eepp') or '').strip()[:50]
+    fecha_hes = _fecha_form(request.POST.get('fechahes_eepp'))
+    try:
+        vencimiento = int(request.POST.get('vencimiento') or 30)
+    except ValueError:
+        vencimiento = 30
+
+    monto, valor_uf, total_pesos = _calculo_factura(proyecto, porc, float(valor_uf))
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute(
+            'SET NOCOUNT ON; EXEC GR_CreaFactura @IdFactura=%s, @NumFactura=%s, @FechaEmision=%s, @IdCliente=%s, '
+            '@IdProyecto=%s, @NumHES_EEPP=%s, @FechaHES_EEPP=%s, @ValorTotal=%s, @ValorUF=%s, @ValorTotalPesos=%s, '
+            '@PorcFact=%s, @Detalle=%s, @Moneda=%s, @MontoFacturarMonOrig=%s, @NuevoEstado=NULL, @Vencimiento=%s',
+            [0, numfactura_int, fecha_emision, proyecto.idcliente_id, proyecto.pk, num_hes, fecha_hes,
+             float(proyecto.valor or 0), round(valor_uf, 2), total_pesos, porc, detalle[:100],
+             (proyecto.moneda or '')[:2], monto, vencimiento])
+        # Datos que el formulario web ya guardaba y el procedimiento no recibe
+        Factura.objects.filter(numfactura=numfactura_int, idproyecto=proyecto).update(
+            idcontacto=proyecto.idcontactofacturacion_id)
+        Factura.objects.filter(numfactura=numfactura_int, idproyecto=proyecto, fecharegistro__isnull=True).update(
+            fecharegistro=_ahora_santiago_naive())
+
+    if es_ajax:
+        return JsonResponse({'ok': True, 'message': f'Factura creada: {numfactura_int}', 'numfactura': str(numfactura_int)})
+    messages.success(request, f'Factura creada: {numfactura_int}')
     return redirect('seguimiento_proyectos')
 
 

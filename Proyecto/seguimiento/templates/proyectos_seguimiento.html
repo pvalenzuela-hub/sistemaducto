@@ -418,7 +418,7 @@
                         </div>
                         <div class="col-12 col-md-2">
                             <label class="form-label">Valor UF</label>
-                            <input type="text" id="fact_valor_uf" class="form-control" readonly>
+                            <input type="text" name="valor_uf" id="fact_valor_uf" class="form-control" readonly>
                         </div>
                         <div class="col-12 col-md-1">
                             <label class="form-label">% a Facturar</label>
@@ -447,12 +447,12 @@
                             <label class="form-label">Detalle a facturar</label>
                             <select name="detallefactura" id="fact_detallefactura" class="form-select">
                                 <option value="">Seleccione</option>
-                                <option value="1">Anticipo</option>
-                                <option value="2">Entrega V00</option>
-                                <option value="3">Entrega V. Final</option>
-                                <option value="4">Saldo</option>
-                                <option value="5">V. Licitación</option>
-                                <option value="6">V. Construcción</option>
+                                <option value="Anticipo">Anticipo</option>
+                                <option value="Entrega V00">Entrega V00</option>
+                                <option value="Entrega V Final">Entrega V Final</option>
+                                <option value="Saldo">Saldo</option>
+                                <option value="V Licitación">V Licitación</option>
+                                <option value="V Construcción">V Construcción</option>
                             </select>
                         </div>
                         <div class="col-12 col-md-2">
@@ -771,45 +771,27 @@ $(document).ready(function() {
         modal.show();
     });
 
-    $('#btnArmarDescripcionFactura').on('click', function() {
-        const numeroProyecto = ($('#fact_head_numproyecto').data('numero-proyecto') || $('#proj_numero').val() || '').toString().trim();
-        const nombreProyecto = ($('#proj_nombre').val() || '').trim();
-        const medio = ($('#proj_medioconf').val() || '').trim();
-        const numero = ($('#proj_numconf').val() || '').trim();
-        const fecha = ($('#proj_fechaconf').val() || '').trim();
-        const moneda = ($('#proj_moneda').val() || '').trim();
-        const valorProyectoRaw = $('#btnAbrirCrearFactura').data('valor-raw') || $('#proj_valor').val() || 0;
-        const valorProyecto = ($('#proj_valor').val() || '').trim();
-        const numCotizacion = ($('#proj_cotizacion').val() || '').trim();
-        const fechaCotizacion = ($('#proj_fechacot').val() || '').trim();
-        const porcentaje = ($('#fact_porcfact').val() || '').trim();
-        const detalle = $('#fact_detallefactura option:selected').text().trim();
-        const baseProyecto = parseNumeroCL(valorProyectoRaw || valorProyecto);
-        const pctFact = parseNumeroCL(porcentaje);
-        const montoAFacturarNum = baseProyecto > 0 && pctFact > 0 ? (baseProyecto * pctFact / 100.0) : 0;
-        const valorUFNum = parseNumeroCL($('#fact_valor_uf').val() || 0);
-        const valorTotalPesosNum = parseNumeroCL($('#fact_valor_total_pesos').val()) || (montoAFacturarNum * valorUFNum);
-        const montoAFacturar = formatearUF(montoAFacturarNum);
-        const valorTotalPesos = formatearNumeroEntero(valorTotalPesosNum);
-        const valorUF = formatearUF(valorUFNum);
-        const fechaUF = fechaISOaDDMMYYYY($('#fact_fecha_uf').val() || $('#fact_fechaemision').val() || '');
-        const saldoPct = ($('#proj_saldo_facturar').val() || '').trim();
-        const saldoMonto = baseProyecto > 0 && saldoPct ? formatearNumeroEntero(baseProyecto * (parseNumeroCL(saldoPct) || 0) / 100.0) : '';
-        const lineas = [
-            '',
-            `${numeroProyecto} ${nombreProyecto}`.trim(),
-            `Monto Total Proyecto ${moneda} ${formatearUF(baseProyecto)}`.trim(),
-            `Según Cotización N° ${numCotizacion} (${fechaCotizacion})`.trim(),
-            `Según ${medio} N° ${numero} (${fecha})`.trim(),
-            '',
-            '',
-            `A Facturar ${porcentaje}% ${detalle} ${montoAFacturar} ($${valorTotalPesos})`.trim(),
-            `Según ${moneda} ${valorUF} (${fechaUF})`.trim(),
-            '',
-            'Proyecto Especialidad Manejo de Residuos',
-            `Saldo por facturar ${saldoPct}% ${formatearUF(parseNumeroCL(saldoMonto))}`.trim(),
-        ];
-        $('#fact_descripcionfactura').val(lineas.join('\n'));
+    $('#btnArmarDescripcionFactura').on('click', async function() {
+        // Misma descripción que genera Creación de Facturas del escritorio (GeneraGlosa), armada en el servidor
+        const idproyecto = $('#factura_idproyecto').val();
+        if (!idproyecto) return;
+        const fd = new FormData();
+        fd.append('porc', $('#fact_porcfact').val() || '');
+        fd.append('valor_uf', $('#fact_valor_uf').val() || '');
+        fd.append('fecha_emision', $('#fact_fechaemision').val() || '');
+        fd.append('detalle', $('#fact_detallefactura').val() || '');
+        fd.append('num_hes_eepp', $('#fact_numhes_eepp').val() || '');
+        fd.append('fecha_hes_eepp', $('#fact_fechahes_eepp').val() || '');
+        const csrf = $('#formCrearFacturaReal [name=csrfmiddlewaretoken]').val();
+        const url = "{% url 'factura_glosa' 0 %}".replace('/0/', '/' + idproyecto + '/');
+        try {
+            const resp = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' }, body: fd });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.ok) { alert(data.message || 'No se pudo armar la descripción.'); return; }
+            $('#fact_descripcionfactura').val(data.glosa);
+        } catch (e) {
+            alert('No se pudo armar la descripción.');
+        }
     });
 
     function formatearNumero(valor) {
@@ -849,12 +831,23 @@ $(document).ready(function() {
     }
 
     function recalcularFactura() {
+        // Igual que Creación de Facturas del escritorio: en UF el monto lleva 2 decimales y el total en pesos se
+        // redondea; en pesos el monto es entero y no se usa UF.
         const base = parseFloat($('#btnAbrirCrearFactura').data('valor-raw') || 0);
         const pct = parseFloat($('#fact_porcfact').val() || 0);
-        const monto = base > 0 && pct > 0 ? (base * pct / 100.0) : 0;
-        const uf = parseFloat($('#fact_valor_uf').val() || 0);
-        $('#fact_monto_facturar').val(monto ? monto.toFixed(2) : '');
-        $('#fact_valor_total_pesos').val(monto > 0 && uf > 0 ? (monto * uf).toFixed(2) : '');
+        const esUF = ($('#fact_moneda_hidden').val() || $('#proj_moneda').val() || '').trim() === 'UF';
+        const redondear = (v, d) => { const f = Math.pow(10, d); return Math.round((v + 1e-9) * f) / f; };
+        if (!(base > 0 && pct > 0)) { $('#fact_monto_facturar, #fact_valor_total_pesos').val(''); return; }
+        if (esUF) {
+            const monto = redondear(base * pct / 100.0, 2);
+            const uf = parseNumeroCL($('#fact_valor_uf').val() || 0);
+            $('#fact_monto_facturar').val(monto.toFixed(2));
+            $('#fact_valor_total_pesos').val(uf > 0 ? formatearNumeroEntero(redondear(monto * uf, 0)) : '');
+        } else {
+            const monto = redondear(base * pct / 100.0, 0);
+            $('#fact_monto_facturar').val(formatearNumeroEntero(monto));
+            $('#fact_valor_total_pesos').val(formatearNumeroEntero(monto));
+        }
     }
 
     function fechaISOaDDMMYYYY(fecha) {
