@@ -49,12 +49,17 @@
 							</ul>
 						</li>			
 						<li class="slide">
+							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-file-text"></i><span class="side-menu__label">Facturas</span></a>
+							<ul class="slide-menu">
+								<li><a href="{% url 'facturas_seguimiento' %}" class="slide-item"> Seguimiento Facturas</a></li>
+							</ul>
+						</li>
+						<li class="slide">
 							<a class="side-menu__item" data-bs-toggle="slide" href="#"><i class="side-menu__icon fe fe-clipboard"></i><span class="side-menu__label">Cobranza</span><span class="badge bg-secondary side-badge">2</span></a>
 							<ul class="slide-menu">
 								<li><a href="{% url 'vista1' %}" class="slide-item"> Proyectos terminados</a></li>
 								<li><a href="{% url 'vista2' %}" class="slide-item"> Proyectos visto bueno</a></li>
 								<li><a href="{% url 'vista3' %}" class="slide-item"> Proyectos en desarrollo</a></li>
-								<li><a href="{% url 'facturas_seguimiento' %}" class="slide-item"> Seguimiento de Facturas</a></li>
 							</ul>
 						</li>
 

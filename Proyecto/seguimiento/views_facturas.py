@@ -148,8 +148,8 @@ def facturas_seguimiento(request):
     return render(request, 'facturas_seguimiento.html', {
         'titulo': 'Seguimiento de Facturas',
         'encabezado': 'Seguimiento de Facturas',
-        'menu': 'Cobranza',
-        'submenu': 'Seguimiento de Facturas',
+        'menu': 'Facturas',
+        'submenu': 'Seguimiento Facturas',
         'estados_catalogo': [
             {'codigo': cod, 'nombre': nombre, 'color': COLOR_ESTADO.get(cod, '#ffffff'),
              'marcado': todo or cod in estados}
