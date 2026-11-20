@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, views_facturas
 from .views import Vista1, Vista2, Vista3, VistaSeguimiento, VisorComentario
 
 urlpatterns = [
@@ -28,6 +28,11 @@ urlpatterns = [
     path('proyectos/seguimiento/guardar-facturacion/', views.guardar_datos_facturacion_proyecto, name='guardar_datos_facturacion_proyecto'),
     path('proyectos/seguimiento/crear-factura/', views.crear_factura_proyecto, name='crear_factura_proyecto'),
     path('proyectos/seguimiento/api/valor-uf/', views.api_valor_uf_por_fecha, name='api_valor_uf_por_fecha'),
+    path('facturas/seguimiento/', views_facturas.facturas_seguimiento, name='facturas_seguimiento'),
+    path('facturas/<int:idfactura>/seguimiento/', views_facturas.factura_seguimiento_detalle, name='factura_seguimiento_detalle'),
+    path('facturas/<int:idfactura>/seguimiento/guardar/', views_facturas.factura_seguimiento_guardar, name='factura_seguimiento_guardar'),
+    path('facturas/<int:idfactura>/comentarios/<int:idreg>/editar/', views_facturas.factura_comentario_editar, name='factura_comentario_editar'),
+    path('facturas/<int:idfactura>/comentarios/<int:idreg>/eliminar/', views_facturas.factura_comentario_eliminar, name='factura_comentario_eliminar'),
     path('vistobueno/', Vista2.as_view(), name='vista2'),
     path('desarrollo/', Vista3.as_view(), name='vista3'),
 

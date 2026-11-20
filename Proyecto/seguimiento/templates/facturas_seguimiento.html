@@ -1,0 +1,478 @@
+{% extends 'components/base.html' %}
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .estado-chip { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid #c9ced6; border-radius: 6px;
+                   padding: .25rem .55rem; margin: 0 .35rem .35rem 0; cursor: pointer; font-size: .85rem; user-select: none; }
+    .estado-chip input { margin: 0; }
+    .tabla-facturas th { white-space: nowrap; font-size: .8rem; }
+    .tabla-facturas td { font-size: .82rem; vertical-align: middle; }
+    .tabla-facturas tbody tr td { background-color: var(--fila-color) !important; color: #1f2733; }
+    .tabla-facturas .col-proyecto { min-width: 220px; }
+    .tabla-facturas .col-razon { min-width: 170px; }
+    .tabla-facturas a.link-seg { font-weight: 600; text-decoration: underline; cursor: pointer; color: #173052; }
+    .tabla-facturas .ultimo-seg { cursor: help; border-bottom: 1px dotted #555; }
+    .totales { font-size: 1rem; font-weight: 600; }
+    #modalSeg .modal-dialog { max-width: 1100px; }
+    #modalSeg .dato { font-size: .82rem; }
+    #modalSeg .dato .lbl { color: #6b7280; display: block; font-size: .72rem; text-transform: uppercase; }
+    #modalSeg textarea.glosa { font-family: inherit; font-size: .85rem; }
+    .comentario-item { border-bottom: 1px solid #e5e7eb; padding: .5rem 0; }
+    .comentario-item .meta { font-size: .75rem; color: #6b7280; }
+    .comentario-item pre { white-space: pre-wrap; font-family: inherit; font-size: .85rem; margin: .2rem 0 0; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ encabezado }}</h1>
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="#">{{ menu }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ submenu }}</li>
+        </ol>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" id="formFiltros">
+            <input type="hidden" name="filtrado" value="1">
+            <div class="mb-2">
+                <label class="form-label mb-1">Estado</label>
+                <div>
+                    <label class="estado-chip" style="background:#f3f4f6">
+                        <input type="checkbox" name="todo" value="1" id="chkTodo" {% if todo %}checked{% endif %}> Todo
+                    </label>
+                    {% for e in estados_catalogo %}
+                        <label class="estado-chip" style="background:{{ e.color }}">
+                            <input type="checkbox" name="estado" value="{{ e.codigo }}" class="chk-estado" {% if e.marcado %}checked{% endif %}>
+                            {{ e.nombre }}
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-5">
+                    <label class="form-label mb-1">Buscar por</label>
+                    <div>
+                        {% for valor, nombre in tipos_filtro %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="tipo" id="tipo{{ valor }}" value="{{ valor }}"
+                                       {% if filtro_tipo == valor or forloop.first and not filtro_tipo %}checked{% endif %}>
+                                <label class="form-check-label" for="tipo{{ valor }}">{{ nombre }}</label>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <input type="text" name="texto" class="form-control" value="{{ filtro_texto }}" placeholder="Texto a buscar (vacío = sin filtro)">
+                </div>
+                <div class="col-12 col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Buscar</button>
+                    <a href="{% url 'facturas_seguimiento' %}" class="btn btn-outline-secondary">Limpiar</a>
+                </div>
+            </div>
+            {% if error %}<div class="text-danger mt-2">{{ error }}</div>{% endif %}
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="text-muted small">Clic en el <b>nombre del proyecto</b> para registrar seguimiento; en el <b>N° de factura</b> para crear una nueva factura del proyecto.</div>
+            <div class="totales">Facturas: {{ cantidad }} &nbsp;·&nbsp; TOTAL: ${{ total_texto }}</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm tabla-facturas mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>N° Fact</th>
+                        <th>Fecha Emisión</th>
+                        <th>N° Proyecto</th>
+                        <th class="col-proyecto">Nombre Proyecto</th>
+                        <th>Seguimiento</th>
+                        <th class="col-razon">Cliente</th>
+                        <th class="col-razon">Mandante</th>
+                        <th class="text-end">Monto Fact</th>
+                        <th>Detalle</th>
+                        <th>Fecha Pago</th>
+                        <th>Estado</th>
+                        <th class="text-end">%</th>
+                        <th class="text-end">Saldo por Facturar</th>
+                        <th class="text-end">Vencimiento</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in filas %}
+                        <tr style="--fila-color: {{ f.color }}">
+                            <td><a href="{% url 'seguimiento_proyectos' %}?numero_proyecto={{ f.idproyecto }}" title="Crear factura para el proyecto {{ f.idproyecto }}">{{ f.numfactura }}</a></td>
+                            <td>{{ f.fecha_emision }}</td>
+                            <td>{{ f.idproyecto }}</td>
+                            <td class="col-proyecto"><a class="link-seg" data-id="{{ f.idfactura }}" title="Seguimiento de Facturas">{{ f.nombre_proyecto }}</a></td>
+                            <td>{% if f.ultimo_seg %}<span class="ultimo-seg" title="{{ f.seguimiento }}">{{ f.ultimo_seg }}</span>{% endif %}</td>
+                            <td class="col-razon">{{ f.cliente }}</td>
+                            <td class="col-razon">{{ f.mandante }}</td>
+                            <td class="text-end">${{ f.monto_texto }}</td>
+                            <td>{{ f.detalle }}</td>
+                            <td>{{ f.fecha_pago }}</td>
+                            <td>{{ f.estado_nombre }}</td>
+                            <td class="text-end">{{ f.porc_fact|default_if_none:"" }}</td>
+                            <td class="text-end">{{ f.saldo_por_facturar|default_if_none:"" }}</td>
+                            <td class="text-end">{{ f.vencimiento|default_if_none:"" }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="14" class="text-center text-muted py-4">No existen facturas en los estados seleccionados.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalSeg" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="segTitulo">Seguimiento de Factura</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="segCargando" class="text-center text-muted py-4">Cargando...</div>
+                <div id="segContenido" class="d-none">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6 col-md-2 dato"><span class="lbl">Factura</span><span id="dNum"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">Emisión</span><span id="dEmision"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">Monto</span><span id="dMonto"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">% Facturado</span><span id="dPorc"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">Estado</span><span id="dEstado"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">Vencimiento</span><span id="dVenc"></span></div>
+                        <div class="col-12 col-md-6 dato"><span class="lbl">Proyecto</span><span id="dProyecto"></span></div>
+                        <div class="col-12 col-md-6 dato"><span class="lbl">Detalle</span><span id="dDetalle"></span></div>
+                        <div class="col-12 col-md-6 dato"><span class="lbl">Cliente</span><span id="dCliente"></span></div>
+                        <div class="col-12 col-md-6 dato"><span class="lbl">Mandante</span><span id="dMandante"></span></div>
+                    </div>
+
+                    <ul class="nav nav-tabs" role="tablist">
+                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabNuevo" type="button">Nuevo seguimiento</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabComentarios" type="button">Comentarios (<span id="cantComentarios">0</span>)</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabCorreo" type="button">Correo de envío</button></li>
+                    </ul>
+                    <div class="tab-content border border-top-0 p-3">
+                        <div class="tab-pane fade show active" id="tabNuevo">
+                            <form id="formSeg">
+                                <div class="mb-2">
+                                    <label class="form-label">Comentario del seguimiento *</label>
+                                    <textarea name="comentario" class="form-control" rows="3" required></textarea>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-12 col-md-4">
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="chkCambiaEstado" name="cambia_estado" value="1">
+                                            <label class="form-check-label" for="chkCambiaEstado">Cambiar estado</label>
+                                        </div>
+                                        <select name="estado" id="selEstado" class="form-select mt-1" disabled>
+                                            <option value="">Seleccione...</option>
+                                            {% for e in estados_catalogo %}<option value="{{ e.codigo }}">{{ e.nombre }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-4 d-none" id="grpFechaPago">
+                                        <label class="form-label mt-2">Fecha de pago *</label>
+                                        <input type="date" name="fecha_pago" class="form-control">
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="chkRecordatorio" name="es_recordatorio" value="1">
+                                            <label class="form-check-label" for="chkRecordatorio">Es recordatorio</label>
+                                        </div>
+                                        <input type="date" name="fecha_recordatorio" id="fechaRecordatorio" class="form-control mt-1 d-none">
+                                    </div>
+                                </div>
+
+                                <fieldset class="border rounded p-2 mb-2">
+                                    <legend class="float-none w-auto px-1 fs-6 mb-0">Contacto</legend>
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-12 col-md-3">
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="contacto_de" id="contactoMandante" value="mandante" checked>
+                                                <label class="form-check-label" for="contactoMandante">Mandante</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" name="contacto_de" id="contactoCliente" value="cliente">
+                                                <label class="form-check-label" for="contactoCliente">Cliente</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-4"><select id="selContacto" class="form-select"></select></div>
+                                        <div class="col-12 col-md-5 dato" id="datosContacto"></div>
+                                    </div>
+                                </fieldset>
+
+                                <fieldset class="border rounded p-2 mb-2">
+                                    <legend class="float-none w-auto px-1 fs-6 mb-0">Datos del cliente</legend>
+                                    <div class="row g-2">
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label">Horario de llamados</label>
+                                            <input type="text" name="horario_llamada" class="form-control" maxlength="80">
+                                        </div>
+                                        <div class="col-12 col-md-5">
+                                            <label class="form-label">Dirección retiro de cheques</label>
+                                            <input type="text" name="direc_retiro_ch" class="form-control" maxlength="80">
+                                        </div>
+                                        <div class="col-12 col-md-3">
+                                            <label class="form-label">Horario retiro de cheques</label>
+                                            <input type="text" name="horario_retiro_ch" class="form-control" maxlength="50">
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label">Notas del cliente</label>
+                                            <textarea name="comentario_cliente" class="form-control" rows="2"></textarea>
+                                        </div>
+                                        <div class="col-12 dato"><span class="lbl">Dirección de facturación</span><span id="dDirFactura"></span></div>
+                                    </div>
+                                </fieldset>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span id="segMensaje" class="small"></span>
+                                    <div class="d-flex gap-2">
+                                        <a id="lnkCrearFactura" class="btn btn-outline-secondary" href="#">Crear factura del proyecto</a>
+                                        <button type="submit" class="btn btn-primary" id="btnGuardarSeg">Grabar</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="tab-pane fade" id="tabComentarios">
+                            <div id="listaComentarios"></div>
+                        </div>
+
+                        <div class="tab-pane fade" id="tabCorreo">
+                            <div class="mb-2"><span class="lbl text-muted small">Asunto</span>
+                                <input type="text" id="correoAsunto" class="form-control" readonly></div>
+                            <textarea id="correoGlosa" class="form-control glosa" rows="11"></textarea>
+                            <button type="button" class="btn btn-outline-primary mt-2" id="btnCopiarCorreo">Copiar texto</button>
+                            <span id="copiado" class="small text-success ms-2"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% csrf_token %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const URL_DETALLE = "{% url 'factura_seguimiento_detalle' 0 %}";
+    const URL_GUARDAR = "{% url 'factura_seguimiento_guardar' 0 %}";
+    const URL_EDITAR = "{% url 'factura_comentario_editar' 0 0 %}";
+    const URL_ELIMINAR = "{% url 'factura_comentario_eliminar' 0 0 %}";
+    const ESTADO_PAGADA = {{ estado_pagada }};
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const modalEl = document.getElementById('modalSeg');
+    const modal = new bootstrap.Modal(modalEl);
+    let actual = null;
+    let huboCambios = false;
+
+    const urlFactura = (base, id) => base.replace('/0/', '/' + id + '/');
+    const urlComentario = (base, id, reg) => base.replace('/0/comentarios/0/', '/' + id + '/comentarios/' + reg + '/');
+    const esc = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
+    // Filtro de estados: "Todo" marca todos; marcar uno desmarca "Todo" (igual que antes)
+    $('#chkTodo').on('change', function () {
+        if (this.checked) { $('.chk-estado').prop('checked', true); $('#formFiltros').trigger('submit'); }
+    });
+    $('.chk-estado').on('change', function () {
+        $('#chkTodo').prop('checked', false);
+        $('#formFiltros').trigger('submit');
+    });
+
+    async function postForm(url, data) {
+        const resp = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' }, body: data });
+        const json = await resp.json().catch(() => ({ ok: false, message: 'Error del servidor.' }));
+        if (!resp.ok || !json.ok) throw new Error(json.message || 'No se pudo guardar.');
+        return json;
+    }
+
+    function renderContactos() {
+        const de = $('input[name=contacto_de]:checked').val();
+        const lista = de === 'cliente' ? actual.contactos_cliente : actual.contactos_mandante;
+        const $sel = $('#selContacto').empty().append(new Option('Seleccione contacto...', ''));
+        lista.forEach(c => $sel.append(new Option(c.nombre || '(sin nombre)', c.idcontacto)));
+        if (de === 'mandante' && actual.contacto_cotizacion && lista.some(c => c.idcontacto === actual.contacto_cotizacion)) {
+            $sel.val(String(actual.contacto_cotizacion));
+        }
+        renderDatosContacto();
+    }
+
+    function renderDatosContacto() {
+        const de = $('input[name=contacto_de]:checked').val();
+        const lista = de === 'cliente' ? actual.contactos_cliente : actual.contactos_mandante;
+        const c = lista.find(x => String(x.idcontacto) === $('#selContacto').val());
+        $('#datosContacto').html(c ? `${esc(c.cargo)}<br>${esc(c.telefono)} · <a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : '');
+        const saludo = c && c.nombre ? 'Estimado(a) ' + c.nombre : 'Estimado';
+        $('#correoGlosa').val(actual.glosa.replace(/^Estimado /, saludo + ' '));
+    }
+
+    function renderComentarios(comentarios) {
+        $('#cantComentarios').text(comentarios.length);
+        if (!comentarios.length) { $('#listaComentarios').html('<div class="text-muted">Sin comentarios.</div>'); return; }
+        $('#listaComentarios').html(comentarios.map(c => `
+            <div class="comentario-item" data-reg="${c.idreg}">
+                <div class="d-flex justify-content-between">
+                    <div class="meta">#${c.idreg} · ${esc(c.fecha)} · ${esc(c.usuario)}${c.es_recordatorio ? ' · Recordatorio ' + esc(c.fecha_recordatorio) : ''}</div>
+                    <div class="d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-secondary btn-editar">Editar</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar">Eliminar</button>
+                    </div>
+                </div>
+                <pre class="texto">${esc(c.comentario)}</pre>
+                <form class="form-editar d-none mt-2">
+                    <div class="row g-2">
+                        <div class="col-12 col-md-3"><input type="date" name="fecha" class="form-control form-control-sm" value="${c.fecha_iso}"></div>
+                        <div class="col-12 col-md-3 d-flex align-items-center gap-2">
+                            <input type="checkbox" name="es_recordatorio" value="1" ${c.es_recordatorio ? 'checked' : ''}> Recordatorio
+                        </div>
+                        <div class="col-12 col-md-3"><input type="date" name="fecha_recordatorio" class="form-control form-control-sm" value="${c.fecha_recordatorio}"></div>
+                        <div class="col-12"><textarea name="comentario" class="form-control form-control-sm" rows="3">${esc(c.comentario)}</textarea></div>
+                        <div class="col-12 d-flex gap-2">
+                            <button type="submit" class="btn btn-sm btn-primary">Guardar cambios</button>
+                            <button type="button" class="btn btn-sm btn-light btn-cancelar">Cancelar</button>
+                            <span class="small text-danger msg"></span>
+                        </div>
+                    </div>
+                </form>
+            </div>`).join(''));
+    }
+
+    async function abrir(idfactura) {
+        $('#segCargando').removeClass('d-none').text('Cargando...');
+        $('#segContenido').addClass('d-none');
+        $('#segMensaje').text('').removeClass('text-danger text-success');
+        $('#formSeg')[0].reset();
+        $('#selEstado').prop('disabled', true);
+        $('#grpFechaPago, #fechaRecordatorio').addClass('d-none');
+        bootstrap.Tab.getOrCreateInstance(document.querySelector('[data-bs-target="#tabNuevo"]')).show();
+        modal.show();
+        try {
+            const resp = await fetch(urlFactura(URL_DETALLE, idfactura), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!resp.ok) throw new Error();
+            actual = await resp.json();
+        } catch (e) {
+            $('#segCargando').text('No se pudo cargar la factura.');
+            return;
+        }
+        $('#segTitulo').text(actual.asunto);
+        $('#dNum').text(actual.numfactura);
+        $('#dEmision').text(actual.fecha_emision);
+        $('#dMonto').text('$' + actual.monto_texto);
+        $('#dPorc').text(actual.porc_fact ? actual.porc_fact + ' %' : '');
+        $('#dEstado').text(actual.estado_nombre);
+        $('#dVenc').text(actual.vencimiento ?? '');
+        $('#dProyecto').text((actual.idproyecto ?? '') + ' ' + actual.nombre_proyecto);
+        $('#dDetalle').text(actual.detalle);
+        $('#dCliente').text(actual.cliente ? actual.cliente.razonsocial : '');
+        $('#dMandante').text(actual.mandante ? actual.mandante.razonsocial : '');
+        const cli = actual.cliente || {};
+        $('[name=horario_llamada]').val(cli.horario_llamada || '');
+        $('[name=direc_retiro_ch]').val(cli.direc_retiro_ch || '');
+        $('[name=horario_retiro_ch]').val(cli.horario_retiro_ch || '');
+        $('[name=comentario_cliente]').val(cli.comentario || '');
+        $('#dDirFactura').text(cli.direc_factura || '');
+        $('#lnkCrearFactura').attr('href', actual.crear_factura_url || '#').toggleClass('d-none', !actual.crear_factura_url);
+        $('#correoAsunto').val(actual.asunto);
+        $('#contactoMandante').prop('checked', true);
+        renderContactos();
+        renderComentarios(actual.comentarios);
+        $('#segCargando').addClass('d-none');
+        $('#segContenido').removeClass('d-none');
+    }
+
+    $(document).on('click', '.link-seg', function () { abrir($(this).data('id')); });
+    $('input[name=contacto_de]').on('change', renderContactos);
+    $('#selContacto').on('change', renderDatosContacto);
+    $('#chkCambiaEstado').on('change', function () {
+        $('#selEstado').prop('disabled', !this.checked).val('');
+        $('#grpFechaPago').addClass('d-none');
+    });
+    $('#selEstado').on('change', function () {
+        $('#grpFechaPago').toggleClass('d-none', Number(this.value) !== ESTADO_PAGADA);
+    });
+    $('#chkRecordatorio').on('change', function () { $('#fechaRecordatorio').toggleClass('d-none', !this.checked); });
+
+    $('#formSeg').on('submit', async function (e) {
+        e.preventDefault();
+        const $btn = $('#btnGuardarSeg').prop('disabled', true);
+        try {
+            await postForm(urlFactura(URL_GUARDAR, actual.idfactura), new FormData(this));
+            huboCambios = true;
+            $('#segMensaje').text('Seguimiento guardado.').removeClass('text-danger').addClass('text-success');
+            await abrirRecargarComentarios();
+            this.reset();
+            $('#selEstado').prop('disabled', true);
+            $('#grpFechaPago, #fechaRecordatorio').addClass('d-none');
+        } catch (err) {
+            $('#segMensaje').text(err.message).removeClass('text-success').addClass('text-danger');
+        } finally {
+            $btn.prop('disabled', false);
+        }
+    });
+
+    async function abrirRecargarComentarios() {
+        const resp = await fetch(urlFactura(URL_DETALLE, actual.idfactura), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (resp.ok) {
+            const datos = await resp.json();
+            actual.comentarios = datos.comentarios;
+            $('#dEstado').text(datos.estado_nombre);
+            renderComentarios(datos.comentarios);
+        }
+    }
+
+    $('#listaComentarios').on('click', '.btn-editar', function () {
+        $(this).closest('.comentario-item').find('.form-editar').removeClass('d-none');
+    });
+    $('#listaComentarios').on('click', '.btn-cancelar', function () {
+        $(this).closest('.form-editar').addClass('d-none');
+    });
+    $('#listaComentarios').on('submit', '.form-editar', async function (e) {
+        e.preventDefault();
+        const reg = $(this).closest('.comentario-item').data('reg');
+        try {
+            const json = await postForm(urlComentario(URL_EDITAR, actual.idfactura, reg), new FormData(this));
+            huboCambios = true;
+            actual.comentarios = json.comentarios;
+            renderComentarios(json.comentarios);
+        } catch (err) {
+            $(this).find('.msg').text(err.message);
+        }
+    });
+    $('#listaComentarios').on('click', '.btn-eliminar', async function () {
+        const reg = $(this).closest('.comentario-item').data('reg');
+        if (!window.confirm('¿Está seguro de eliminar el comentario N° ' + reg + '?')) return;
+        try {
+            const json = await postForm(urlComentario(URL_ELIMINAR, actual.idfactura, reg), new FormData());
+            huboCambios = true;
+            actual.comentarios = json.comentarios;
+            renderComentarios(json.comentarios);
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
+    $('#btnCopiarCorreo').on('click', async function () {
+        const texto = $('#correoGlosa').val();
+        try { await navigator.clipboard.writeText(texto); } catch (e) { $('#correoGlosa').select(); document.execCommand('copy'); }
+        $('#copiado').text('Copiado.');
+        setTimeout(() => $('#copiado').text(''), 2000);
+    });
+
+    // Al cerrar, recarga el listado si hubo cambios (igual que el formulario anterior al reactivarse)
+    modalEl.addEventListener('hidden.bs.modal', function () {
+        if (huboCambios) { window.location.reload(); }
+    });
+})();
+</script>
+{% endblock %}
