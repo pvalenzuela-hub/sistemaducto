@@ -1374,11 +1374,20 @@ class Vista1(LoginRequiredMixin,TemplateView):
         return contexto
 
 
-# Estados que el escritorio muestra por defecto en Seguimiento de Proyectos (SEG_ConsultaProyecto: Estado in
-# 0,1,2,3,4,5,8,11), expresados como estadoproyecto_id (= código + 1)
-ESTADOS_PROYECTO_ACTIVOS = [1, 2, 3, 4, 5, 6, 9, 12]
+# Estados marcados por defecto en el filtro de Seguimiento de Proyectos (estadoproyecto_id): Nuevo, Con Datos de
+# Facturación, Entrega Versión Revisión, Con Observaciones, Con VB para Ingreso a SEREMI, A Espera de VB y EN PAUSA.
+# Quedan fuera los estados SEREMI avanzados, terminados y anulados (pedido de Paulo, 2026-11-20).
+ESTADOS_PROYECTO_ACTIVOS = [1, 2, 3, 4, 5, 9, 11]
 # Crear factura y datos de facturación: perfil 0 del escritorio = grupo Director + grupo Facturación
 GRUPOS_FACTURACION = ('Director', 'Facturación')
+
+
+def _url_seguimiento_con_filtros(filtros):
+    """URL del listado con los filtros que tenía el usuario; 'estado' viene como ids separados por coma."""
+    params = [('filtrado', '1')]
+    params += [('estado', e) for e in (filtros.get('estado') or '').split(',') if e.strip()]
+    params += [(k, v) for k, v in filtros.items() if k != 'estado' and v]
+    return f"{reverse('seguimiento_proyectos')}?{urlencode(params)}"
 
 
 def puede_facturar(user):
@@ -1399,7 +1408,17 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
 
-        estado_id = (self.request.GET.get('estado') or '').strip()
+        # Filtro de estados con selección múltiple; al abrir se marcan los estados por defecto
+        filtrado = 'filtrado' in self.request.GET or 'estado' in self.request.GET
+        valores_estado = [e.strip() for e in self.request.GET.getlist('estado') if e.strip()]
+        todos_ids = list(estadoproyecto.objects.values_list('id', flat=True))
+        if 'todos' in valores_estado:
+            estados_sel = todos_ids
+        elif filtrado:
+            estados_sel = sorted({int(e) for e in valores_estado if e.isdigit()} & set(todos_ids))
+        else:
+            estados_sel = list(ESTADOS_PROYECTO_ACTIVOS)
+        estado_id = ','.join(str(e) for e in estados_sel)
         mandante_id = (self.request.GET.get('mandante') or '').strip()
         numero_proyecto = (self.request.GET.get('numero_proyecto') or '').strip()
 
@@ -1412,13 +1431,8 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
             'estadoproyecto',
         )
 
-        if estado_id == 'todos':
-            pass
-        elif estado_id:
-            proyectos_qs = proyectos_qs.filter(estadoproyecto_id=estado_id)
-        elif not (mandante_id or numero_proyecto):
-            # Igual que el escritorio: sin filtros muestra solo proyectos activos
-            proyectos_qs = proyectos_qs.filter(estadoproyecto_id__in=ESTADOS_PROYECTO_ACTIVOS)
+        if not numero_proyecto:  # buscar por N° de proyecto busca en todos los estados, como el escritorio
+            proyectos_qs = proyectos_qs.filter(estadoproyecto_id__in=estados_sel)
         if mandante_id:
             proyectos_qs = proyectos_qs.filter(idcotizacion__idcliente_id=mandante_id)
         if numero_proyecto:
@@ -1513,6 +1527,8 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         contexto["siguiente_num_factura"] = _siguiente_num_factura()
         contexto["mostrar_crear_factura"] = False
         contexto["filtro_estado"] = estado_id
+        contexto["estados_marcados"] = estados_sel
+        contexto["estados_defecto"] = ESTADOS_PROYECTO_ACTIVOS
         contexto["puede_facturar"] = puede_facturar(self.request.user)
         contexto["filtro_mandante"] = mandante_id
         contexto["filtro_numero_proyecto"] = numero_proyecto
@@ -1549,8 +1565,7 @@ def guardar_seguimiento_proyecto(request):
     def _redirigir_con_filtros(mensaje=None, nivel='success'):
         if mensaje:
             getattr(messages, nivel)(request, mensaje)
-        params = {k: v for k, v in filtros.items() if v}
-        return redirect(f"{reverse('seguimiento_proyectos')}?{urlencode(params)}" if params else reverse('seguimiento_proyectos'))
+        return redirect(_url_seguimiento_con_filtros(filtros))
 
     if not idproyecto:
         return _redirigir_con_filtros('No se recibió el proyecto.', 'error')
@@ -1740,8 +1755,7 @@ def guardar_datos_facturacion_proyecto(request):
 
     messages.success(request, 'Datos de facturación guardados correctamente.' if avanza_estado else
                      'Datos de facturación guardados correctamente. El estado del proyecto no cambió.')
-    params = {k: v for k, v in filtros.items() if v}
-    return redirect(f"{reverse('seguimiento_proyectos')}?{urlencode(params)}" if params else reverse('seguimiento_proyectos'))
+    return redirect(_url_seguimiento_con_filtros(filtros))
 
 
 @login_required

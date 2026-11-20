@@ -23,6 +23,8 @@
     .col-cliente { min-width: 180px; max-width: 260px; }
     .col-ultimo-seg { min-width: 110px; max-width: 130px; }
     .estado-row { border-left: 6px solid transparent; }
+    .estado-chip { display: inline-flex; align-items: center; gap: .3rem; border: 1px solid #c9ced6; border-radius: 6px;
+                   padding: .2rem .5rem; margin: 0 .3rem .3rem 0; font-size: .8rem; cursor: pointer; user-select: none; }
     #modalFacturacion .modal-dialog { max-width: 96vw; }
     #modalFacturacion .modal-content {
         background: linear-gradient(180deg, #f8fafc 0%, #ffffff 22%);
@@ -119,15 +121,21 @@
 <div class="card mb-3">
     <div class="card-body">
         <form method="get" class="row g-2 align-items-end">
-            <div class="col-12 col-md-3">
-                <label for="estado" class="form-label mb-1">Estado del proyecto</label>
-                <select name="estado" id="estado" class="form-select">
-                    <option value="">Activos</option>
-                    <option value="todos" {% if filtro_estado == 'todos' %}selected{% endif %}>Todos</option>
+            <input type="hidden" name="filtrado" value="1">
+            <div class="col-12">
+                <label class="form-label mb-1">Estado del proyecto</label>
+                <span class="small ms-2">
+                    <a href="#" class="filtro-estados" data-cual="defecto">Por defecto</a> ·
+                    <a href="#" class="filtro-estados" data-cual="todos">Todos</a> ·
+                    <a href="#" class="filtro-estados" data-cual="ninguno">Ninguno</a>
+                </span>
+                <div>
                     {% for estado in estados_proyecto %}
-                        <option value="{{ estado.id }}" {% if filtro_estado == estado.id|stringformat:"s" %}selected{% endif %}>{{ estado.nombre }}</option>
+                        <label class="estado-chip" style="background: {{ estado.color|default:'#ffffff' }}; color: {{ estado.forcolor|default:'#000000' }};">
+                            <input type="checkbox" name="estado" value="{{ estado.id }}" class="chk-estado-proy" {% if estado.id in estados_marcados %}checked{% endif %}> {{ estado.nombre }}
+                        </label>
                     {% endfor %}
-                </select>
+                </div>
             </div>
             <div class="col-12 col-md-3">
                 <label for="mandante" class="form-label mb-1">Mandante</label>
@@ -758,6 +766,16 @@ $(document).ready(function() {
         const factCompleta = !!btn.data('idcliente-fact') && !!btn.data('numconf') && !!btn.data('medioconf') && !!btn.data('fechaconf') && !!btn.data('conhes') && !!btn.data('coneepp') && !!btn.data('conotro');
         $('#btnAbrirCrearFactura').prop('hidden', !(factCompleta && (estadoproyectoId === 1 || estadoproyectoId === 2)));
         $('#btnAbrirCrearFactura').data('valor-raw', btn.data('valorraw') || 0);
+    });
+
+    // Filtro de estados: atajos Por defecto / Todos / Ninguno
+    const ESTADOS_DEFECTO = {{ estados_defecto|safe }};
+    $('.filtro-estados').on('click', function (e) {
+        e.preventDefault();
+        const cual = $(this).data('cual');
+        $('.chk-estado-proy').each(function () {
+            this.checked = cual === 'todos' ? true : cual === 'ninguno' ? false : ESTADOS_DEFECTO.includes(Number(this.value));
+        });
     });
 
     // Fecha que pide el escritorio según el nuevo estado: Entrega Versión Revisión, Ingresado a SEREMI, Aprobado en SEREMI
