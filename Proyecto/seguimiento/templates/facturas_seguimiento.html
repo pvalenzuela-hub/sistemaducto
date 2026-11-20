@@ -96,10 +96,10 @@
             <div class="totales">Facturas: {{ cantidad }} &nbsp;·&nbsp; TOTAL: ${{ total_texto }}</div>
         </div>
         <div class="table-responsive">
-            <table class="table table-bordered table-sm tabla-facturas mb-0">
+            <table class="table table-bordered table-sm tabla-facturas tabla-ordenable mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>Acciones</th>
+                        <th data-no-ordenar>Acciones</th>
                         <th>N° Fact</th>
                         <th>Fecha Emisión</th>
                         <th>N° Proyecto</th>
@@ -388,6 +388,8 @@
 {% endblock %}
 
 {% block extra_js %}
+{% load static %}
+<script src="{% static 'assets/js/tabla-ordenable.js' %}"></script>
 <script>
 (function () {
     const URL_DETALLE = "{% url 'factura_seguimiento_detalle' 0 %}";
