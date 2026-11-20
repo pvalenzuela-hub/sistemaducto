@@ -18,7 +18,7 @@ from .models import Clientecontacto, Factura
 
 TIPO_ESTADO_FACTURA = 3
 ESTADO_PAGADA = 5  # el sistema anterior exige fecha de pago solo para este estado
-ESTADOS_POR_DEFECTO = [0, 1, 2, 3, 4, 7]  # todo lo que aún no está pagado, verificado ni nulo
+ESTADOS_POR_DEFECTO = [0, 1, 7]  # Provisoria, Para Emitir y En Pausa
 
 TIPOS_FILTRO = [(1, 'Factura'), (2, 'Proyecto'), (3, 'Mandante'), (4, 'Monto')]
 
