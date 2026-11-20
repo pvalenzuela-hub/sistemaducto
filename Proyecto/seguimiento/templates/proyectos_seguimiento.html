@@ -173,7 +173,7 @@
                             class="btn btn-primary btn-sm btn-visor-proyecto"
                             data-bs-toggle="modal"
                             data-bs-target="#modalVisor"
-                            data-idproyecto="{{ c.idproyecto }}"
+                            data-idproyecto="{{ c.idproyecto }}" data-fpe-iso="{{ c.fechaprimereenvio|date:'Y-m-d'|default:'' }}" data-ingseremi-iso="{{ c.fechaingresoseremi|date:'Y-m-d'|default:'' }}" data-aprobseremi-iso="{{ c.fechaaprobseremi|date:'Y-m-d'|default:'' }}"
                             data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}"
                             data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}"
                             data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}"
@@ -196,7 +196,7 @@
                             data-numconf="{{ c.numconf_texto|default:''|escape }}"
                             data-medioconf="{{ c.medioconf_texto|default:''|escape }}"
                             data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}"
-                            data-estadoproyecto-id="{{ c.estado_id|default:'' }}"
+                            data-estadoproyecto-id="{{ c.estadoproyecto_id|default:'' }}"
                             data-estadoproyecto-texto="{{ c.estado_texto|default:''|escape }}"
                             data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}"
                             data-fechaprimerenvio="{{ c.fechaprimereenvio|date:'d/m/Y'|default:'' }}"
@@ -218,7 +218,7 @@
                     <td class="mb-0 fs-12 fw-semibold col-formapago">{{ c.fpago_texto }}</td>
                     <td class="mb-0 fs-12 fw-semibold col-mandante">{{ c.mandante_texto }}</td>
                     <td class="mb-0 fs-12 fw-semibold col-ultimo-seg">
-                        <button type="button" class="btn btn-link p-0 btn-visor-proyecto" data-bs-toggle="modal" data-bs-target="#modalVisor" data-idproyecto="{{ c.idproyecto }}" data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}" data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}" data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}" data-moneda="{{ c.moneda_texto|default:''|escape }}" data-valor="{{ c.valor_texto|default:''|escape }}" data-mandante="{{ c.mandante_texto|default:''|escape }}" data-contacto-mandante="{{ c.contacto_mandante_texto|default:''|escape }}" data-email-mandante="{{ c.email_mandante_texto|default:''|escape }}" data-telefono-mandante="{{ c.telefono_mandante_texto|default:''|escape }}" data-cliente="{{ c.cliente_texto|default:''|escape }}" data-rut="{{ c.rut_texto|default:''|escape }}" data-comentario-cliente="{{ c.comentario_cliente_texto|default:''|escape }}" data-contacto-fact="{{ c.cliente_factura_texto|default:''|escape }}" data-cargo-fact="{{ c.cargo_factura_texto|default:''|escape }}" data-email-fact="{{ c.email_factura_texto|default:''|escape }}" data-telefono-fact="{{ c.telefono_factura_texto|default:''|escape }}" data-fpago="{{ c.fpago_texto|default:''|escape }}" data-numconf="{{ c.numconf_texto|default:''|escape }}" data-medioconf="{{ c.medioconf_texto|default:''|escape }}" data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}" data-estadoproyecto-id="{{ c.estado_id|default:'' }}" data-estadoproyecto-texto="{{ c.estado_texto|default:''|escape }}" data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}" data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}" data-region="{{ c.region_texto|default:''|escape }}" data-conhes="{{ c.conhes_texto|default:''|escape }}" data-coneepp="{{ c.coneepp_texto|default:''|escape }}" data-conotro="{{ c.conotro_texto|default:''|escape }}" data-seguimiento="{{ c.seg_texto|default:''|escape }}" data-xfacturar="{{ c.x_facturar_texto|default:''|escape }}" data-idcliente-fact="{{ c.idcliente_id|default:'' }}" data-valorraw="{{ c.valor_raw }}" data-facturacion-completa="{{ c.facturacion_lista|yesno:'1,0' }}">{{ c.ultimoseg_texto }}</button>
+                        <button type="button" class="btn btn-link p-0 btn-visor-proyecto" data-bs-toggle="modal" data-bs-target="#modalVisor" data-idproyecto="{{ c.idproyecto }}" data-fpe-iso="{{ c.fechaprimereenvio|date:'Y-m-d'|default:'' }}" data-ingseremi-iso="{{ c.fechaingresoseremi|date:'Y-m-d'|default:'' }}" data-aprobseremi-iso="{{ c.fechaaprobseremi|date:'Y-m-d'|default:'' }}" data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}" data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}" data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}" data-moneda="{{ c.moneda_texto|default:''|escape }}" data-valor="{{ c.valor_texto|default:''|escape }}" data-mandante="{{ c.mandante_texto|default:''|escape }}" data-contacto-mandante="{{ c.contacto_mandante_texto|default:''|escape }}" data-email-mandante="{{ c.email_mandante_texto|default:''|escape }}" data-telefono-mandante="{{ c.telefono_mandante_texto|default:''|escape }}" data-cliente="{{ c.cliente_texto|default:''|escape }}" data-rut="{{ c.rut_texto|default:''|escape }}" data-comentario-cliente="{{ c.comentario_cliente_texto|default:''|escape }}" data-contacto-fact="{{ c.cliente_factura_texto|default:''|escape }}" data-cargo-fact="{{ c.cargo_factura_texto|default:''|escape }}" data-email-fact="{{ c.email_factura_texto|default:''|escape }}" data-telefono-fact="{{ c.telefono_factura_texto|default:''|escape }}" data-fpago="{{ c.fpago_texto|default:''|escape }}" data-numconf="{{ c.numconf_texto|default:''|escape }}" data-medioconf="{{ c.medioconf_texto|default:''|escape }}" data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}" data-estadoproyecto-id="{{ c.estadoproyecto_id|default:'' }}" data-estadoproyecto-texto="{{ c.estado_texto|default:''|escape }}" data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}" data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}" data-region="{{ c.region_texto|default:''|escape }}" data-conhes="{{ c.conhes_texto|default:''|escape }}" data-coneepp="{{ c.coneepp_texto|default:''|escape }}" data-conotro="{{ c.conotro_texto|default:''|escape }}" data-seguimiento="{{ c.seg_texto|default:''|escape }}" data-xfacturar="{{ c.x_facturar_texto|default:''|escape }}" data-idcliente-fact="{{ c.idcliente_id|default:'' }}" data-valorraw="{{ c.valor_raw }}" data-facturacion-completa="{{ c.facturacion_lista|yesno:'1,0' }}">{{ c.ultimoseg_texto }}</button>
                     </td>
                     <td class="fs-11 fw-semibold col-estado">{{ c.estado_texto }}</td>
                     <td class="mb-0 fs-12 fw-semibold col-cliente">{{ c.cliente_texto }}</td>
@@ -308,6 +308,18 @@
                                     {% endfor %}
                                 </select>
                                 <div class="form-text">El estado <strong>Proyecto con Datos de Facturación</strong> se actualiza desde <strong>Actualizar Datos de Facturación</strong>.</div>
+                                <div class="fecha-estado d-none mt-2" data-estado="3">
+                                    <label class="form-label mb-0" for="visor_fecha_primer_envio">Fecha Primera Entrega *</label>
+                                    <input type="date" name="fecha_primer_envio" id="visor_fecha_primer_envio" class="form-control" data-obligatoria="1">
+                                </div>
+                                <div class="fecha-estado d-none mt-2" data-estado="6">
+                                    <label class="form-label mb-0" for="visor_fecha_ingreso_seremi">Fecha Ingreso a SEREMI *</label>
+                                    <input type="date" name="fecha_ingreso_seremi" id="visor_fecha_ingreso_seremi" class="form-control" data-obligatoria="1">
+                                </div>
+                                <div class="fecha-estado d-none mt-2" data-estado="7">
+                                    <label class="form-label mb-0" for="visor_fecha_aprob_seremi">Fecha Aprobación SEREMI</label>
+                                    <input type="date" name="fecha_aprob_seremi" id="visor_fecha_aprob_seremi" class="form-control">
+                                </div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">x Facturar</label>
@@ -661,6 +673,11 @@ $(document).ready(function() {
             const $opt = $(this);
             $opt.prop('disabled', ($opt.text() || '').trim() === 'Proyecto con Datos de Facturación');
         });
+        $('#visor_nuevo_estado').data('estado-actual', String(btn.data('estadoproyecto-id') || ''));
+        $('#visor_fecha_primer_envio').val(btn.attr('data-fpe-iso') || '');
+        $('#visor_fecha_ingreso_seremi').val(btn.attr('data-ingseremi-iso') || '');
+        $('#visor_fecha_aprob_seremi').val(btn.attr('data-aprobseremi-iso') || '');
+        mostrarFechaEstado();
         $('#visor_ultimoseg').val(btn.data('ultimoseg'));
         $('#visor_xfacturar').val(btn.data('xfacturar'));
         $('#visor_seguimiento_hist').val(btn.data('seguimiento') || '');
@@ -705,6 +722,30 @@ $(document).ready(function() {
         const factCompleta = !!btn.data('idcliente-fact') && !!btn.data('numconf') && !!btn.data('medioconf') && !!btn.data('fechaconf') && !!btn.data('conhes') && !!btn.data('coneepp') && !!btn.data('conotro');
         $('#btnAbrirCrearFactura').prop('hidden', !(factCompleta && (estadoproyectoId === 1 || estadoproyectoId === 2)));
         $('#btnAbrirCrearFactura').data('valor-raw', btn.data('valorraw') || 0);
+    });
+
+    // Fecha que pide el escritorio según el nuevo estado: Entrega Versión Revisión, Ingresado a SEREMI, Aprobado en SEREMI
+    function mostrarFechaEstado() {
+        const $sel = $('#visor_nuevo_estado');
+        const nuevo = String($sel.val() || '');
+        const cambia = nuevo && nuevo !== String($sel.data('estado-actual') || '');
+        $('.fecha-estado').each(function () {
+            $(this).toggleClass('d-none', !(cambia && String($(this).data('estado')) === nuevo));
+        });
+    }
+    $('#visor_nuevo_estado').on('change', mostrarFechaEstado);
+    $('#formVisorSeguimiento').on('submit', function (e) {
+        const $sel = $('#visor_nuevo_estado');
+        const cambia = $sel.val() && String($sel.val()) !== String($sel.data('estado-actual') || '');
+        if (cambia && !($('#visor_comentario').val() || '').trim()) {
+            e.preventDefault(); mostrarMensaje('Debe ingresar comentario del seguimiento.', 'error'); return;
+        }
+        const $vacia = $('.fecha-estado:not(.d-none) input[data-obligatoria="1"]').filter(function () { return !this.value; });
+        if ($vacia.length) {
+            e.preventDefault();
+            mostrarMensaje('Debe ingresar ' + $vacia.closest('.fecha-estado').find('label').text().replace(' *', '') + '.', 'error');
+            $vacia.trigger('focus');
+        }
     });
 
     $('#datosfact_idcliente').on('change', function() {

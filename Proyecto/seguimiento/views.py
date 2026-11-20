@@ -1501,6 +1501,14 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         return contexto
 
 
+# (código tEstado del nuevo estado, campo del formulario, campo del modelo, nombre, obligatoria)
+FECHAS_POR_ESTADO_PROYECTO = [
+    (2, 'fecha_primer_envio', 'fechaprimereenvio', 'la Fecha de Primera Entrega', True),     # Entrega Versión Revisión
+    (5, 'fecha_ingreso_seremi', 'fechaingresoseremi', 'la Fecha de Ingreso a SEREMI', True),  # Proyecto Ingresado a SEREMI
+    (6, 'fecha_aprob_seremi', 'fechaaprobseremi', 'la Fecha de Aprobación SEREMI', False),   # Terminado y Aprobado en SEREMI
+]
+
+
 @login_required
 @require_POST
 def guardar_seguimiento_proyecto(request):
@@ -1525,13 +1533,35 @@ def guardar_seguimiento_proyecto(request):
     proyecto = get_object_or_404(Proyecto, pk=idproyecto)
     estado_anterior = proyecto.estadoproyecto_id
 
-    if nuevo_estado_id and int(nuevo_estado_id) != estado_anterior and not comentario:
+    cambia_estado = bool(nuevo_estado_id) and int(nuevo_estado_id) != estado_anterior
+    if cambia_estado and not comentario:
         return _redirigir_con_filtros('Debe ingresar comentario del seguimiento.', 'error')
 
-    if nuevo_estado_id:
-        proyecto.estadoproyecto_id = int(nuevo_estado_id)
-        proyecto.estado = int(nuevo_estado_id) - 1  # Estado usa el código de tEstado (= estadoproyecto_id - 1)
-        proyecto.save(update_fields=['estadoproyecto', 'estado'])
+    # Igual que SEG_EditaProyecto / GR_Proyecto_SEG del escritorio: según el nuevo estado se pide y guarda una fecha
+    fechas_estado = {}
+    if cambia_estado:
+        codigo_nuevo = int(nuevo_estado_id) - 1
+        for codigo, campo_post, campo_modelo, nombre, obligatoria in FECHAS_POR_ESTADO_PROYECTO:
+            if codigo != codigo_nuevo:
+                continue
+            texto = (request.POST.get(campo_post) or '').strip()
+            try:
+                valor = date.fromisoformat(texto) if texto else None
+            except ValueError:
+                return _redirigir_con_filtros(f'{nombre}: fecha inválida.', 'error')
+            if obligatoria and not valor:
+                return _redirigir_con_filtros(f'Debe ingresar {nombre}.', 'error')
+            if valor:
+                fechas_estado[campo_modelo] = valor
+
+    if cambia_estado:
+        Proyecto.objects.filter(pk=proyecto.pk).update(
+            estadoproyecto_id=int(nuevo_estado_id),
+            estado=int(nuevo_estado_id) - 1,  # Estado usa el código de tEstado (= estadoproyecto_id - 1)
+            fechaact=timezone.localdate(),
+            **fechas_estado,
+        )
+        proyecto.refresh_from_db()
 
     if comentario:
         ultimo_idreg = ProyectoSeg.objects.filter(idproyecto_id=idproyecto).aggregate(mx=Max('idreg'))['mx'] or 0
@@ -1574,12 +1604,30 @@ def guardar_datos_facturacion_proyecto(request):
     proyecto.conhes = request.POST.get('conhes') or None
     proyecto.coneepp = request.POST.get('coneepp') or None
     proyecto.conotro = request.POST.get('conotro') or None
-    proyecto.idcontactofacturacion_id = request.POST.get('idcontactofacturacion') or None
-    proyecto.emailcontactofacturacion = request.POST.get('emailcontactofacturacion') or None
+    # Igual que GR_Proyecto_DatosFactura del escritorio: el email de facturación es el del contacto elegido
+    # (si se escribe otro, se respeta) y se registra cuándo se asignó el contacto.
+    idcontacto = request.POST.get('idcontactofacturacion') or None
+    email_post = (request.POST.get('emailcontactofacturacion') or '').strip()
+    if idcontacto:
+        contacto = Clientecontacto.objects.filter(pk=idcontacto).first()
+        if contacto and contacto.pk != proyecto.idcontactofacturacion_id:
+            proyecto.fecharegistrocontacto = _ahora_santiago_naive()
+        proyecto.idcontactofacturacion_id = idcontacto
+        proyecto.emailcontactofacturacion = email_post or (contacto.email if contacto else None)
+    else:
+        proyecto.idcontactofacturacion_id = None
+        proyecto.emailcontactofacturacion = email_post or None
     proyecto.fechaact = timezone.now().date()
-    proyecto.estadoproyecto_id = 2
-    proyecto.estado = 1  # código tEstado de 'Proyecto con Datos de Facturación'
+    # El escritorio no cambia el estado al guardar datos de facturación. En la web este botón es la vía para pasar
+    # de "Proyecto Nuevo" a "Proyecto con Datos de Facturación"; un proyecto más avanzado conserva su estado.
+    avanza_estado = proyecto.estadoproyecto_id in (None, 1)
+    if avanza_estado:
+        proyecto.estadoproyecto_id = 2
+        proyecto.estado = 1  # código tEstado de 'Proyecto con Datos de Facturación'
     proyecto.save()
+    # Facturas del proyecto sin cliente quedan con el cliente de facturación (como GR_Proyecto_DatosFactura)
+    if proyecto.idcliente_id:
+        Factura.objects.filter(idproyecto=proyecto, idcliente__isnull=True).update(idcliente_id=proyecto.idcliente_id)
 
     comentario = (request.POST.get('comentario') or '').strip()
     if comentario:
@@ -1593,7 +1641,8 @@ def guardar_datos_facturacion_proyecto(request):
             estado=proyecto.estadoproyecto_id or 0,
         )
 
-    messages.success(request, 'Datos de facturación guardados correctamente.')
+    messages.success(request, 'Datos de facturación guardados correctamente.' if avanza_estado else
+                     'Datos de facturación guardados correctamente. El estado del proyecto no cambió.')
     params = {k: v for k, v in filtros.items() if v}
     return redirect(f"{reverse('seguimiento_proyectos')}?{urlencode(params)}" if params else reverse('seguimiento_proyectos'))
 

@@ -155,6 +155,15 @@
         }
     </script>
 
+    {% if messages %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            {% for m in messages %}
+            mostrarMensaje("{{ m.message|escapejs }}", "{% if m.level_tag == 'error' %}error{% elif m.level_tag == 'warning' %}warning{% elif m.level_tag == 'success' %}success{% else %}info{% endif %}");
+            {% endfor %}
+        });
+    </script>
+    {% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>
