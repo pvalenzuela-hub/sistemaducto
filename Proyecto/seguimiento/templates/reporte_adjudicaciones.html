@@ -6,6 +6,7 @@
 {% block extra_css %}
 <style>
     .tabla-reporte th, .tabla-reporte td { font-size: .82rem; vertical-align: middle; }
+    .tabla-reporte .col-cot { white-space: nowrap; }  /* el N° de cotización nunca en dos líneas */
     .tabla-reporte tr.fila-anio td { background: #dfe7f3; font-weight: 700; }
     .tabla-reporte tr.fila-mes td { background: #f1f4f9; font-weight: 600; }
     .tabla-reporte tr.subtotal td { background: #fafafa; font-weight: 600; }
@@ -57,7 +58,7 @@
             <table class="table table-bordered table-sm tabla-reporte mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>N° Proyecto</th><th>N° Cot.</th><th>Proyecto</th><th>Moneda</th>
+                        <th>N° Proyecto</th><th class="col-cot">N° Cot.</th><th>Proyecto</th><th>Moneda</th>
                         <th class="text-end">Valor UF</th><th class="text-end">Valor Peso</th><th>Mandante</th><th>Estado</th><th>Adjudicación</th>
                     </tr>
                 </thead>
@@ -68,7 +69,7 @@
                             <tr class="fila-mes"><td colspan="9">{{ mes }} {{ anio }}</td></tr>
                             {% for f in dm.filas %}
                                 <tr>
-                                    <td>{{ f.idproyecto }}</td><td>{{ f.cotizacion }}</td><td>{{ f.proyecto }}</td><td>{{ f.moneda }}</td>
+                                    <td>{{ f.idproyecto }}</td><td class="col-cot">{{ f.cotizacion }}</td><td>{{ f.proyecto }}</td><td>{{ f.moneda }}</td>
                                     <td class="text-end">{{ f.uf_texto }}</td><td class="text-end">${{ f.peso_texto }}</td>
                                     <td>{{ f.mandante }}</td><td>{{ f.estado }}</td><td>{{ f.adjudicacion }}</td>
                                 </tr>
