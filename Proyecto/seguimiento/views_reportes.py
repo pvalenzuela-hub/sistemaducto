@@ -19,6 +19,18 @@ from django.views.decorators.http import require_GET
 GRUPO_DIRECTOR = 'Director'
 
 
+def solo_grupos(*grupos):
+    """Solo usuarios de alguno de los grupos indicados (o superusuarios). El resto recibe 403."""
+    def decorador(vista):
+        @wraps(vista)
+        def envoltura(request, *args, **kwargs):
+            if not (request.user.is_superuser or request.user.groups.filter(name__in=grupos).exists()):
+                raise PermissionDenied('No tiene permiso para este reporte.')
+            return vista(request, *args, **kwargs)
+        return envoltura
+    return decorador
+
+
 def solo_director(vista):
     """Solo usuarios del grupo Director (o superusuarios). El resto recibe 403."""
     @wraps(vista)
@@ -213,6 +225,7 @@ def _adjudicaciones(desde_anio):
 
 
 @login_required
+@solo_grupos(GRUPO_DIRECTOR, 'Facturación')  # en el escritorio, solo el perfil 0
 @require_GET
 def reporte_adjudicaciones(request):
     anios = _anios_adjudicacion()
