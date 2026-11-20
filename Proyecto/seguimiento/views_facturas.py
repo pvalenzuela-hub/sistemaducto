@@ -157,6 +157,7 @@ def facturas_seguimiento(request):
             for cod, nombre in estados_catalogo
         ],
         'todo': todo,
+        'estados_defecto': ESTADOS_POR_DEFECTO,
         'tipos_filtro': TIPOS_FILTRO,
         'filtro_tipo': int(request.GET.get('tipo') or 0) if (request.GET.get('tipo') or '').isdigit() else 0,
         'filtro_texto': request.GET.get('texto') or '',

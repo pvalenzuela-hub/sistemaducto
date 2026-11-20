@@ -51,22 +51,16 @@
     <div class="card-body">
         <form method="get" id="formFiltros">
             <input type="hidden" name="filtrado" value="1">
-            <div class="mb-2">
-                <label class="form-label mb-1">Estado</label>
-                <div>
-                    <label class="estado-chip" style="background:#f3f4f6">
-                        <input type="checkbox" name="todo" value="1" id="chkTodo" {% if todo %}checked{% endif %}> Todo
-                    </label>
-                    {% for e in estados_catalogo %}
-                        <label class="estado-chip" style="background:{{ e.color }}">
-                            <input type="checkbox" name="estado" value="{{ e.codigo }}" class="chk-estado" {% if e.marcado %}checked{% endif %}>
-                            {{ e.nombre }}
-                        </label>
-                    {% endfor %}
-                </div>
-            </div>
             <div class="row g-2 align-items-end">
-                <div class="col-12 col-md-5">
+                <div class="col-12 col-md-3">
+                    <label class="form-label mb-1" for="filtroEstado">Estado</label>
+                    <select name="estado" id="filtroEstado" multiple class="select-check" data-texto="estados" data-defecto="{{ estados_defecto|join:',' }}">
+                        {% for e in estados_catalogo %}
+                            <option value="{{ e.codigo }}" data-color="{{ e.color }}" {% if e.marcado %}selected{% endif %}>{{ e.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-md-3">
                     <label class="form-label mb-1">Buscar por</label>
                     <div>
                         {% for valor, nombre in tipos_filtro %}
@@ -78,7 +72,7 @@
                         {% endfor %}
                     </div>
                 </div>
-                <div class="col-12 col-md-4">
+                <div class="col-12 col-md-3">
                     <input type="text" name="texto" class="form-control" value="{{ filtro_texto }}" placeholder="Texto a buscar (vacío = sin filtro)">
                 </div>
                 <div class="col-12 col-md-3 d-flex gap-2">
@@ -392,6 +386,7 @@
 {% block extra_js %}
 {% load static %}
 <script src="{% static 'assets/js/tabla-ordenable.js' %}"></script>
+<script src="{% static 'assets/js/select-check.js' %}"></script>
 <script>
 (function () {
     const URL_DETALLE = "{% url 'factura_seguimiento_detalle' 0 %}";
@@ -408,15 +403,6 @@
     const urlFactura = (base, id) => base.replace('/0/', '/' + id + '/');
     const urlComentario = (base, id, reg) => base.replace('/0/comentarios/0/', '/' + id + '/comentarios/' + reg + '/');
     const esc = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-
-    // Filtro de estados: "Todo" marca todos; marcar uno desmarca "Todo" (igual que antes)
-    $('#chkTodo').on('change', function () {
-        if (this.checked) { $('.chk-estado').prop('checked', true); $('#formFiltros').trigger('submit'); }
-    });
-    $('.chk-estado').on('change', function () {
-        $('#chkTodo').prop('checked', false);
-        $('#formFiltros').trigger('submit');
-    });
 
     async function postForm(url, data) {
         const resp = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' }, body: data });

@@ -53,19 +53,16 @@
                 <div class="col-12 col-md-2"><label class="form-label mb-1">Cliente (nombre o RUT)</label><input type="text" name="cliente" class="form-control" value="{{ cliente }}"></div>
                 <div class="col-12 col-md-3"><label class="form-label mb-1">Proyecto (nombre o N°)</label><input type="text" name="proyecto" class="form-control" value="{{ proyecto }}"></div>
             </div>
-            <div class="mb-2">
-                <label class="form-label mb-1">Estados</label>
-                <span class="small ms-2">
-                    <a href="#" id="preEmitidas">Emitidas</a> ·
-                    <a href="#" id="preTodas">Todos</a> ·
-                    <a href="#" id="preNinguno">Ninguno</a>
-                </span>
-                <div>
-                    {% for e in estados_catalogo %}
-                        <label class="estado-chip"><input type="checkbox" name="estado" value="{{ e.codigo }}" class="chk-estado" {% if e.marcado %}checked{% endif %}> {{ e.nombre }}</label>
-                    {% endfor %}
+            <div class="row g-2 mb-2">
+                <div class="col-12 col-md-3">
+                    <label class="form-label mb-1" for="filtroEstado">Estados</label>
+                    <select name="estado" id="filtroEstado" multiple class="select-check" data-texto="estados" data-vacio="Todos" data-defecto="{{ estados_emitidas|join:',' }}" data-defecto-texto="Emitidas">
+                        {% for e in estados_catalogo %}
+                            <option value="{{ e.codigo }}" {% if e.marcado %}selected{% endif %}>{{ e.nombre }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div class="form-text">"Emitidas" es el reporte de Emitidas del escritorio: sin provisorias, para emitir, nulas ni en pausa. Sin estados marcados se incluyen todos, como el reporte de Pagadas.</div>
+                <div class="col-12 col-md-9 form-text align-self-end">"Emitidas" es el reporte de Emitidas del escritorio: sin provisorias, para emitir, nulas ni en pausa. Sin estados marcados se incluyen todos, como el reporte de Pagadas.</div>
             </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">Generar</button>
@@ -119,13 +116,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-(function () {
-    const EMITIDAS = {{ estados_emitidas|safe }};
-    const marcar = (fn) => (e) => { e.preventDefault(); document.querySelectorAll('.chk-estado').forEach(c => c.checked = fn(Number(c.value))); };
-    document.getElementById('preEmitidas').addEventListener('click', marcar(v => EMITIDAS.includes(v)));
-    document.getElementById('preTodas').addEventListener('click', marcar(() => true));
-    document.getElementById('preNinguno').addEventListener('click', marcar(() => false));
-})();
-</script>
+{% load static %}
+<script src="{% static 'assets/js/select-check.js' %}"></script>
 {% endblock %}

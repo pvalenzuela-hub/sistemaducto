@@ -480,14 +480,16 @@ def cotizaciones_seguimiento(request):
     numero = (request.GET.get('numero') or '').strip()
     proyecto = (request.GET.get('proyecto') or '').strip()
     mandante = (request.GET.get('mandante') or '').strip()
-    estado = (request.GET.get('estado') or '').strip()
     fecha_desde = (request.GET.get('fecha_desde') or '').strip()
     fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
+    # Estados con selección múltiple. Al abrir (sin filtros) se muestran las "En Espera", como antes.
+    estado_espera = Estadocotizacion.objects.filter(nombre__iexact='En Espera').values_list('pk', flat=True).first()
+    filtrado = 'filtrado' in request.GET or 'estado' in request.GET
+    estados_sel = sorted({int(e) for e in request.GET.getlist('estado') if e.strip().isdigit()})
+    if not filtrado and not any([numero, proyecto, mandante, fecha_desde, fecha_hasta]) and estado_espera:
+        estados_sel = [estado_espera]
 
-    if not any([numero, proyecto, mandante, estado, fecha_desde, fecha_hasta]):
-        estado = 'En Espera'
-
-    usar_fechas = not any([numero, proyecto, mandante, estado])
+    usar_fechas = not any([numero, proyecto, mandante, estados_sel])
 
     if numero:
         qs = qs.filter(Q(numcotizacion__icontains=numero) | Q(idcotizacion__icontains=numero))
@@ -495,11 +497,8 @@ def cotizaciones_seguimiento(request):
         qs = qs.filter(nombreproyecto__icontains=proyecto)
     if mandante:
         qs = qs.filter(idcliente__razonsocial__icontains=mandante)
-    if estado:
-        if estado.isdigit():
-            qs = qs.filter(estadocotizacion_id=int(estado))
-        else:
-            qs = qs.filter(estadocotizacion__nombre__iexact=estado)
+    if estados_sel:
+        qs = qs.filter(estadocotizacion_id__in=estados_sel)
     if usar_fechas:
         if fecha_desde:
             qs = qs.filter(fecha__gte=fecha_desde)
@@ -541,11 +540,12 @@ def cotizaciones_seguimiento(request):
             'numero': numero,
             'proyecto': proyecto,
             'mandante': mandante,
-            'estado': estado,
             'fecha_desde': fecha_desde,
             'fecha_hasta': fecha_hasta,
         },
         'usar_fechas': usar_fechas,
+        'estados_marcados': estados_sel,
+        'estados_defecto': [estado_espera] if estado_espera else [],
         'estados': list(Estadocotizacion.objects.order_by('orden', 'nombre')),
         'limpiar_url': request.path,
     })

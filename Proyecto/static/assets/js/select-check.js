@@ -3,7 +3,7 @@
           <option value="1" data-color="#fff" selected>Proyecto Nuevo</option> ...
         </select>
    El <select multiple> queda oculto y sigue siendo el que se envía en el formulario.
-   data-defecto (opcional) agrega el atajo "Por defecto". data-vacio (opcional): texto cuando no hay nada marcado. data-color (opcional) muestra el color de cada opción. */
+   data-defecto (opcional) agrega el atajo "Por defecto" (su texto se cambia con data-defecto-texto). data-vacio (opcional): texto cuando no hay nada marcado. data-color (opcional) muestra el color de cada opción. */
 (function () {
     function crear(select) {
         if (select.dataset.selectCheck === '1') return;
@@ -28,7 +28,7 @@
         const atajos = document.createElement('div');
         atajos.className = 'd-flex gap-2 small border-bottom pb-1 mb-1';
         const accionesAtajo = [['Todos', () => true], ['Ninguno', () => false]];
-        if (defecto.length) accionesAtajo.unshift(['Por defecto', o => defecto.includes(o.value)]);
+        if (defecto.length) accionesAtajo.unshift([select.dataset.defectoTexto || 'Por defecto', o => defecto.includes(o.value)]);
         accionesAtajo.forEach(([texto, regla]) => {
             const a = document.createElement('a');
             a.href = '#';
