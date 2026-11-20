@@ -17,6 +17,8 @@
     .comentario-item { border-bottom: 1px solid #e5e7eb; padding: .45rem 0; }
     .comentario-item .meta { font-size: .75rem; color: #6b7280; }
     .comentario-item pre { white-space: pre-wrap; font-family: inherit; font-size: .85rem; margin: .2rem 0 0; }
+    .tabla-seremi td.acciones { width: 1%; }
+    .tabla-seremi td.acciones .btn { font-size: .7rem; padding: .1rem .45rem; text-align: left; }
 </style>
 {% endblock %}
 
@@ -98,7 +100,7 @@
                     {% for f in filas %}
                         <tr style="--fila-color: {{ f.color }}; --fila-texto: {% if f.texto_claro %}#fff{% else %}#1f2733{% endif %}">
                             <td class="acciones">
-                                <div class="btn-group btn-group-sm" role="group">
+                                <div class="btn-group-vertical btn-group-sm w-100" role="group">
                                     <button type="button" class="btn btn-outline-primary btn-accion" data-tab="datos" data-id="{{ f.idproyecto }}">Datos SEREMI</button>
                                     <button type="button" class="btn btn-outline-primary btn-accion" data-tab="estado" data-id="{{ f.idproyecto }}">Estado</button>
                                     <button type="button" class="btn btn-primary btn-accion" data-tab="seguimiento" data-id="{{ f.idproyecto }}">Seguimiento</button>
