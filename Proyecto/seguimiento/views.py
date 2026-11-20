@@ -1374,6 +1374,25 @@ class Vista1(LoginRequiredMixin,TemplateView):
         return contexto
 
 
+# Estados que el escritorio muestra por defecto en Seguimiento de Proyectos (SEG_ConsultaProyecto: Estado in
+# 0,1,2,3,4,5,8,11), expresados como estadoproyecto_id (= código + 1)
+ESTADOS_PROYECTO_ACTIVOS = [1, 2, 3, 4, 5, 6, 9, 12]
+# Crear factura y datos de facturación: perfil 0 del escritorio = grupo Director + grupo Facturación
+GRUPOS_FACTURACION = ('Director', 'Facturación')
+
+
+def puede_facturar(user):
+    return user.is_authenticated and (user.is_superuser or user.groups.filter(name__in=GRUPOS_FACTURACION).exists())
+
+
+def _sin_permiso_facturar(request):
+    msg = 'No tiene permiso para facturar ni modificar datos de facturación.'
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse({'ok': False, 'message': msg}, status=403)
+    messages.error(request, msg)
+    return redirect('seguimiento_proyectos')
+
+
 class VistaSeguimiento(LoginRequiredMixin,TemplateView):
     template_name = "proyectos_seguimiento.html"
 
@@ -1393,8 +1412,13 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
             'estadoproyecto',
         )
 
-        if estado_id:
+        if estado_id == 'todos':
+            pass
+        elif estado_id:
             proyectos_qs = proyectos_qs.filter(estadoproyecto_id=estado_id)
+        elif not (mandante_id or numero_proyecto):
+            # Igual que el escritorio: sin filtros muestra solo proyectos activos
+            proyectos_qs = proyectos_qs.filter(estadoproyecto_id__in=ESTADOS_PROYECTO_ACTIVOS)
         if mandante_id:
             proyectos_qs = proyectos_qs.filter(idcotizacion__idcliente_id=mandante_id)
         if numero_proyecto:
@@ -1489,6 +1513,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         contexto["siguiente_num_factura"] = _siguiente_num_factura()
         contexto["mostrar_crear_factura"] = False
         contexto["filtro_estado"] = estado_id
+        contexto["puede_facturar"] = puede_facturar(self.request.user)
         contexto["filtro_mandante"] = mandante_id
         contexto["filtro_numero_proyecto"] = numero_proyecto
 
@@ -1533,6 +1558,17 @@ def guardar_seguimiento_proyecto(request):
     proyecto = get_object_or_404(Proyecto, pk=idproyecto)
     estado_anterior = proyecto.estadoproyecto_id
 
+    fecha_recordatorio = None
+    if request.POST.get('es_recordatorio'):
+        try:
+            fecha_recordatorio = date.fromisoformat((request.POST.get('fecha_recordatorio') or '').strip())
+        except ValueError:
+            return _redirigir_con_filtros('Ingrese la fecha de recordatorio.', 'error')
+        if fecha_recordatorio <= timezone.localdate():
+            return _redirigir_con_filtros('La fecha de recordatorio debe ser posterior a hoy.', 'error')
+        if not comentario:
+            return _redirigir_con_filtros('Debe ingresar comentario del seguimiento.', 'error')
+
     cambia_estado = bool(nuevo_estado_id) and int(nuevo_estado_id) != estado_anterior
     if cambia_estado and not comentario:
         return _redirigir_con_filtros('Debe ingresar comentario del seguimiento.', 'error')
@@ -1575,16 +1611,77 @@ def guardar_seguimiento_proyecto(request):
         }
         if request.POST.get('es_recordatorio'):
             data['esrecordatorio'] = True
-            fecha_recordatorio = request.POST.get('fecha_recordatorio')
-            data['fecharecordatorio'] = datetime.strptime(fecha_recordatorio, '%Y-%m-%d').date() if fecha_recordatorio else None
+            data['fecharecordatorio'] = fecha_recordatorio
         ProyectoSeg.objects.create(**data)
 
     return _redirigir_con_filtros('Seguimiento guardado correctamente.')
 
 
+def _comentarios_proyecto(idproyecto):
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT IdReg, Fecha, Comentario, ISNULL(EsRecordatorio, 0), FechaRecordatorio, ISNULL(IdUsuario, '') "
+            "FROM Proyecto_Seg WHERE IdProyecto = %s ORDER BY IdReg DESC", [idproyecto])
+        return [{
+            'idreg': idreg,
+            'fecha': fecha.strftime('%d/%m/%Y %H:%M') if fecha else '',
+            'fecha_iso': fecha.strftime('%Y-%m-%d') if fecha else '',
+            'comentario': (comentario or '').rstrip(),
+            'es_recordatorio': bool(es_rec),
+            'fecha_recordatorio': fecha_rec.strftime('%Y-%m-%d') if fecha_rec else '',
+            'usuario': usuario,
+        } for idreg, fecha, comentario, es_rec, fecha_rec, usuario in cursor.fetchall()]
+
+
+@login_required
+@require_GET
+def proyecto_comentarios(request, idproyecto):
+    get_object_or_404(Proyecto, pk=idproyecto)
+    return JsonResponse({'ok': True, 'comentarios': _comentarios_proyecto(idproyecto)})
+
+
+@login_required
+@require_POST
+def proyecto_comentario_editar(request, idproyecto, idreg):
+    """Como AC_Proyecto_SEG: cambia fecha, texto y recordatorio; el usuario queda como quien editó.
+    Si el día no cambia se conserva la hora (el procedimiento recibe solo la fecha y la perdía)."""
+    get_object_or_404(Proyecto, pk=idproyecto)
+    comentario = (request.POST.get('comentario') or '').strip()
+    if not comentario:
+        return JsonResponse({'ok': False, 'message': 'El comentario no puede quedar vacío.'}, status=400)
+    try:
+        dia = date.fromisoformat(request.POST.get('fecha') or '')
+        es_rec = request.POST.get('es_recordatorio') == '1'
+        fecha_rec = date.fromisoformat(request.POST.get('fecha_recordatorio') or '') if es_rec else None
+    except ValueError:
+        return JsonResponse({'ok': False, 'message': 'Fecha inválida.'}, status=400)
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT Fecha FROM Proyecto_Seg WHERE IdProyecto = %s AND IdReg = %s', [idproyecto, idreg])
+        fila = cursor.fetchone()
+        if fila is None:
+            return JsonResponse({'ok': False, 'message': 'El comentario ya no existe.'}, status=404)
+        fecha = fila[0] if fila[0] and fila[0].date() == dia else datetime.combine(dia, time.min)
+        cursor.execute(
+            'UPDATE Proyecto_Seg SET Fecha = %s, Comentario = %s, IdUsuario = %s, EsRecordatorio = %s, '
+            'FechaRecordatorio = %s WHERE IdProyecto = %s AND IdReg = %s',
+            [fecha, comentario, (request.user.username or '')[:15], int(es_rec), fecha_rec, idproyecto, idreg])
+    return JsonResponse({'ok': True, 'comentarios': _comentarios_proyecto(idproyecto)})
+
+
+@login_required
+@require_POST
+def proyecto_comentario_eliminar(request, idproyecto, idreg):
+    get_object_or_404(Proyecto, pk=idproyecto)
+    with connection.cursor() as cursor:
+        cursor.execute('SET NOCOUNT ON; EXEC EL_Proyecto_SEG %s, %s', [idproyecto, idreg])
+    return JsonResponse({'ok': True, 'comentarios': _comentarios_proyecto(idproyecto)})
+
+
 @login_required
 @require_POST
 def guardar_datos_facturacion_proyecto(request):
+    if not puede_facturar(request.user):
+        return _sin_permiso_facturar(request)
     proyecto = get_object_or_404(Proyecto, pk=request.POST.get('idproyecto'))
     filtros = {
         'estado': (request.POST.get('filtro_estado') or '').strip(),
@@ -1650,6 +1747,8 @@ def guardar_datos_facturacion_proyecto(request):
 @login_required
 @require_POST
 def crear_factura_proyecto(request):
+    if not puede_facturar(request.user):
+        return _sin_permiso_facturar(request)
     proyecto = get_object_or_404(Proyecto.objects.select_related('idcliente', 'idcontactofacturacion', 'estadoproyecto'), pk=request.POST.get('idproyecto'))
     if not _facturacion_completa_proyecto(proyecto):
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':

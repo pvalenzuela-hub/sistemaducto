@@ -122,7 +122,8 @@
             <div class="col-12 col-md-3">
                 <label for="estado" class="form-label mb-1">Estado del proyecto</label>
                 <select name="estado" id="estado" class="form-select">
-                    <option value="">Todos</option>
+                    <option value="">Activos</option>
+                    <option value="todos" {% if filtro_estado == 'todos' %}selected{% endif %}>Todos</option>
                     {% for estado in estados_proyecto %}
                         <option value="{{ estado.id }}" {% if filtro_estado == estado.id|stringformat:"s" %}selected{% endif %}>{{ estado.nombre }}</option>
                     {% endfor %}
@@ -330,15 +331,45 @@
                             <label class="form-label">Comentario</label>
                             <textarea name="comentario" id="visor_comentario" class="form-control" rows="4" placeholder="Escribe un comentario"></textarea>
                         </div>
+                        <div class="col-12 col-md-4">
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="checkbox" name="es_recordatorio" value="1" id="visor_es_recordatorio">
+                                <label class="form-check-label" for="visor_es_recordatorio">Es recordatorio</label>
+                            </div>
+                            <input type="date" name="fecha_recordatorio" id="visor_fecha_recordatorio" class="form-control mt-1 d-none">
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <label class="form-label mb-0" for="visor_notas_cliente">Notas del cliente <span id="visor_notas_cliente_nombre" class="text-muted small"></span></label>
+                            <textarea id="visor_notas_cliente" class="form-control" rows="2"></textarea>
+                            <div class="d-flex align-items-center gap-2 mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="btnGuardarNotasCliente">Guardar notas</button>
+                                <span id="msgNotasCliente" class="small"></span>
+                            </div>
+                        </div>
                     </div>
                 </form>
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" class="btn btn-warning" id="btnDatosFacturacion">Actualizar Datos de Facturación</button>
+                    <button type="button" class="btn btn-outline-primary" id="btnComentariosProyecto">Comentarios</button>
+                    {% if puede_facturar %}
+                    <button type="button" class="btn btn-warning" id="btnDatosFacturacion">Actualizar Datos de Facturación</button>
                     <button type="button" class="btn btn-success" id="btnAbrirCrearFactura" hidden>Crear Factura</button>
+                    {% endif %}
                     <button type="submit" form="formVisorSeguimiento" class="btn btn-primary">Guardar</button>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalComentariosProyecto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Comentarios del seguimiento · Proyecto <span id="comProyNum"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body"><div id="listaComentariosProyecto" class="small text-muted">Cargando...</div></div>
         </div>
     </div>
 </div>
@@ -674,6 +705,11 @@ $(document).ready(function() {
             $opt.prop('disabled', ($opt.text() || '').trim() === 'Proyecto con Datos de Facturación');
         });
         $('#visor_nuevo_estado').data('estado-actual', String(btn.data('estadoproyecto-id') || ''));
+        $('#visor_es_recordatorio').prop('checked', false); $('#visor_fecha_recordatorio').addClass('d-none').val('');
+        const idClienteNotas = btn.data('idcliente-fact') || '';
+        $('#visor_notas_cliente').val(btn.attr('data-comentario-cliente') || '').prop('readonly', !idClienteNotas).data('idcliente', idClienteNotas);
+        $('#visor_notas_cliente_nombre').text(btn.data('cliente') ? '(' + btn.data('cliente') + ')' : '(el proyecto no tiene cliente)');
+        $('#btnGuardarNotasCliente').prop('disabled', !idClienteNotas); $('#msgNotasCliente').text('');
         $('#visor_fecha_primer_envio').val(btn.attr('data-fpe-iso') || '');
         $('#visor_fecha_ingreso_seremi').val(btn.attr('data-ingseremi-iso') || '');
         $('#visor_fecha_aprob_seremi').val(btn.attr('data-aprobseremi-iso') || '');
@@ -746,6 +782,87 @@ $(document).ready(function() {
             mostrarMensaje('Debe ingresar ' + $vacia.closest('.fecha-estado').find('label').text().replace(' *', '') + '.', 'error');
             $vacia.trigger('focus');
         }
+    });
+
+    // ---------------- Recordatorio, notas del cliente y comentarios (como el escritorio) ----------------
+    const CSRF = $('#formVisorSeguimiento [name=csrfmiddlewaretoken]').val();
+    const URL_NOTAS = "{% url 'cliente_notas_guardar' 0 %}";
+    const URL_COMS = "{% url 'proyecto_comentarios' 0 %}";
+    const URL_COM_EDIT = "{% url 'proyecto_comentario_editar' 0 0 %}";
+    const URL_COM_DEL = "{% url 'proyecto_comentario_eliminar' 0 0 %}";
+    const escH = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    async function postDatos(url, fd) {
+        const resp = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': CSRF, 'X-Requested-With': 'XMLHttpRequest' }, body: fd });
+        const json = await resp.json().catch(() => ({ ok: false, message: 'Error del servidor.' }));
+        if (!resp.ok || !json.ok) throw new Error(json.message || 'No se pudo guardar.');
+        return json;
+    }
+    $('#visor_es_recordatorio').on('change', function () { $('#visor_fecha_recordatorio').toggleClass('d-none', !this.checked); });
+    $('#formVisorSeguimiento').on('submit', function (e) {
+        if (e.isDefaultPrevented() || !$('#visor_es_recordatorio').is(':checked')) return;
+        const f = $('#visor_fecha_recordatorio').val();
+        const hoy = new Date(); const hoyIso = new Date(hoy.getTime() - hoy.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        if (!f || f <= hoyIso) { e.preventDefault(); mostrarMensaje('Ingrese una fecha de recordatorio posterior a hoy.', 'error'); }
+        else if (!($('#visor_comentario').val() || '').trim()) { e.preventDefault(); mostrarMensaje('Debe ingresar comentario del seguimiento.', 'error'); }
+    });
+    $('#btnGuardarNotasCliente').on('click', async function () {
+        const id = $('#visor_notas_cliente').data('idcliente'); if (!id) return;
+        const fd = new FormData(); fd.append('notas', $('#visor_notas_cliente').val());
+        try { const j = await postDatos(URL_NOTAS.replace('/0/', '/' + id + '/'), fd); $('#msgNotasCliente').text(j.message).attr('class', 'small text-success'); }
+        catch (err) { $('#msgNotasCliente').text(err.message).attr('class', 'small text-danger'); }
+    });
+
+    let comProyecto = null; let comCambios = false;
+    function renderComentariosProyecto(lista) {
+        $('#listaComentariosProyecto').attr('class', '').html(lista.length ? lista.map(c => `
+            <div class="border-bottom py-2" data-reg="${c.idreg}">
+                <div class="d-flex justify-content-between">
+                    <div class="small text-muted">#${c.idreg} · ${escH(c.fecha)} · ${escH(c.usuario)}${c.es_recordatorio ? ' · Recordatorio ' + escH(c.fecha_recordatorio) : ''}</div>
+                    <div class="d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-secondary com-editar">Editar</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger com-eliminar">Eliminar</button>
+                    </div>
+                </div>
+                <div class="com-texto" style="white-space: pre-wrap;">${escH(c.comentario)}</div>
+                <form class="com-form d-none mt-2 row g-2">
+                    <div class="col-6 col-md-3"><input type="date" name="fecha" class="form-control form-control-sm" value="${c.fecha_iso}"></div>
+                    <div class="col-6 col-md-3 d-flex align-items-center gap-1"><input type="checkbox" name="es_recordatorio" value="1" ${c.es_recordatorio ? 'checked' : ''}> Recordatorio</div>
+                    <div class="col-6 col-md-3"><input type="date" name="fecha_recordatorio" class="form-control form-control-sm" value="${c.fecha_recordatorio}"></div>
+                    <div class="col-12"><textarea name="comentario" class="form-control form-control-sm" rows="3">${escH(c.comentario)}</textarea></div>
+                    <div class="col-12 d-flex gap-2"><button type="submit" class="btn btn-sm btn-primary">Guardar cambios</button>
+                        <button type="button" class="btn btn-sm btn-light com-cancelar">Cancelar</button><span class="small text-danger com-msg"></span></div>
+                </form>
+            </div>`).join('') : '<div class="text-muted small">Sin comentarios.</div>');
+    }
+    $('#btnComentariosProyecto').on('click', async function () {
+        comProyecto = $('#visor_idproyecto').val(); comCambios = false;
+        $('#comProyNum').text(comProyecto);
+        $('#listaComentariosProyecto').attr('class', 'small text-muted').text('Cargando...');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalComentariosProyecto')).show();
+        const resp = await fetch(URL_COMS.replace('/0/', '/' + comProyecto + '/'), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const j = await resp.json().catch(() => ({}));
+        if (resp.ok && j.ok) renderComentariosProyecto(j.comentarios); else $('#listaComentariosProyecto').text('No se pudieron cargar los comentarios.');
+    });
+    $('#listaComentariosProyecto').on('click', '.com-editar', function () { $(this).closest('[data-reg]').find('.com-form').removeClass('d-none'); });
+    $('#listaComentariosProyecto').on('click', '.com-cancelar', function () { $(this).closest('.com-form').addClass('d-none'); });
+    $('#listaComentariosProyecto').on('submit', '.com-form', async function (e) {
+        e.preventDefault();
+        const reg = $(this).closest('[data-reg]').data('reg');
+        try {
+            const j = await postDatos(URL_COM_EDIT.replace('/0/comentarios/0/', '/' + comProyecto + '/comentarios/' + reg + '/'), new FormData(this));
+            comCambios = true; renderComentariosProyecto(j.comentarios);
+        } catch (err) { $(this).find('.com-msg').text(err.message); }
+    });
+    $('#listaComentariosProyecto').on('click', '.com-eliminar', async function () {
+        const reg = $(this).closest('[data-reg]').data('reg');
+        if (!window.confirm('¿Está seguro de eliminar el comentario N° ' + reg + '?')) return;
+        try {
+            const j = await postDatos(URL_COM_DEL.replace('/0/comentarios/0/', '/' + comProyecto + '/comentarios/' + reg + '/'), new FormData());
+            comCambios = true; renderComentariosProyecto(j.comentarios);
+        } catch (err) { alert(err.message); }
+    });
+    document.getElementById('modalComentariosProyecto').addEventListener('hidden.bs.modal', function () {
+        if (comCambios) window.location.reload();
     });
 
     $('#datosfact_idcliente').on('change', function() {
