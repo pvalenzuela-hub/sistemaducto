@@ -8,11 +8,26 @@ from collections import OrderedDict
 from datetime import date
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from functools import wraps
 from django.db import connection
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
+
+GRUPO_DIRECTOR = 'Director'
+
+
+def solo_director(vista):
+    """Solo usuarios del grupo Director (o superusuarios). El resto recibe 403."""
+    @wraps(vista)
+    def envoltura(request, *args, **kwargs):
+        if not (request.user.is_superuser or request.user.groups.filter(name=GRUPO_DIRECTOR).exists()):
+            raise PermissionDenied('Solo para el perfil Director.')
+        return vista(request, *args, **kwargs)
+    return envoltura
+
 
 TIPO_ESTADO_FACTURA = 3
 # Emitidas: Estado >= 2 y no 6 (NULA) ni 7 (PAUSA), como Rep_Factura1
@@ -79,6 +94,7 @@ def _consulta(campo_fecha, desde, hasta, estados, cliente, proyecto):
 
 
 @login_required
+@solo_director
 @require_GET
 def reporte_facturas(request):
     hoy = timezone.localdate()
