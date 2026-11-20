@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views, views_facturas, views_seremi, views_reportes
+from .permisos import solo_director
 from .views import Vista1, Vista2, Vista3, VistaSeguimiento, VisorComentario
 
 urlpatterns = [
@@ -57,15 +58,15 @@ urlpatterns = [
     path('<int:pk>/<int:tabla>/', VisorComentario.as_view(), name='visor-comentario'),
     path('guardacomentario/', views.guardacomentario, name='graba-comentario'),
 
-    path('listadocategorias/', views.ListaCategoria.as_view(), name='lista-categoria'),
-    path('tipoentrega/', views.ListaTipoEntrega.as_view(), name='lista-tipo-entrega'),
-    path('tipoentrega/crear/', views.tipo_entrega_create, name='crear-tipo-entrega'),
-    path('tipoentrega/modificar/<int:pk>/', views.tipo_entrega_update, name='editar-tipo-entrega'),
-    path('tipoentrega/eliminar/<int:pk>/', views.tipo_entrega_delete, name='eliminar-tipo-entrega'),
-    path('valor-uf/', views.ListaValorUF.as_view(), name='lista-valor-uf'),
-    path('valor-uf/crear/', views.valor_uf_create, name='crear-valor-uf'),
-    path('valor-uf/modificar/<str:pk>/', views.valor_uf_update, name='editar-valor-uf'),
-    path('valor-uf/eliminar/<str:pk>/', views.valor_uf_delete, name='eliminar-valor-uf'),
+    path('listadocategorias/', solo_director(views.ListaCategoria.as_view()), name='lista-categoria'),
+    path('tipoentrega/', solo_director(views.ListaTipoEntrega.as_view()), name='lista-tipo-entrega'),
+    path('tipoentrega/crear/', solo_director(views.tipo_entrega_create), name='crear-tipo-entrega'),
+    path('tipoentrega/modificar/<int:pk>/', solo_director(views.tipo_entrega_update), name='editar-tipo-entrega'),
+    path('tipoentrega/eliminar/<int:pk>/', solo_director(views.tipo_entrega_delete), name='eliminar-tipo-entrega'),
+    path('valor-uf/', solo_director(views.ListaValorUF.as_view()), name='lista-valor-uf'),
+    path('valor-uf/crear/', solo_director(views.valor_uf_create), name='crear-valor-uf'),
+    path('valor-uf/modificar/<str:pk>/', solo_director(views.valor_uf_update), name='editar-valor-uf'),
+    path('valor-uf/eliminar/<str:pk>/', solo_director(views.valor_uf_delete), name='eliminar-valor-uf'),
 
     path('proyecto/reporte/', views.proyectos_totales, name='reporte_proyectos'),
     path('clientes/reporte/', views.reporte_clientes, name='reporte_clientes'),
