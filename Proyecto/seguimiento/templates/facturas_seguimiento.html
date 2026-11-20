@@ -13,7 +13,15 @@
     .tabla-facturas tbody tr td { background-color: var(--fila-color) !important; color: #1f2733; }
     .tabla-facturas .col-proyecto { min-width: 220px; }
     .tabla-facturas .col-razon { min-width: 170px; }
-    .tabla-facturas a.link-seg { font-weight: 600; text-decoration: underline; cursor: pointer; color: #173052; }
+    .tabla-facturas td.acciones { white-space: nowrap; }
+    .tabla-facturas td.acciones .btn { background-color: #fff; }
+    .tabla-facturas td.acciones .btn-primary { background-color: var(--bs-primary, #0d6efd); }
+    #modalFact .modal-dialog { max-width: 1200px; }
+    #modalFact .dato { font-size: .8rem; }
+    #modalFact .dato .lbl { color: #6b7280; display: block; font-size: .7rem; text-transform: uppercase; }
+    #listaFacturasProy .list-group-item { cursor: pointer; font-size: .82rem; }
+    #listaFacturasProy .list-group-item.active { background: #e8f0fe; color: #173052; border-color: #c5d6f5; }
+    #factGlosa, #factSeg { font-family: inherit; font-size: .82rem; }
     .tabla-facturas .ultimo-seg { cursor: help; border-bottom: 1px dotted #555; }
     .totales { font-size: 1rem; font-weight: 600; }
     #modalSeg .modal-dialog { max-width: 1100px; }
@@ -84,13 +92,14 @@
 <div class="card">
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <div class="text-muted small">Clic en el <b>nombre del proyecto</b> para registrar seguimiento; en el <b>N° de factura</b> para crear una nueva factura del proyecto.</div>
+            <div class="text-muted small">Use los botones de cada fila: <b>Seguimiento</b>, <b>Comentarios</b>, <b>Facturar</b> (crear o modificar facturas del proyecto) y <b>Cliente</b>.</div>
             <div class="totales">Facturas: {{ cantidad }} &nbsp;·&nbsp; TOTAL: ${{ total_texto }}</div>
         </div>
         <div class="table-responsive">
             <table class="table table-bordered table-sm tabla-facturas mb-0">
                 <thead class="table-light">
                     <tr>
+                        <th>Acciones</th>
                         <th>N° Fact</th>
                         <th>Fecha Emisión</th>
                         <th>N° Proyecto</th>
@@ -110,10 +119,18 @@
                 <tbody>
                     {% for f in filas %}
                         <tr style="--fila-color: {{ f.color }}">
-                            <td><a href="{% url 'seguimiento_proyectos' %}?numero_proyecto={{ f.idproyecto }}" title="Crear factura para el proyecto {{ f.idproyecto }}">{{ f.numfactura }}</a></td>
+                            <td class="acciones">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-primary btn-accion" data-accion="seguimiento" data-id="{{ f.idfactura }}" title="Seguimiento de la factura">Seguimiento</button>
+                                    <button type="button" class="btn btn-outline-primary btn-accion" data-accion="comentarios" data-id="{{ f.idfactura }}" title="Comentarios de la factura">Comentarios</button>
+                                    <button type="button" class="btn btn-outline-success btn-accion" data-accion="facturar" data-id="{{ f.idfactura }}" title="Creación de facturas del proyecto">Facturar</button>
+                                    {% if f.idcliente %}<a class="btn btn-outline-secondary" href="{% url 'cliente_update' f.idcliente %}" target="_blank" rel="noopener" title="Mantenimiento del cliente">Cliente</a>{% endif %}
+                                </div>
+                            </td>
+                            <td>{{ f.numfactura }}</td>
                             <td>{{ f.fecha_emision }}</td>
                             <td>{{ f.idproyecto }}</td>
-                            <td class="col-proyecto"><a class="link-seg" data-id="{{ f.idfactura }}" title="Seguimiento de Facturas">{{ f.nombre_proyecto }}</a></td>
+                            <td class="col-proyecto">{{ f.nombre_proyecto }}</td>
                             <td>{% if f.ultimo_seg %}<span class="ultimo-seg" title="{{ f.seguimiento }}">{{ f.ultimo_seg }}</span>{% endif %}</td>
                             <td class="col-razon">{{ f.cliente }}</td>
                             <td class="col-razon">{{ f.mandante }}</td>
@@ -126,7 +143,7 @@
                             <td class="text-end">{{ f.vencimiento|default_if_none:"" }}</td>
                         </tr>
                     {% empty %}
-                        <tr><td colspan="14" class="text-center text-muted py-4">No existen facturas en los estados seleccionados.</td></tr>
+                        <tr><td colspan="15" class="text-center text-muted py-4">No existen facturas en los estados seleccionados.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -260,6 +277,100 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="modalFact" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Creación de Facturas <span id="factTituloProy" class="text-muted fs-6"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="factCargando" class="text-center text-muted py-4">Cargando...</div>
+                <div id="factContenido" class="d-none">
+                    <div class="row g-2 mb-3 border rounded p-2 bg-light">
+                        <div class="col-6 col-md-2 dato"><span class="lbl">N° Proyecto</span><span id="fpNum"></span></div>
+                        <div class="col-6 col-md-4 dato"><span class="lbl">Proyecto</span><span id="fpNombre"></span></div>
+                        <div class="col-6 col-md-3 dato"><span class="lbl">Estado proyecto</span><span id="fpEstado"></span></div>
+                        <div class="col-6 col-md-3 dato"><span class="lbl">Valor proyecto</span><span id="fpValor"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">Cotización</span><span id="fpCot"></span></div>
+                        <div class="col-6 col-md-4 dato"><span class="lbl">Mandante</span><span id="fpMandante"></span></div>
+                        <div class="col-12 col-md-6 dato"><span class="lbl">Confirmación (OC)</span><span id="fpConf"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">HES / EEPP / Otro</span><span id="fpReq"></span></div>
+                        <div class="col-6 col-md-4 dato"><span class="lbl">Cliente</span><span id="fpCliente"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">Forma de pago</span><span id="fpFPago"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">Saldo por facturar</span><span id="fpSaldo"></span></div>
+                        <div class="col-6 col-md-2 dato"><span class="lbl">UF del día</span><span id="fpUfDia"></span></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-12 col-md-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <strong class="small">Facturas del proyecto</strong>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFactNueva">Nueva</button>
+                            </div>
+                            <div class="list-group mb-2" id="listaFacturasProy"></div>
+                            <button type="button" class="btn btn-sm btn-outline-danger w-100" id="btnFactEliminar" disabled>Eliminar factura seleccionada</button>
+                            <div class="mt-3">
+                                <label class="form-label small mb-1">Notas del cliente</label>
+                                <textarea id="factNotas" class="form-control form-control-sm" rows="4"></textarea>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-1" id="btnGuardarNotas">Guardar notas</button>
+                                <span id="msgNotas" class="small ms-1"></span>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-9">
+                            <form id="formFact" autocomplete="off">
+                                <input type="hidden" name="idfactura" value="0">
+                                <input type="hidden" name="idcliente" value="0">
+                                <div id="factAvisoNoEditable" class="alert alert-warning py-1 small d-none">Esta factura ya no está en estado Provisoria o Para Emitir: no se puede modificar.</div>
+                                <div class="row g-2">
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">N° Factura *</label><input type="number" name="numfactura" class="form-control form-control-sm" min="1"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Fecha emisión *</label><input type="date" name="fecha_emision" class="form-control form-control-sm"></div>
+                                    <div class="col-6 col-md-2"><label class="form-label small mb-0">% a facturar *</label><input type="text" name="porc" class="form-control form-control-sm" inputmode="decimal"></div>
+                                    <div class="col-6 col-md-2"><label class="form-label small mb-0">Monto <span class="moneda-proy"></span></label><input type="text" id="factMonto" class="form-control form-control-sm" readonly></div>
+                                    <div class="col-6 col-md-2"><label class="form-label small mb-0">Vencimiento (días)</label><input type="number" name="vencimiento" class="form-control form-control-sm" min="0" value="30"></div>
+                                    <div class="col-6 col-md-3 grp-uf"><label class="form-label small mb-0">Valor UF *</label><input type="text" name="valor_uf" class="form-control form-control-sm" inputmode="decimal"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Total $</label><input type="text" id="factTotal" class="form-control form-control-sm" readonly></div>
+                                    <div class="col-12 col-md-6"><label class="form-label small mb-0">Detalle *</label>
+                                        <input type="text" name="detalle" class="form-control form-control-sm" list="listaDetalles" maxlength="100">
+                                        <datalist id="listaDetalles"></datalist></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">N° HES / EEPP</label><input type="text" name="num_hes_eepp" class="form-control form-control-sm" maxlength="50"></div>
+                                    <div class="col-6 col-md-3"><label class="form-label small mb-0">Fecha HES / EEPP</label><input type="date" name="fecha_hes_eepp" class="form-control form-control-sm"></div>
+                                    <div class="col-12 col-md-6">
+                                        <div class="form-check mt-3">
+                                            <input class="form-check-input" type="checkbox" id="factCambiaEstado" name="cambia_estado" value="1">
+                                            <label class="form-check-label small" for="factCambiaEstado">Cambiar estado</label>
+                                        </div>
+                                        <select name="estado" id="factEstado" class="form-select form-select-sm d-none">
+                                            <option value="">Seleccione...</option>
+                                            {% for e in estados_catalogo %}<option value="{{ e.codigo }}">{{ e.nombre }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="d-flex justify-content-between align-items-end">
+                                            <label class="form-label small mb-0">Descripción factura *</label>
+                                            <div class="d-flex gap-1 mb-1">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" id="btnGenerarGlosa">Generar descripción</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCopiarGlosa">Copiar</button>
+                                            </div>
+                                        </div>
+                                        <textarea name="glosa" id="factGlosa" class="form-control" rows="9"></textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small mb-0">Seguimiento de la factura</label>
+                                        <textarea id="factSeg" class="form-control" rows="3" readonly></textarea>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <span id="factMensaje" class="small"></span>
+                                    <button type="submit" class="btn btn-success" id="btnGrabarFact">Grabar factura</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% csrf_token %}
 {% endblock %}
 
@@ -313,8 +424,8 @@
         const lista = de === 'cliente' ? actual.contactos_cliente : actual.contactos_mandante;
         const c = lista.find(x => String(x.idcontacto) === $('#selContacto').val());
         $('#datosContacto').html(c ? `${esc(c.cargo)}<br>${esc(c.telefono)} · <a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : '');
-        const saludo = c && c.nombre ? 'Estimado(a) ' + c.nombre : 'Estimado';
-        $('#correoGlosa').val(actual.glosa.replace(/^Estimado /, saludo + ' '));
+        const saludo = c && c.nombre ? 'Estimado(a) ' + c.nombre.trim() : 'Estimado';
+        $('#correoGlosa').val(actual.glosa.replace(/^Estimado ?/, saludo));
     }
 
     function renderComentarios(comentarios) {
@@ -391,7 +502,15 @@
         $('#segContenido').removeClass('d-none');
     }
 
-    $(document).on('click', '.link-seg', function () { abrir($(this).data('id')); });
+    $(document).on('click', '.btn-accion', async function () {
+        const id = $(this).data('id');
+        const accion = $(this).data('accion');
+        if (accion === 'facturar') { abrirFacturacion(id); return; }
+        await abrir(id);
+        if (accion === 'comentarios') {
+            bootstrap.Tab.getOrCreateInstance(document.querySelector('[data-bs-target="#tabComentarios"]')).show();
+        }
+    });
     $('input[name=contacto_de]').on('change', renderContactos);
     $('#selContacto').on('change', renderDatosContacto);
     $('#chkCambiaEstado').on('change', function () {
@@ -471,6 +590,229 @@
 
     // Al cerrar, recarga el listado si hubo cambios (igual que el formulario anterior al reactivarse)
     modalEl.addEventListener('hidden.bs.modal', function () {
+        if (huboCambios) { window.location.reload(); }
+    });
+
+    // ---------------- Creación de Facturas ----------------
+    const URL_FACTURACION = "{% url 'factura_facturacion' 0 %}";
+    const URL_FACT_DATOS = "{% url 'factura_datos' 0 %}";
+    const URL_FACT_ELIMINAR = "{% url 'factura_eliminar' 0 %}";
+    const URL_FACT_NUMERO = "{% url 'factura_por_numero' %}";
+    const URL_FACT_GLOSA = "{% url 'factura_glosa' 0 %}";
+    const URL_FACT_GRABAR = "{% url 'factura_grabar' 0 %}";
+    const URL_NOTAS = "{% url 'cliente_notas_guardar' 0 %}";
+    const URL_UF = "{% url 'api_valor_uf_por_fecha' %}";
+    const modalFactEl = document.getElementById('modalFact');
+    const modalFact = new bootstrap.Modal(modalFactEl);
+    const $ff = $('#formFact');
+    let fact = null;           // datos del proyecto
+    let factSel = null;        // factura seleccionada en la lista
+    const cl = (n, dec = 0) => (n === null || n === undefined || n === '' || isNaN(n)) ? '' :
+        Number(n).toLocaleString('es-CL', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    const num = (t) => { t = String(t ?? '').trim(); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); return parseFloat(t); };
+    const esUF = () => fact && fact.proyecto.moneda === 'UF';
+    const redondear = (v, d) => { const f = Math.pow(10, d); return Math.round((v + 1e-9) * f) / f; };
+    const ufTexto = (v) => (v === null || v === undefined || v === '') ? '' : Number(v).toFixed(2).replace('.', ',');
+
+    function recalcular() {
+        const porc = num($ff.find('[name=porc]').val());
+        const valor = Number(fact.proyecto.valor_proyecto || 0);
+        if (!(porc > 0)) { $('#factMonto, #factTotal').val(''); return; }
+        if (esUF()) {
+            const monto = redondear(porc * valor / 100, 2);
+            $('#factMonto').val(cl(monto, 2));
+            const uf = num($ff.find('[name=valor_uf]').val());
+            $('#factTotal').val(uf > 0 ? cl(redondear(uf * monto, 0)) : '');
+        } else {
+            const monto = redondear(porc * valor / 100, 0);
+            $('#factMonto').val(cl(monto)); $('#factTotal').val(cl(monto));
+        }
+    }
+
+    function mensajeFact(texto, error) {
+        $('#factMensaje').text(texto || '').toggleClass('text-danger', !!error).toggleClass('text-success', !error);
+    }
+
+    function limpiarFormulario() {
+        factSel = null;
+        $ff[0].reset();
+        $ff.find('[name=idfactura]').val(0);
+        $ff.find('[name=idcliente]').val(fact.proyecto.cliente ? fact.proyecto.cliente.idcliente : 0);
+        $ff.find('[name=vencimiento]').val(30);
+        $ff.find('[name=fecha_emision]').val(fact.fecha_hoy);
+        $ff.find('[name=valor_uf]').val(ufTexto(fact.uf_dia));
+        $('#factEstado').addClass('d-none');
+        $('#factSeg').val('');
+        $('#factAvisoNoEditable').addClass('d-none');
+        $('#btnGrabarFact').prop('disabled', false);
+        $('#btnFactEliminar').prop('disabled', true);
+        $('#listaFacturasProy .list-group-item').removeClass('active');
+        recalcular();
+    }
+
+    function cargarEnFormulario(f, seguimiento) {
+        factSel = f;
+        $ff.find('[name=idfactura]').val(f.idfactura);
+        $ff.find('[name=numfactura]').val(f.numfactura);
+        $ff.find('[name=fecha_emision]').val(f.fecha_emision);
+        $ff.find('[name=porc]').val(f.porc !== null ? String(f.porc).replace('.', ',') : '');
+        $ff.find('[name=valor_uf]').val(ufTexto(f.valor_uf));
+        $ff.find('[name=detalle]').val(f.detalle);
+        $ff.find('[name=num_hes_eepp]').val(f.num_hes_eepp);
+        $ff.find('[name=fecha_hes_eepp]').val(f.fecha_hes_eepp);
+        $ff.find('[name=vencimiento]').val(f.vencimiento ?? 30);
+        $('#factCambiaEstado').prop('checked', false); $('#factEstado').addClass('d-none').val('');
+        $('#factGlosa').val('');
+        $('#factSeg').val(seguimiento || '');
+        $('#factAvisoNoEditable').toggleClass('d-none', f.editable);
+        $('#btnGrabarFact').prop('disabled', !f.editable);
+        $('#btnFactEliminar').prop('disabled', false);
+        $('#listaFacturasProy .list-group-item').removeClass('active')
+            .filter(`[data-id="${f.idfactura}"]`).addClass('active');
+        recalcular();
+    }
+
+    function renderListaFacturas(lista) {
+        $('#listaFacturasProy').html(lista.length ? lista.map(f => `
+            <a class="list-group-item list-group-item-action" data-id="${f.idfactura}">
+                <div class="d-flex justify-content-between"><strong>N° ${f.numfactura}</strong><span>${esc(f.porc)}%</span></div>
+                <div class="small text-muted">${esc(f.fecha_emision)} · ${esc(f.detalle)} · $${esc(f.total_texto)}</div>
+                <div class="small">${esc(f.estado_nombre)}</div>
+            </a>`).join('') : '<div class="text-muted small p-2">Sin facturas.</div>');
+    }
+
+    function renderEncabezado() {
+        const p = fact.proyecto;
+        $('#factTituloProy').text(`· Proyecto ${p.idproyecto}`);
+        $('#fpNum').text(p.idproyecto);
+        $('#fpNombre').text(p.nombre_proyecto);
+        $('#fpEstado').text(p.estado_proyecto);
+        $('#fpValor').text(`${p.moneda} ${cl(p.valor_proyecto, p.moneda === 'UF' ? 2 : 0)}`);
+        $('#fpCot').text(`${p.num_cot} (${p.fecha_cot})`);
+        $('#fpMandante').text(p.mandante);
+        $('#fpConf').text(p.medio_conf ? `${p.medio_conf} N° ${p.num_conf} (${p.fecha_conf})` : 'Sin datos de confirmación');
+        $('#fpReq').text(`${p.con_hes || '-'} / ${p.con_eepp || '-'} / ${p.con_otro || '-'}`);
+        $('#fpCliente').text(p.cliente ? `${p.cliente.razonsocial} (${p.cliente.rut})` : 'Sin cliente');
+        $('#fpFPago').text(p.forma_pago);
+        $('#fpSaldo').text(cl(p.saldo, 2) + ' %');
+        $('#fpUfDia').text(fact.uf_dia ? '$' + cl(fact.uf_dia, 2) : 'Sin UF');
+        $('.moneda-proy').text(p.moneda);
+        $('.grp-uf').toggleClass('d-none', p.moneda !== 'UF');
+        $('#factNotas').val(p.cliente ? p.cliente.notas : '').prop('readonly', !p.cliente);
+        $('#btnGuardarNotas').prop('disabled', !p.cliente);
+        $('#listaDetalles').html(fact.detalles.map(d => `<option value="${esc(d)}">`).join(''));
+    }
+
+    async function abrirFacturacion(idfactura) {
+        $('#factCargando').removeClass('d-none').text('Cargando...');
+        $('#factContenido').addClass('d-none');
+        mensajeFact('');
+        modalFact.show();
+        try {
+            const resp = await fetch(urlFactura(URL_FACTURACION, idfactura), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            const json = await resp.json();
+            if (!resp.ok || !json.ok) throw new Error(json.message || 'No se pudo cargar.');
+            fact = json;
+        } catch (e) {
+            $('#factCargando').text(e.message || 'No se pudo cargar la facturación.');
+            return;
+        }
+        renderEncabezado();
+        renderListaFacturas(fact.facturas);
+        limpiarFormulario();
+        $('#factSeg').val(fact.seguimiento);   // como antes: muestra el seguimiento de la factura desde la que se abrió
+        $('#factCargando').addClass('d-none');
+        $('#factContenido').removeClass('d-none');
+    }
+
+    async function seleccionarFactura(idfactura) {
+        const resp = await fetch(urlFactura(URL_FACT_DATOS, idfactura), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const json = await resp.json();
+        if (resp.ok && json.ok) { cargarEnFormulario(json.factura, json.seguimiento); mensajeFact(''); }
+    }
+
+    $('#listaFacturasProy').on('click', '.list-group-item', function () { seleccionarFactura($(this).data('id')); });
+    $('#btnFactNueva').on('click', function () { limpiarFormulario(); mensajeFact(''); });
+    $ff.on('input', '[name=porc], [name=valor_uf]', recalcular);
+    $('#factCambiaEstado').on('change', function () { $('#factEstado').toggleClass('d-none', !this.checked).val(''); });
+
+    // Al salir del N° de factura: si ya existe, carga sus datos (igual que antes)
+    $ff.find('[name=numfactura]').on('change', async function () {
+        const numero = this.value;
+        if (!(Number(numero) > 0)) return;
+        const resp = await fetch(URL_FACT_NUMERO + '?numero=' + encodeURIComponent(numero), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const json = await resp.json().catch(() => ({}));
+        if (!json.existe) {
+            if (factSel) { $ff.find('[name=idfactura]').val(0); factSel = null; $('#btnFactEliminar').prop('disabled', true); $('#factAvisoNoEditable').addClass('d-none'); $('#btnGrabarFact').prop('disabled', false); }
+            return;
+        }
+        if (json.idproyecto !== fact.proyecto.idproyecto) {
+            mensajeFact(`La factura N° ${numero} ya existe y pertenece al proyecto ${json.idproyecto}.`, true);
+            return;
+        }
+        cargarEnFormulario(json.factura, json.seguimiento);
+        mensajeFact(`La factura N° ${numero} ya existe: se cargaron sus datos.`, false);
+    });
+
+    // UF de la fecha de emisión (si falta en el sistema, se trae de mindicador.cl)
+    $ff.find('[name=fecha_emision]').on('change', async function () {
+        if (!esUF() || !this.value) return;
+        const [y, m, d] = this.value.split('-');
+        const resp = await fetch(URL_UF + '?fecha=' + encodeURIComponent(`${d}/${m}/${y}`), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const json = await resp.json().catch(() => ({}));
+        if (resp.ok && json.ok) { $ff.find('[name=valor_uf]').val(ufTexto(json.valoruf)); recalcular(); }
+    });
+
+    $('#btnGenerarGlosa').on('click', async function () {
+        if (!$ff.find('[name=fecha_emision]').val()) { mensajeFact('Debe ingresar la fecha de emisión.', true); return; }
+        try {
+            const json = await postForm(urlFactura(URL_FACT_GLOSA, fact.proyecto.idproyecto), new FormData($ff[0]));
+            $('#factGlosa').val(json.glosa); mensajeFact('');
+        } catch (err) { mensajeFact(err.message, true); }
+    });
+    $('#btnCopiarGlosa').on('click', async function () {
+        try { await navigator.clipboard.writeText($('#factGlosa').val()); } catch (e) { $('#factGlosa').select(); document.execCommand('copy'); }
+        mensajeFact('Descripción copiada.', false);
+    });
+
+    $ff.on('submit', async function (e) {
+        e.preventDefault();
+        const $btn = $('#btnGrabarFact').prop('disabled', true);
+        try {
+            const json = await postForm(urlFactura(URL_FACT_GRABAR, fact.proyecto.idproyecto), new FormData(this));
+            huboCambios = true;
+            fact.facturas = json.facturas; fact.proyecto.saldo = json.saldo;
+            renderListaFacturas(json.facturas); $('#fpSaldo').text(cl(json.saldo, 2) + ' %');
+            if (json.idfactura) await seleccionarFactura(json.idfactura);
+            mensajeFact(json.message, false);
+        } catch (err) {
+            mensajeFact(err.message, true);
+        } finally {
+            $btn.prop('disabled', factSel ? !factSel.editable : false);
+        }
+    });
+
+    $('#btnFactEliminar').on('click', async function () {
+        if (!factSel) return;
+        if (!window.confirm(`¿Eliminar la factura N° ${factSel.numfactura} (${$('#listaFacturasProy .active .small:last').text()}) y todo su seguimiento? No se puede deshacer.`)) return;
+        try {
+            const json = await postForm(urlFactura(URL_FACT_ELIMINAR, factSel.idfactura), new FormData());
+            huboCambios = true;
+            renderListaFacturas(json.facturas); $('#fpSaldo').text(cl(json.saldo, 2) + ' %');
+            limpiarFormulario();
+            mensajeFact('Factura eliminada.', false);
+        } catch (err) { mensajeFact(err.message, true); }
+    });
+
+    $('#btnGuardarNotas').on('click', async function () {
+        const datos = new FormData(); datos.append('notas', $('#factNotas').val());
+        try {
+            const json = await postForm(urlFactura(URL_NOTAS, fact.proyecto.cliente.idcliente), datos);
+            $('#msgNotas').text(json.message).removeClass('text-danger').addClass('text-success');
+        } catch (err) { $('#msgNotas').text(err.message).removeClass('text-success').addClass('text-danger'); }
+    });
+
+    modalFactEl.addEventListener('hidden.bs.modal', function () {
         if (huboCambios) { window.location.reload(); }
     });
 })();

@@ -100,6 +100,7 @@ def _fila(row):
         'estado_nombre': _texto(row[19]),
         'estado_proyecto': _texto(row[20]),
         'idfactura': row[16],
+        'idcliente': row[13],
         'contacto': _texto(row[14]),
         'telefono': _texto(row[15]),
         'email': email,
@@ -361,3 +362,373 @@ def factura_comentario_eliminar(request, idfactura, idreg):
     with connection.cursor() as cursor:
         cursor.execute('SET NOCOUNT ON; EXEC EL_Factura_SEG @IdFactura=%s, @IdReg=%s', [idfactura, idreg])
     return JsonResponse({'ok': True, 'comentarios': _comentarios(idfactura)})
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Creación de Facturas (formulario CreacionFactura del sistema anterior)
+# ---------------------------------------------------------------------------------------------------------------
+
+DETALLES_FACTURA = ['Anticipo', 'Entrega V00', 'Entrega V Final', 'Saldo', 'V Licitación', 'V Construcción']
+ESTADOS_EDITABLES = (0, 1)  # GR_CreaFactura solo modifica facturas Provisoria o Para Emitir
+
+
+def _cl(valor, decimales=0):
+    """Número con formato chileno: miles con punto y decimales con coma."""
+    if valor is None:
+        return ''
+    texto = f"{float(valor):,.{decimales}f}"
+    return texto.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _porcentaje(valor):
+    """Como PorcFacturar.ToString() del sistema anterior: sin decimales sobrantes."""
+    if valor is None:
+        return ''
+    valor = round(float(valor), 2)
+    return _cl(valor, 0) if valor.is_integer() else _cl(valor, 2).rstrip('0').rstrip(',')
+
+
+def _fecha_corta(valor):
+    """dd/mm/aa, como las fechas que el sistema anterior pone en la descripción."""
+    if not valor:
+        return ''
+    if isinstance(valor, str):
+        try:
+            valor = datetime.strptime(valor.strip(), '%d/%m/%Y').date()
+        except ValueError:
+            try:
+                valor = date.fromisoformat(valor.strip())
+            except ValueError:
+                return valor
+    return valor.strftime('%d/%m/%y')
+
+
+def genera_glosa(p):
+    """Port de GeneraGlosa (FUNCIONES.vb): descripción de la factura. Vacía si falta medio o N° de confirmación."""
+    if not p.get('medio_conf') or not p.get('num_conf'):
+        return ''
+    uf = p.get('moneda') == 'UF'
+    dec = 2 if uf else 0
+    lineas = [
+        '',
+        f"{p['idproyecto']} {p['nombre_proyecto']}",
+        f"Monto Total Proyecto {p['moneda']} {_cl(p['valor_proyecto'], dec)}",
+        f"Según Cotización N° {p['num_cot']} ({_fecha_corta(p['fecha_cot'])})",
+        f"Según {p['medio_conf']} N° {str(p['num_conf']).strip()} ({_fecha_corta(p['fecha_conf'])})",
+    ]
+    for marca, nombre in (('con_hes', 'HES'), ('con_eepp', 'EEPP'), ('con_otro', '.......')):
+        if p.get(marca) == 'S':
+            lineas.append(f"Según {nombre} N° {(p.get('num_hes_eepp') or '').strip()} ({_fecha_corta(p.get('fecha_hes_eepp'))})")
+    lineas += ['', '']
+    a_facturar = f"A Facturar {_porcentaje(p['porc'])}% {p['detalle']} {p['moneda']} {_cl(p['monto'], dec)}"
+    if uf:
+        a_facturar += f"(${_cl(p['total_pesos'])})"
+    lineas.append(a_facturar)
+    if uf:
+        lineas += [f"Según UF ${_cl(p['valor_uf'], 2)} ({_fecha_corta(p['fecha_emision'])})", '']
+    lineas.append('Proyecto Especialidad Manejo de Residuos')
+    saldo = float(p.get('saldo') or 0)
+    if saldo > 0:
+        valor_saldo = round(float(p['valor_proyecto'] or 0) * saldo / 100, dec)
+        lineas.append(f"Saldo por facturar {_porcentaje(saldo)}%" + (f" UF {_cl(valor_saldo, 2)}" if uf else f" $ {_cl(valor_saldo)}"))
+    return '\n'.join(lineas)
+
+
+def _saldo_por_facturar(idproyecto):
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT dbo.SaldoPorFacturar(%s)', [idproyecto])
+        return float(cursor.fetchone()[0] or 0)
+
+
+def _facturas_del_proyecto(idproyecto, estados):
+    with connection.cursor() as cursor:
+        cursor.execute('SET NOCOUNT ON; EXEC CO_FacturaxProyecto %s', [idproyecto])
+        filas = cursor.fetchall()
+    return [{
+        'idfactura': r[23],
+        'numfactura': int(r[0]),
+        'fecha_emision': (r[1] or '').strip(),
+        'porc': _porcentaje(r[9]),
+        'detalle': r[12] or '',
+        'total_texto': _pesos(r[8]),
+        'estado': r[10],
+        'estado_nombre': estados.get(r[10], ''),
+        'editable': r[10] in ESTADOS_EDITABLES,
+    } for r in filas]
+
+
+def _datos_factura(idfactura):
+    """CO_Factura: datos para cargar una factura existente en el formulario."""
+    with connection.cursor() as cursor:
+        cursor.execute('SET NOCOUNT ON; EXEC CO_Factura %s', [idfactura])
+        r = cursor.fetchone()
+    if r is None:
+        return None
+    def iso(texto):
+        texto = (texto or '').strip()
+        return datetime.strptime(texto, '%d/%m/%Y').date().isoformat() if texto else ''
+    return {
+        'idfactura': r[23],
+        'numfactura': int(r[0]),
+        'fecha_emision': iso(r[1]),
+        'num_hes_eepp': r[4] or '',
+        'fecha_hes_eepp': iso(r[5]),
+        'valor_uf': float(r[7]) if r[7] is not None else None,
+        'total_pesos': r[8],
+        'porc': r[9],
+        'estado': r[10],
+        'detalle': r[12] or '',
+        'moneda': r[21] or '',
+        'monto': r[22],
+        'vencimiento': r[26],
+        'editable': r[10] in ESTADOS_EDITABLES,
+    }
+
+
+def _seguimiento_texto(idfactura):
+    if not idfactura:
+        return ''
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT dbo.Fx_ObtieneSEGFactura(%s)', [idfactura])
+        return (cursor.fetchone()[0] or '').replace('\r\n', '\n').strip()
+
+
+def _encabezado_proyecto(proyecto, cliente):
+    cot = proyecto.idcotizacion
+    return {
+        'idproyecto': int(proyecto.idproyecto),
+        'nombre_proyecto': cot.nombreproyecto or '',
+        'estado_proyecto': proyecto.estadoproyecto.nombre if proyecto.estadoproyecto_id else '',
+        'moneda': proyecto.moneda or '',
+        'valor_proyecto': proyecto.valor or 0,
+        'num_cot': f"{int(cot.numcotizacion)}-{int(cot.numcorr or 0):03d}" if cot.numcotizacion is not None else '',
+        'fecha_cot': cot.fecha.strftime('%d/%m/%Y') if cot.fecha else '',
+        'mandante': cot.idcliente.razonsocial if cot.idcliente_id else '',
+        'medio_conf': proyecto.medioconf or '',
+        'num_conf': (proyecto.numconf or '').strip(),
+        'fecha_conf': proyecto.fechaconf.strftime('%d/%m/%Y') if proyecto.fechaconf else '',
+        'con_hes': proyecto.conhes or '',
+        'con_eepp': proyecto.coneepp or '',
+        'con_otro': proyecto.conotro or '',
+        'forma_pago': proyecto.fpago or '',
+        'saldo': _saldo_por_facturar(proyecto.idproyecto),
+        'cliente': {
+            'idcliente': cliente.idcliente,
+            'razonsocial': cliente.razonsocial or '',
+            'rut': f"{int(cliente.rut)}-{cliente.dvrut or ''}" if cliente.rut is not None else '',
+            'notas': cliente.comentario or '',
+            'editar_url': reverse('cliente_update', args=[cliente.idcliente]),
+        } if cliente else None,
+    }
+
+
+@login_required
+@require_GET
+def factura_facturacion(request, idfactura):
+    """Abre Creación de Facturas desde una factura del listado, como el clic en el N° de factura."""
+    from .views import _valor_uf_por_fecha
+    factura = get_object_or_404(
+        Factura.objects.select_related('idcliente', 'idproyecto__idcotizacion__idcliente', 'idproyecto__estadoproyecto'),
+        pk=idfactura)
+    if factura.idproyecto is None:
+        return JsonResponse({'ok': False, 'message': 'La factura no tiene proyecto.'}, status=400)
+    estados = dict(_estados_factura())
+    hoy = timezone.localdate()
+    uf_dia = _valor_uf_por_fecha(hoy)
+    return JsonResponse({
+        'ok': True,
+        'origen_idfactura': factura.idfactura,
+        'origen_numfactura': int(factura.numfactura),
+        'proyecto': _encabezado_proyecto(factura.idproyecto, factura.idcliente),
+        'facturas': _facturas_del_proyecto(factura.idproyecto_id, estados),
+        'seguimiento': _seguimiento_texto(factura.idfactura),
+        'uf_dia': uf_dia,
+        'fecha_hoy': hoy.isoformat(),
+        'detalles': DETALLES_FACTURA,
+    })
+
+
+@login_required
+@require_GET
+def factura_datos(request, idfactura):
+    datos = _datos_factura(idfactura)
+    if datos is None:
+        return JsonResponse({'ok': False, 'message': 'La factura no existe.'}, status=404)
+    return JsonResponse({'ok': True, 'factura': datos, 'seguimiento': _seguimiento_texto(idfactura)})
+
+
+@login_required
+@require_GET
+def factura_por_numero(request):
+    """CO_FacturaxNumero: al salir del N° de factura, si ya existe se cargan sus datos (como antes)."""
+    try:
+        numero = int(request.GET.get('numero') or 0)
+    except ValueError:
+        numero = 0
+    if numero <= 0:
+        return JsonResponse({'ok': True, 'existe': False})
+    with connection.cursor() as cursor:
+        cursor.execute('SET NOCOUNT ON; EXEC CO_FacturaxNumero %s', [numero])
+        r = cursor.fetchone()
+    if r is None:
+        return JsonResponse({'ok': True, 'existe': False})
+    return JsonResponse({'ok': True, 'existe': True, 'idproyecto': int(r[3]) if r[3] is not None else None,
+                         'factura': _datos_factura(r[23]), 'seguimiento': _seguimiento_texto(r[23])})
+
+
+def _decimal(request, campo, nombre):
+    texto = (request.POST.get(campo) or '').strip().replace('.', '').replace(',', '.') if ',' in (request.POST.get(campo) or '') \
+        else (request.POST.get(campo) or '').strip()
+    try:
+        return float(texto)
+    except ValueError:
+        raise ErrorValidacion(f'{nombre} no es un número válido.')
+
+
+def _calculo_factura(proyecto, porc, valor_uf):
+    """Monto a facturar y total en pesos, igual que el formulario anterior."""
+    valor_proyecto = float(proyecto.valor or 0)
+    if (proyecto.moneda or '') == 'UF':
+        monto = round(porc * valor_proyecto / 100 + 1e-9, 2)
+        total_pesos = round(valor_uf * monto + 1e-9, 0)
+    else:
+        monto = round(porc * valor_proyecto / 100 + 1e-9, 0)
+        valor_uf = 1.0
+        total_pesos = monto
+    return monto, valor_uf, total_pesos
+
+
+@login_required
+@require_POST
+def factura_glosa(request, idproyecto):
+    """Genera la descripción (botón 'Generar descripción', Button3 del formulario anterior)."""
+    from .models import Proyecto
+    proyecto = get_object_or_404(Proyecto.objects.select_related('idcotizacion__idcliente', 'estadoproyecto'),
+                                 pk=idproyecto)
+    try:
+        porc = _decimal(request, 'porc', '% a facturar')
+        valor_uf = _decimal(request, 'valor_uf', 'Valor UF') if (proyecto.moneda or '') == 'UF' else 1.0
+        fecha_emision = _fecha(request.POST.get('fecha_emision'), 'Fecha de emisión')
+        monto, valor_uf, total_pesos = _calculo_factura(proyecto, porc, valor_uf)
+        if total_pesos <= 0:
+            raise ErrorValidacion('Debe ingresar el valor UF.')
+    except ErrorValidacion as e:
+        return JsonResponse({'ok': False, 'message': str(e)}, status=400)
+    enc = _encabezado_proyecto(proyecto, None)
+    glosa = genera_glosa({
+        **enc,
+        'num_hes_eepp': request.POST.get('num_hes_eepp') or '',
+        'fecha_hes_eepp': request.POST.get('fecha_hes_eepp') or '',
+        'porc': porc, 'detalle': (request.POST.get('detalle') or '').strip(), 'monto': monto,
+        'total_pesos': total_pesos, 'valor_uf': valor_uf, 'fecha_emision': fecha_emision,
+    })
+    if not glosa:
+        return JsonResponse({'ok': False, 'message': 'El proyecto no tiene medio y N° de confirmación (OC): '
+                                                     'la descripción queda vacía, igual que antes.'}, status=400)
+    return JsonResponse({'ok': True, 'glosa': glosa})
+
+
+@login_required
+@require_POST
+def factura_grabar(request, idproyecto):
+    """Crea o modifica una factura con GR_CreaFactura, con las validaciones de CreacionFactura."""
+    from .models import Proyecto
+    proyecto = get_object_or_404(Proyecto, pk=idproyecto)
+    try:
+        idfactura = int(request.POST.get('idfactura') or 0)
+        idcliente = int(request.POST.get('idcliente') or 0)
+        if idcliente <= 0:
+            raise ErrorValidacion('No es posible crear la factura: falta la identificación del cliente.')
+        try:
+            numfactura = int(request.POST.get('numfactura') or 0)
+        except ValueError:
+            numfactura = 0
+        if numfactura <= 0:
+            raise ErrorValidacion('N° de factura no válido.')
+        existente = Factura.objects.filter(numfactura=numfactura).exclude(pk=idfactura).first()
+        if existente:
+            raise ErrorValidacion(f'Factura N° {numfactura} existe por un valor ${_pesos(existente.valortotalpesos)}.')
+        if idfactura:
+            actual = Factura.objects.filter(pk=idfactura, idproyecto_id=proyecto.pk).first()
+            if actual is None:
+                raise ErrorValidacion('La factura a modificar no pertenece a este proyecto.')
+            if actual.estado not in ESTADOS_EDITABLES:
+                raise ErrorValidacion('Solo se pueden modificar facturas en estado Provisoria o Para Emitir.')
+        fecha_emision = _fecha(request.POST.get('fecha_emision'), 'Fecha de emisión')
+        porc = _decimal(request, 'porc', '% a facturar')
+        if porc <= 0:
+            raise ErrorValidacion('% a facturar debe ser mayor a cero.')
+        uf = (proyecto.moneda or '') == 'UF'
+        valor_uf = _decimal(request, 'valor_uf', 'Valor UF') if uf else 1.0
+        if valor_uf <= 0:
+            raise ErrorValidacion('Valor U.F. debe ser mayor a cero.')
+        detalle = (request.POST.get('detalle') or '').strip()
+        if not detalle:
+            raise ErrorValidacion('Debe ingresar el detalle a facturar.')
+        if len(detalle) > 100:
+            raise ErrorValidacion('El detalle admite hasta 100 caracteres.')
+        nuevo_estado = None
+        if request.POST.get('cambia_estado') == '1':
+            try:
+                nuevo_estado = int(request.POST.get('estado'))
+            except (TypeError, ValueError):
+                nuevo_estado = None
+            if nuevo_estado not in dict(_estados_factura()):
+                raise ErrorValidacion('Debe seleccionar el estado de la factura.')
+        if not (request.POST.get('glosa') or '').strip():
+            raise ErrorValidacion('Falta actualizar la descripción de la factura.')
+        num_hes = (request.POST.get('num_hes_eepp') or '').strip()
+        if len(num_hes) > 50:
+            raise ErrorValidacion('El N° HES/EEPP admite hasta 50 caracteres.')
+        fecha_hes = _fecha(request.POST.get('fecha_hes_eepp'), 'Fecha HES/EEPP') if request.POST.get('fecha_hes_eepp') else None
+        try:
+            vencimiento = int(request.POST.get('vencimiento') or 30)
+        except ValueError:
+            raise ErrorValidacion('Vencimiento no válido.')
+        monto, valor_uf, total_pesos = _calculo_factura(proyecto, porc, valor_uf)
+    except ErrorValidacion as e:
+        return JsonResponse({'ok': False, 'message': str(e)}, status=400)
+
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute(
+            'SET NOCOUNT ON; EXEC GR_CreaFactura @IdFactura=%s, @NumFactura=%s, @FechaEmision=%s, @IdCliente=%s, '
+            '@IdProyecto=%s, @NumHES_EEPP=%s, @FechaHES_EEPP=%s, @ValorTotal=%s, @ValorUF=%s, @ValorTotalPesos=%s, '
+            '@PorcFact=%s, @Detalle=%s, @Moneda=%s, @MontoFacturarMonOrig=%s, @NuevoEstado=%s, @Vencimiento=%s',
+            [idfactura, numfactura, fecha_emision, idcliente, proyecto.pk, num_hes, fecha_hes,
+             float(proyecto.valor or 0), round(valor_uf, 2), total_pesos, porc, detalle, (proyecto.moneda or '')[:2],
+             monto, nuevo_estado, vencimiento])
+    guardada = Factura.objects.filter(numfactura=numfactura, idproyecto_id=proyecto.pk).order_by('-idfactura').first()
+    return JsonResponse({
+        'ok': True,
+        'message': 'Factura modificada.' if idfactura else 'Factura creada.',
+        'idfactura': guardada.idfactura if guardada else None,
+        'facturas': _facturas_del_proyecto(proyecto.pk, dict(_estados_factura())),
+        'saldo': _saldo_por_facturar(proyecto.pk),
+    })
+
+
+@login_required
+@require_POST
+def factura_eliminar(request, idfactura):
+    """EL_Factura: borra la factura y su seguimiento (igual que antes, pero pidiendo confirmación en pantalla)."""
+    factura = get_object_or_404(Factura, pk=idfactura)
+    idproyecto = factura.idproyecto_id
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute('SET NOCOUNT ON; EXEC EL_Factura %s', [idfactura])
+    return JsonResponse({
+        'ok': True,
+        'facturas': _facturas_del_proyecto(idproyecto, dict(_estados_factura())) if idproyecto else [],
+        'saldo': _saldo_por_facturar(idproyecto) if idproyecto else 0,
+    })
+
+
+@login_required
+@require_POST
+def cliente_notas_guardar(request, idcliente):
+    """Guarda las notas del cliente (botón de notas de CreacionFactura). Como antes, no borra si viene vacío."""
+    from .models import Cliente
+    cliente = get_object_or_404(Cliente, pk=idcliente)
+    notas = (request.POST.get('notas') or '').strip()
+    if notas:
+        Cliente.objects.filter(pk=cliente.pk).update(comentario=notas)
+    return JsonResponse({'ok': True, 'message': 'Notas guardadas.' if notas else 'Sin cambios: las notas venían vacías.'})

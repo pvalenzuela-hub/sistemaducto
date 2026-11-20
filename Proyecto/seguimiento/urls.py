@@ -33,6 +33,13 @@ urlpatterns = [
     path('facturas/<int:idfactura>/seguimiento/guardar/', views_facturas.factura_seguimiento_guardar, name='factura_seguimiento_guardar'),
     path('facturas/<int:idfactura>/comentarios/<int:idreg>/editar/', views_facturas.factura_comentario_editar, name='factura_comentario_editar'),
     path('facturas/<int:idfactura>/comentarios/<int:idreg>/eliminar/', views_facturas.factura_comentario_eliminar, name='factura_comentario_eliminar'),
+    path('facturas/<int:idfactura>/facturacion/', views_facturas.factura_facturacion, name='factura_facturacion'),
+    path('facturas/<int:idfactura>/datos/', views_facturas.factura_datos, name='factura_datos'),
+    path('facturas/<int:idfactura>/eliminar/', views_facturas.factura_eliminar, name='factura_eliminar'),
+    path('facturas/por-numero/', views_facturas.factura_por_numero, name='factura_por_numero'),
+    path('facturas/proyecto/<int:idproyecto>/glosa/', views_facturas.factura_glosa, name='factura_glosa'),
+    path('facturas/proyecto/<int:idproyecto>/grabar/', views_facturas.factura_grabar, name='factura_grabar'),
+    path('facturas/clientes/<int:idcliente>/notas/', views_facturas.cliente_notas_guardar, name='cliente_notas_guardar'),
     path('vistobueno/', Vista2.as_view(), name='vista2'),
     path('desarrollo/', Vista3.as_view(), name='vista3'),
 
