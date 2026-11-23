@@ -39,6 +39,8 @@ from django.db import DatabaseError
 from .servicios import proyectos as srv_proyectos
 from .servicios import uf as srv_uf
 from .servicios import cotizaciones as srv_cotizaciones
+from .servicios import clientes as srv_clientes
+from django.http import Http404
 
 
 
@@ -50,7 +52,6 @@ ESTADO_ENTREGA_REVISION = 4
 ESTADO_ENTREGA_ENTREGADO = 5
 ESTADO_ENTREGA_NULA = 6
 
-FECHA_MINIMA_COTIZACION = None
 ESTADO_CLIENTE_ELIMINADO = 5
 
 CATALOGO_COTIZACIONES = [
@@ -170,15 +171,6 @@ def _nombre_visible_usuario_actual(usuario):
 
     username = getattr(usuario, 'username', '') or str(usuario)
     return username.strip()
-
-
-def _nombre_visible_usuario_legacy(usuario):
-    return (
-        (usuario.nombrecompleto or '').strip()
-        or (usuario.username or '').strip()
-        or (usuario.email or '').strip()
-        or (usuario.id or '').strip()
-    )
 
 
 @login_required
@@ -736,37 +728,8 @@ def api_cotizaciones_formapago(request):
     return JsonResponse({'results': data})
 
 
-def _resolver_id_usuario_nota(username):
-    identificador = (username or '').strip()
-    if not identificador:
-        return ''
-
-    usuario_legacy = AspNetUser.objects.filter(username=identificador).only('id').first()
-    if usuario_legacy and usuario_legacy.id:
-        return usuario_legacy.id
-
-    return identificador
-
-
-def _fecha_cliente_seg_guardado():
-    # Cliente_Seg es una tabla legacy donde la hora se maneja como valor local
-    # sin conversión real de zona horaria. Guardamos la hora local con marca UTC
-    # para conservar el mismo reloj visible al leerla después.
-    return timezone.localtime(timezone.now()).replace(tzinfo=dt_timezone.utc)
-
-
 def _ahora_santiago_naive():
     return timezone.localtime(timezone.now()).replace(tzinfo=None)
-
-
-def _fecha_cliente_seg_mostrada(fecha):
-    if not fecha:
-        return None
-
-    if timezone.is_aware(fecha):
-        return fecha.replace(tzinfo=None)
-
-    return fecha
 
 
 def _notas_pendientes_desde_post(post_data, usuario):
@@ -783,60 +746,6 @@ def _notas_pendientes_desde_post(post_data, usuario):
 
     return notas
 
-
-def _asignar_nombre_usuario_notas(notas):
-    identificadores = {
-        (nota.iduser or '').strip()
-        for nota in notas
-        if (nota.iduser or '').strip()
-    }
-
-    usuarios_aspnet = list(
-        AspNetUser.objects.filter(
-            Q(id__in=identificadores) | Q(username__in=identificadores)
-        )
-    )
-    usuarios_aspnet_por_id = {
-        usuario.id: _nombre_visible_usuario_legacy(usuario)
-        for usuario in usuarios_aspnet
-        if usuario.id
-    }
-    usuarios_aspnet_por_username = {
-        usuario.username: _nombre_visible_usuario_legacy(usuario)
-        for usuario in usuarios_aspnet
-        if usuario.username
-    }
-
-    usuarios_auth = {
-        usuario.username: usuario
-        for usuario in User.objects.filter(username__in=identificadores)
-    }
-    usuarios_legacy = {
-        usuario.username: (usuario.nombreusuario or '').strip()
-        for usuario in tusuario.objects.filter(username__in=identificadores)
-        if usuario.username
-    }
-
-    for nota in notas:
-        identificador = (nota.iduser or '').strip()
-        nombre_aspnet = usuarios_aspnet_por_id.get(identificador) or usuarios_aspnet_por_username.get(identificador)
-        usuario_auth = usuarios_auth.get(identificador)
-        nombre_auth = usuario_auth.get_full_name().strip() if usuario_auth else ''
-
-        if nombre_aspnet:
-            nota.usuario_nombre = nombre_aspnet
-        elif nombre_auth:
-            nota.usuario_nombre = nombre_auth
-        elif usuarios_legacy.get(identificador):
-            nota.usuario_nombre = usuarios_legacy[identificador]
-        elif usuario_auth:
-            nota.usuario_nombre = usuario_auth.username
-        elif identificador:
-            nota.usuario_nombre = 'Usuario no identificado'
-        else:
-            nota.usuario_nombre = 'Sin usuario'
-
-        nota.fecha_mostrada = _fecha_cliente_seg_mostrada(nota.fecha)
 
 # Create your views here.
 
@@ -1541,37 +1450,6 @@ def tipo_entrega_delete(request, pk):
     }
     return render(request, 'tipoentrega_confirm_delete.html', context)
     
-FECHA_MINIMA_COTIZACION = date(1900, 1, 1)
-
-
-def _queryset_clientes_con_relaciones():
-    return (
-        Cliente.objects
-        .exclude(idestadocliente_id=ESTADO_CLIENTE_ELIMINADO)
-        .select_related('idestadocliente', 'idcomppago', 'idcliente_p')
-        .prefetch_related(
-            Prefetch(
-                'clientecategoria_set',
-                queryset=ClienteCategoria.objects.select_related('idcategoria')
-            )
-        )
-    )
-
-
-def _anotar_clientes_reporte(clientes, fechas_por_cliente=None):
-    fechas_por_cliente = fechas_por_cliente or {}
-
-    for cliente in clientes:
-        cliente.fecha_ultima_cotizacion = fechas_por_cliente.get(cliente.idcliente)
-
-        categorias = []
-        for cc in cliente.clientecategoria_set.all():
-            if cc.idcategoria:
-                categorias.append(cc.idcategoria.NombreCat)
-
-        cliente.categorias_texto = ', '.join(dict.fromkeys(categorias))
-        cliente.estado_texto = cliente.idestadocliente.descrip if cliente.idestadocliente_id else ''
-        cliente.comportamiento_pago_texto = cliente.idcomppago.descrip if cliente.idcomppago_id else ''
 
 
 def _completar_post_data_cliente(post_data, cliente=None, force_esprincipal=None):
@@ -1588,12 +1466,7 @@ def _completar_post_data_cliente(post_data, cliente=None, force_esprincipal=None
 
 @login_required
 def reporte_clientes(request):
-    clientes = list(
-        _queryset_clientes_con_relaciones()
-        .filter(esprincipal=True)
-        .order_by('razonsocial')
-    )
-
+    clientes = srv_clientes.listado_principales()
     if not clientes:
         return render(request, 'clientes/reporte_clientes.html', {
             'clientes': [],
@@ -1603,68 +1476,6 @@ def reporte_clientes(request):
             'url_modificar_name': 'cliente_principal_update',
             'mostrar_eliminar': False,
         })
-
-    ids_principales = [c.idcliente for c in clientes]
-
-    fechas_principal_qs = (
-        Cotizacion.objects
-        .filter(idcliente__in=ids_principales)
-        .values('idcliente')
-        .annotate(ultima_fecha=Max('fecha'))
-    )
-    fechas_principal = {
-        row['idcliente']: row['ultima_fecha']
-        for row in fechas_principal_qs
-    }
-
-    hijos_qs = (
-        Cliente.objects
-        .filter(idcliente_p__in=ids_principales)
-        .exclude(idestadocliente_id=ESTADO_CLIENTE_ELIMINADO)
-        .values('idcliente', 'idcliente_p')
-    )
-
-    hijo_a_padre = {}
-    ids_hijos = []
-
-    for row in hijos_qs:
-        hijo_a_padre[row['idcliente']] = row['idcliente_p']
-        ids_hijos.append(row['idcliente'])
-
-    fechas_hijos_por_padre = defaultdict(lambda: FECHA_MINIMA_COTIZACION)
-
-    if ids_hijos:
-        fechas_hijos_qs = (
-            Cotizacion.objects
-            .filter(idcliente__in=ids_hijos)
-            .values('idcliente')
-            .annotate(ultima_fecha=Max('fecha'))
-        )
-
-        for row in fechas_hijos_qs:
-            id_hijo = row['idcliente']
-            fecha_hijo = row['ultima_fecha'] or FECHA_MINIMA_COTIZACION
-            id_padre = hijo_a_padre.get(id_hijo)
-
-            fecha_actual_padre = fechas_hijos_por_padre[id_padre]
-
-            if id_padre and (
-                fecha_actual_padre is None or
-                (fecha_hijo is not None and fecha_hijo > fecha_actual_padre)
-            ):
-                fechas_hijos_por_padre[id_padre] = fecha_hijo
-
-    fechas_cliente_finales = {}
-    for cliente in clientes:
-        fecha_cliente = fechas_principal.get(cliente.idcliente) or FECHA_MINIMA_COTIZACION
-        fecha_hijos = fechas_hijos_por_padre.get(cliente.idcliente) or FECHA_MINIMA_COTIZACION
-
-        if fecha_cliente and fecha_hijos:
-            fechas_cliente_finales[cliente.idcliente] = max(fecha_cliente, fecha_hijos)
-        else:
-            fechas_cliente_finales[cliente.idcliente] = fecha_cliente or fecha_hijos
-
-    _anotar_clientes_reporte(clientes, fechas_cliente_finales)
 
     return render(request, 'clientes/reporte_clientes.html', {
         'clientes': clientes,
@@ -1678,24 +1489,7 @@ def reporte_clientes(request):
 
 @login_required
 def clientes_totales(request):
-    clientes = list(
-        _queryset_clientes_con_relaciones()
-        .order_by('razonsocial')
-    )
-
-    ids_clientes = [cliente.idcliente for cliente in clientes]
-    fechas_qs = (
-        Cotizacion.objects
-        .filter(idcliente__in=ids_clientes)
-        .values('idcliente')
-        .annotate(ultima_fecha=Max('fecha'))
-    )
-    fechas_por_cliente = {
-        row['idcliente']: row['ultima_fecha']
-        for row in fechas_qs
-    }
-
-    _anotar_clientes_reporte(clientes, fechas_por_cliente)
+    clientes = srv_clientes.listado_total()
 
     return render(request, 'clientes/reporte_clientes.html', {
         'clientes': clientes,
@@ -1710,11 +1504,7 @@ def clientes_totales(request):
 @login_required
 @transaction.atomic
 def cliente_principal_update(request, pk):
-    cliente = get_object_or_404(
-        Cliente.objects.exclude(idestadocliente_id=ESTADO_CLIENTE_ELIMINADO),
-        pk=pk,
-        esprincipal=True,
-    )
+    cliente = get_object_or_404(srv_clientes.principales_activos(), pk=pk)
 
     if request.method == 'POST':
         post_data = _completar_post_data_cliente(
@@ -1766,9 +1556,7 @@ def cliente_create(request):
         )
 
         if form.is_valid():
-            cliente = form.save(commit=False)
-            cliente.insercion = _ahora_santiago_naive()
-            cliente.save()
+            srv_clientes.crear(form.save(commit=False))
             messages.success(request, 'Cliente creado correctamente.')
             return redirect('clientes_totales')
 
@@ -1794,7 +1582,7 @@ def cliente_create(request):
 @xframe_options_sameorigin
 @transaction.atomic
 def cliente_update(request, pk):
-    cliente = get_object_or_404(Cliente, pk=pk)
+    cliente = get_object_or_404(srv_clientes.todos(), pk=pk)
     notas_pendientes = []
     # ?popup=1: se abre dentro de una ventana emergente (p. ej. desde Seguimiento Facturas)
     popup = request.GET.get('popup') == '1'
@@ -1812,55 +1600,12 @@ def cliente_update(request, pk):
         notas_pendientes = _notas_pendientes_desde_post(post_data, request.user)
 
         if form.is_valid() and formset_contactos.is_valid() and form_nota.is_valid():
-            cliente = form.save()
-
-            # Guardar contactos
-            contactos = formset_contactos.save(commit=False)
-
-            # Eliminar los marcados como DELETE
-            for obj in formset_contactos.deleted_objects:
-                obj.delete()
-
-            for contacto in contactos:
-                contacto.idcliente = cliente
-
-                if not contacto.fecharegistro:
-                    contacto.fecharegistro = _ahora_santiago_naive()
-
-                contacto.save()
-
-            # Guardar categorías
-            categorias = list(dict.fromkeys(form.cleaned_data.get('categorias', [])))
-
-            ClienteCategoria.objects.filter(idcliente=cliente).delete()
-
-            nuevas_categorias = [
-                ClienteCategoria(idcliente=cliente, idcategoria=categoria)
-                for categoria in categorias
-            ]
-
-            if nuevas_categorias:
-                ClienteCategoria.objects.bulk_create(nuevas_categorias)
-
-            notas_a_guardar = []
-            notas_a_guardar.extend(post_data.getlist('notas_agregadas'))
-
+            notas_a_guardar = list(post_data.getlist('notas_agregadas'))
             nota_directa = form_nota.cleaned_data.get('nota')
             if nota_directa:
                 notas_a_guardar.append(nota_directa)
-
-            for nota in notas_a_guardar:
-                nota = (nota or '').strip()
-                if not nota:
-                    continue
-
-                usuario_nota = _resolver_id_usuario_nota(request.user.username or str(request.user))[:128]
-                ClienteSeg.objects.create(
-                    idcliente=cliente,
-                    fecha=_fecha_cliente_seg_guardado(),
-                    iduser=usuario_nota,
-                    nota=nota,
-                )
+            cliente = srv_clientes.guardar_ficha(form, formset_contactos, request.user.username or str(request.user),
+                                                 notas_a_guardar)
 
             if popup:
                 return render(request, 'clientes/cliente_popup_guardado.html', {'cliente': cliente})
@@ -1877,8 +1622,7 @@ def cliente_update(request, pk):
         )
         form_nota = ClienteSeguimientoForm(prefix='nota')
 
-    notas_cliente = list(ClienteSeg.objects.filter(idcliente=cliente))
-    _asignar_nombre_usuario_notas(notas_cliente)
+    notas_cliente = srv_clientes.notas(cliente)
 
     context = {
         'titulo': 'Modificar cliente',
@@ -1897,13 +1641,13 @@ def cliente_update(request, pk):
     
 @login_required
 def cliente_delete(request, pk):
-    cliente = get_object_or_404(Cliente, pk=pk)
+    cliente = get_object_or_404(srv_clientes.todos(), pk=pk)
 
     if request.method == 'POST':
-        estado_eliminado = get_object_or_404(Testadocliente, pk=5)
-
-        cliente.idestadocliente = estado_eliminado
-        cliente.save(update_fields=['idestadocliente'])
+        try:
+            srv_clientes.eliminar(cliente)
+        except srv_clientes.NoEncontrado:
+            raise Http404('No existe el estado Eliminado.')
 
         messages.success(request, 'Cliente marcado como eliminado correctamente.')
         return redirect('clientes_totales')
@@ -2019,14 +1763,10 @@ def _make_local_aware(dt_value):
 
 @login_required
 def agenda_clientes(request):
-    clientes = (
-        Cliente.objects
-        .exclude(idestadocliente_id=ESTADO_CLIENTE_ELIMINADO)
-        .order_by('razonsocial')
-    )
+    clientes = srv_clientes.activos_por_nombre()
 
     hoy = timezone.localdate()
-    hace_30_dias = hoy - timedelta(days=30)
+    hace_30_dias = hoy - timedelta(days=srv_clientes.DIAS_AGENDA_ATRAS)
 
     context = {
         'titulo': 'Agenda clientes',
@@ -2042,103 +1782,7 @@ def agenda_clientes(request):
 @login_required
 @require_GET
 def eventos_agenda_clientes(request):
-    start = request.GET.get('start')
-    end = request.GET.get('end')
-
-    start_local = _to_local_naive(start)
-    end_local = _to_local_naive(end)
-
-    hace_30_dias = datetime.combine(
-        timezone.localdate() - timedelta(days=30),
-        time.min,
-    )
-    hace_30_dias = _make_local_aware(hace_30_dias)
-
-    start_local = _make_local_aware(start_local)
-    end_local = _make_local_aware(end_local)
-
-    qs = (
-        ClienteAgenda.objects
-        .select_related('idcliente')
-        .prefetch_related(
-            Prefetch(
-                'idcliente__clientecontacto_set',
-                queryset=Clientecontacto.objects.order_by('nombrecontacto', 'idcontacto')
-            )
-        )
-        .filter(fecha__isnull=False)
-    )
-
-    filtro_desde = hace_30_dias
-    if start_local and start_local > filtro_desde:
-        filtro_desde = start_local
-
-    qs = qs.filter(fecha__gte=filtro_desde)
-
-    if end_local:
-        qs = qs.filter(fecha__lt=end_local)
-
-    eventos = []
-    for agenda in qs:
-        if not agenda.fecha:
-            continue
-
-        fecha_evento = agenda.fecha.date()
-        nombre_cliente = ''
-
-        if agenda.idcliente and agenda.idcliente.razonsocial:
-            nombre_cliente = agenda.idcliente.razonsocial
-        elif agenda.titulo:
-            nombre_cliente = agenda.titulo
-        elif agenda.idcliente_id:
-            nombre_cliente = f'Cliente {agenda.idcliente_id}'
-        else:
-            nombre_cliente = 'Cliente sin nombre'
-
-        contactos = []
-        if agenda.idcliente:
-            for contacto in agenda.idcliente.clientecontacto_set.all():
-                if not any([
-                    contacto.nombrecontacto,
-                    contacto.cargo,
-                    contacto.telefono,
-                    contacto.email,
-                ]):
-                    continue
-
-                tipo_contacto = {
-                    'N': 'Normal',
-                    'F': 'Facturación',
-                    'C': 'Comercial',
-                }.get((contacto.tipocontacto or '').strip().upper(), '')
-
-                contactos.append({
-                    'tipo': tipo_contacto,
-                    'nombre': contacto.nombrecontacto or '',
-                    'cargo': contacto.cargo or '',
-                    'telefono': contacto.telefono or '',
-                    'email': contacto.email or '',
-                })
-
-        eventos.append({
-            'id': agenda.id,
-            'title': nombre_cliente,
-            'start': fecha_evento.isoformat(),
-            'allDay': True,
-            'display': 'block',
-            'backgroundColor': '#0d6efd',
-            'borderColor': '#0d6efd',
-            'textColor': '#ffffff',
-            'extendedProps': {
-                'cliente': nombre_cliente,
-                'titulo': agenda.titulo or nombre_cliente,
-                'descrip': agenda.descrip or '',
-                'fecha': fecha_evento.strftime('%d-%m-%Y'),
-                'comentario_cliente': agenda.idcliente.comentario if agenda.idcliente and agenda.idcliente.comentario else '',
-                'contactos': contactos,
-            }
-        })
-
+    eventos = srv_clientes.eventos_agenda(_to_local_naive(request.GET.get('start')), _to_local_naive(request.GET.get('end')))
     return JsonResponse(eventos, safe=False)
 
 
@@ -2153,50 +1797,13 @@ def crear_agenda_cliente(request):
             'mensaje': 'Datos inválidos.'
         }, status=400)
 
-    fecha_str = payload.get('fecha')
-    idcliente = payload.get('idcliente')
-    descrip = (payload.get('descrip') or '').strip()
-
-    if not fecha_str:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes indicar la fecha del evento.'}, status=400)
-
-    if not idcliente:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes seleccionar un cliente.'}, status=400)
-
-    if not descrip:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes ingresar el detalle del evento.'}, status=400)
-
     try:
-        fecha_evento = datetime.strptime(fecha_str, '%Y-%m-%d').date()
-    except ValueError:
-        return JsonResponse({'ok': False, 'mensaje': 'La fecha del evento es inválida.'}, status=400)
-
-    if fecha_evento < timezone.localdate():
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Solo puedes registrar eventos desde hoy en adelante.'
-        }, status=400)
-
-    cliente = get_object_or_404(Cliente, pk=idcliente)
-
-    if cliente.idestadocliente_id == ESTADO_CLIENTE_ELIMINADO:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'No es posible agendar un cliente eliminado.'
-        }, status=400)
-
-    fecha_agenda = datetime.combine(fecha_evento, time(hour=9, minute=0))
-    if timezone.is_naive(fecha_agenda):
-        fecha_agenda = timezone.make_aware(fecha_agenda, timezone.get_current_timezone())
-
-    agenda = ClienteAgenda(
-        idcliente=cliente,
-        fecha=fecha_agenda,
-        titulo=cliente.razonsocial or f'Cliente {cliente.idcliente}',
-        descrip=descrip,
-        estado=0,
-    )
-    agenda.save()
+        agenda = srv_clientes.crear_evento(payload.get('fecha'), payload.get('idcliente'),
+                                           (payload.get('descrip') or '').strip())
+    except srv_clientes.ErrorValidacion as e:
+        return JsonResponse({'ok': False, 'mensaje': str(e)}, status=400)
+    except srv_clientes.NoEncontrado:
+        raise Http404('Cliente no encontrado.')
 
     return JsonResponse({
         'ok': True,
@@ -2216,49 +1823,12 @@ def mover_agenda_cliente(request, agenda_id):
             'mensaje': 'Datos inválidos.'
         }, status=400)
 
-    nueva_fecha = payload.get('nueva_fecha')
-    if not nueva_fecha:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Falta la nueva fecha.'
-        }, status=400)
-
     try:
-        fecha_nueva = datetime.strptime(nueva_fecha, '%Y-%m-%d').date()
-    except ValueError:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Formato de fecha inválido.'
-        }, status=400)
-
-    hace_30_dias = timezone.localdate() - timedelta(days=30)
-    if fecha_nueva < hace_30_dias:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'No puedes mover el evento a una fecha anterior al rango visible.'
-        }, status=400)
-
-    with transaction.atomic():
-        agenda = get_object_or_404(
-            ClienteAgenda.objects.select_for_update(),
-            pk=agenda_id
-        )
-
-        if not agenda.fecha:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'El evento no tiene fecha registrada.'
-            }, status=400)
-
-        fecha_actual = agenda.fecha
-        fecha_actualizada = fecha_actual.replace(
-            year=fecha_nueva.year,
-            month=fecha_nueva.month,
-            day=fecha_nueva.day
-        )
-
-        agenda.fecha = fecha_actualizada
-        agenda.save(update_fields=['fecha'])
+        srv_clientes.mover_evento(agenda_id, payload.get('nueva_fecha'))
+    except srv_clientes.ErrorValidacion as e:
+        return JsonResponse({'ok': False, 'mensaje': str(e)}, status=400)
+    except srv_clientes.NoEncontrado:
+        raise Http404('Evento no encontrado.')
 
     return JsonResponse({
         'ok': True,

@@ -3,13 +3,13 @@ from datetime import date, datetime
 
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from seguimiento.models import Cliente
+from seguimiento.servicios import clientes as srv_clientes
 from seguimiento.servicios import facturas as srv_facturas
 
 
@@ -347,18 +347,10 @@ def factura_comentario_detail(request, idfactura, idreg):
 @api_key_required()
 def clientes_list(request):
     """Filtros: q (razón social o RUT), rut."""
-    qs = Cliente.objects.all()
     try:
-        if request.GET.get('rut'):
-            qs = qs.filter(rut=_parse_rut(request.GET['rut']))
-        q = request.GET.get('q', '').strip()
-        if q:
-            cond = Q(razonsocial__icontains=q)
-            digits = q.split('-')[0].replace('.', '').strip()
-            if digits.isdigit():
-                cond |= Q(rut=int(digits))
-            qs = qs.filter(cond)
-        clientes, meta = _paginate(request, qs.order_by('razonsocial', 'idcliente'))
+        rut = _parse_rut(request.GET['rut']) if request.GET.get('rut') else None
+        qs = srv_clientes.buscar_api(rut=rut, q=request.GET.get('q', '').strip())
+        clientes, meta = _paginate(request, qs)
     except ParamError as e:
         return _error(str(e))
     return _json({**meta, 'results': [_serialize_cliente(c) for c in clientes]})

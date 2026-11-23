@@ -22,7 +22,7 @@ from datetime import date, datetime
 from django.db import connection, transaction
 from django.utils import timezone
 
-from ..models import Cliente, Clientecontacto, Factura
+from ..models import Clientecontacto, Factura
 from . import bitacora
 
 TIPO_ESTADO_FACTURA = 3  # tEstado.TipoEstado: 1=cotización, 2=proyecto, 3=factura
@@ -641,8 +641,6 @@ def marcar_actualizada(idfactura):
 # ---------------------------------------------------------------------------------------------------------------
 
 def guardar_notas_cliente(idcliente, notas):
-    """Notas del cliente. Como antes, no borra si viene vacío. Devuelve True si guardó."""
-    if not notas:
-        return False
-    Cliente.objects.filter(pk=idcliente).update(comentario=notas)
-    return True
+    """Notas del cliente (servicio de Clientes). Como antes, no borra si viene vacío. Devuelve True si guardó."""
+    from . import clientes
+    return clientes.guardar_comentario(idcliente, notas)

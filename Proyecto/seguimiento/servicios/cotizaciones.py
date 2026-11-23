@@ -12,9 +12,9 @@ from django.db.models import (CharField, DecimalField, Exists, Max, OuterRef, Q,
 from django.db.models.functions import Cast, Coalesce
 from django.utils import timezone
 
-from ..models import (Cliente, Clientecontacto, Cotizacion, CotizacionFpago, CotizacionNota, CotizacionSeg,
+from ..models import (Cotizacion, CotizacionFpago, CotizacionNota, CotizacionSeg,
                       CotizacionValor, Estadocotizacion, ItemCotizacion, NotaCotizacion, Proyecto, TFpago, Tregion)
-from . import proyectos
+from . import clientes, proyectos
 
 ESTADOS_COTIZACION = {0: 'Borrador', 1: 'Activa', 2: 'Cerrada', 3: 'Anulada'}  # Cotizacion.Estado
 ESTADO_EN_ESPERA = 'En Espera'  # única en que se puede editar
@@ -68,28 +68,19 @@ def notas_catalogo():
 
 
 def buscar_mandantes(term, limite=20):
-    qs = Cliente.objects.order_by('razonsocial')
-    if term:
-        qs = qs.filter(razonsocial__icontains=term)
-    return list(qs[:limite])
+    return clientes.buscar_por_nombre(term, limite)
 
 
 def mandante(pk):
-    return Cliente.objects.filter(idcliente=pk).only('idcliente', 'razonsocial', 'direccion', 'telefono').first()
+    return clientes.resumen(pk)
 
 
 def buscar_contactos(cliente_id=None, term='', limite=20):
-    qs = Clientecontacto.objects.select_related('idcliente').order_by('nombrecontacto', 'idcontacto')
-    if cliente_id:
-        qs = qs.filter(idcliente_id=cliente_id)
-    if term:
-        qs = qs.filter(nombrecontacto__icontains=term)
-    return list(qs[:limite])
+    return clientes.buscar_contactos(cliente_id, term, limite)
 
 
 def contacto(pk):
-    return Clientecontacto.objects.filter(idcontacto=pk).only(
-        'idcontacto', 'nombrecontacto', 'cargo', 'telefono', 'email', 'idcliente_id').first()
+    return clientes.contacto(pk)
 
 
 # ---------------------------------------------------------------------------------------------------------------
