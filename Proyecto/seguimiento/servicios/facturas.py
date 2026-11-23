@@ -431,6 +431,36 @@ def grabar(proyecto, *, numfactura, fecha_emision, idcliente, porc, valor_uf, de
     return Factura.objects.filter(numfactura=numfactura, idproyecto_id=proyecto.pk).order_by('-idfactura').first()
 
 
+def glosa_de_factura(idfactura):
+    """Descripción de una factura ya creada, armada con sus datos guardados (como el escritorio al elegirla en
+    "Facturas Emitidas": la descripción no se guarda, se vuelve a generar). Devuelve (glosa, factura) o
+    (None, mensaje) si no se puede."""
+    from ..models import Proyecto
+    datos = datos_factura(idfactura)
+    if datos is None:
+        return None, 'La factura no existe.'
+    factura = Factura.objects.filter(pk=idfactura).first()
+    proyecto = Proyecto.objects.select_related('idcotizacion__idcliente', 'estadoproyecto').filter(
+        pk=factura.idproyecto_id).first() if factura and factura.idproyecto_id else None
+    if proyecto is None:
+        return None, 'La factura no tiene proyecto.'
+    porc = float(datos['porc'] or 0)
+    valor_uf = float(datos['valor_uf'] or 0) if (proyecto.moneda or '') == 'UF' else 1.0
+    monto, _, total_calculado = calculo(proyecto, porc, valor_uf)
+    if datos['monto'] is not None:
+        monto = float(datos['monto'])
+    total_pesos = float(datos['total_pesos']) if datos['total_pesos'] is not None else total_calculado
+    glosa = genera_glosa({
+        **encabezado_proyecto(proyecto, None),
+        'num_hes_eepp': datos['num_hes_eepp'], 'fecha_hes_eepp': datos['fecha_hes_eepp'],
+        'porc': porc, 'detalle': datos['detalle'], 'monto': monto, 'total_pesos': total_pesos,
+        'valor_uf': valor_uf, 'fecha_emision': datos['fecha_emision'],
+    })
+    if not glosa:
+        return None, 'El proyecto no tiene medio y N° de confirmación (OC): la descripción queda vacía, igual que antes.'
+    return glosa, datos
+
+
 def completar_datos_web(numfactura, proyecto, idcontacto, fecha_registro):
     """Datos que el formulario web de Seguimiento de Proyectos guarda y GR_CreaFactura no recibe."""
     Factura.objects.filter(numfactura=numfactura, idproyecto=proyecto).update(idcontacto=idcontacto)

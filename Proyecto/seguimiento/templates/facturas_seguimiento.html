@@ -604,6 +604,7 @@
     const URL_FACT_ELIMINAR = "{% url 'factura_eliminar' 0 %}";
     const URL_FACT_NUMERO = "{% url 'factura_por_numero' %}";
     const URL_FACT_GLOSA = "{% url 'factura_glosa' 0 %}";
+    const URL_FACT_GLOSA_EXISTENTE = "{% url 'factura_glosa_existente' 0 %}";
     const URL_FACT_GRABAR = "{% url 'factura_grabar' 0 %}";
     const URL_NOTAS = "{% url 'cliente_notas_guardar' 0 %}";
     const URL_UF = "{% url 'api_valor_uf_por_fecha' %}";
@@ -668,6 +669,7 @@
         $ff.find('[name=vencimiento]').val(f.vencimiento ?? 30);
         $('#factCambiaEstado').prop('checked', false); $('#factEstado').addClass('d-none').val('');
         $('#factGlosa').val('');
+        cargarGlosaExistente(f.idfactura);  // como el escritorio: al elegir una factura se ve su descripción
         $('#factSeg').val(seguimiento || '');
         $('#factAvisoNoEditable').toggleClass('d-none', f.editable);
         $('#btnGrabarFact').prop('disabled', !f.editable);
@@ -675,6 +677,19 @@
         $('#listaFacturasProy .list-group-item').removeClass('active')
             .filter(`[data-id="${f.idfactura}"]`).addClass('active');
         recalcular();
+    }
+
+    async function cargarGlosaExistente(idfactura) {
+        $('#factGlosa').attr('placeholder', 'Cargando descripción...');
+        try {
+            const resp = await fetch(urlFactura(URL_FACT_GLOSA_EXISTENTE, idfactura), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            const json = await resp.json().catch(() => ({}));
+            if (!factSel || factSel.idfactura !== idfactura) return;  // se eligió otra mientras cargaba
+            if (resp.ok && json.ok) $('#factGlosa').val(json.glosa);
+            else mensajeFact(json.message || 'No se pudo armar la descripción.', true);
+        } finally {
+            $('#factGlosa').attr('placeholder', '');
+        }
     }
 
     function renderListaFacturas(lista) {

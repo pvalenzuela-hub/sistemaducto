@@ -522,6 +522,15 @@
                             </div>
                             <textarea name="descripcionfactura" id="fact_descripcionfactura" class="form-control" rows="3"></textarea>
                         </div>
+                        <div class="col-12 border-top pt-3">
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                <label class="form-label mb-0" for="fact_existente">Descripción de una factura ya creada</label>
+                                <select id="fact_existente" class="form-select form-select-sm w-auto"><option value="">Seleccione factura...</option></select>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCopiarDescripcionExistente" disabled>Copiar</button>
+                                <span id="fact_existente_msg" class="small text-muted"></span>
+                            </div>
+                            <textarea id="fact_descripcion_existente" class="form-control" rows="9" readonly placeholder="Elija una factura del proyecto para ver su descripción y copiarla al emitirla en el SII."></textarea>
+                        </div>
                     </div>
                     <div class="modal-footer px-0 pb-0">
                         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
@@ -949,8 +958,42 @@ $(document).ready(function() {
         $('#fact_fechahes_eepp').val('');
         $('#fact_valor_uf').val('');
         $('#fact_descripcionfactura').val('');
+        cargarFacturasExistentes($('#factura_idproyecto').val());
         modal.show();
         actualizarValorUF();
+    });
+
+    // Facturas ya creadas del proyecto: al elegir una se arma su descripción (como "Facturas Emitidas" del escritorio)
+    async function cargarFacturasExistentes(idproyecto) {
+        const lista$ = $('#fact_existente').html('<option value="">Seleccione factura...</option>');
+        $('#fact_descripcion_existente').val(''); $('#btnCopiarDescripcionExistente').prop('disabled', true); $('#fact_existente_msg').text('');
+        if (!idproyecto) return;
+        const resp = await fetch("{% url 'facturas_de_proyecto' 0 %}".replace('/0/', '/' + idproyecto + '/'), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const data = await resp.json().catch(() => ({}));
+        const facturas = (data && data.facturas) || [];
+        facturas.forEach(f => lista$.append($('<option>').val(f.idfactura).text(`N° ${f.numfactura} · ${f.fecha_emision} · ${f.porc}% ${f.detalle} · $${f.total_texto} · ${f.estado_nombre}`)));
+        $('#fact_existente_msg').text(facturas.length ? '' : 'El proyecto aún no tiene facturas.');
+    }
+
+    $('#fact_existente').on('change', async function() {
+        const id = this.value;
+        $('#fact_descripcion_existente').val(''); $('#btnCopiarDescripcionExistente').prop('disabled', true); $('#fact_existente_msg').text('');
+        if (!id) return;
+        $('#fact_existente_msg').text('Armando descripción...');
+        const resp = await fetch("{% url 'factura_glosa_existente' 0 %}".replace('/0/', '/' + id + '/'), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const data = await resp.json().catch(() => ({}));
+        if (this.value !== id) return;
+        if (resp.ok && data.ok) {
+            $('#fact_descripcion_existente').val(data.glosa); $('#btnCopiarDescripcionExistente').prop('disabled', false); $('#fact_existente_msg').text('');
+        } else {
+            $('#fact_existente_msg').text(data.message || 'No se pudo armar la descripción.');
+        }
+    });
+
+    $('#btnCopiarDescripcionExistente').on('click', async function() {
+        const texto = $('#fact_descripcion_existente').val();
+        try { await navigator.clipboard.writeText(texto); } catch (e) { $('#fact_descripcion_existente').select(); document.execCommand('copy'); }
+        $('#fact_existente_msg').text('Descripción copiada.');
     });
 
     $('#btnArmarDescripcionFactura').on('click', async function() {

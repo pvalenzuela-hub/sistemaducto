@@ -327,6 +327,24 @@ def _decimal(request, campo, nombre):
 
 
 @login_required
+@require_GET
+def factura_glosa_existente(request, idfactura):
+    """Descripción de una factura ya creada (para copiarla al emitirla en el SII)."""
+    glosa, datos = srv.glosa_de_factura(idfactura)
+    if glosa is None:
+        return JsonResponse({'ok': False, 'message': datos}, status=404 if datos == 'La factura no existe.' else 400)
+    return JsonResponse({'ok': True, 'glosa': glosa, 'numfactura': datos['numfactura']})
+
+
+@login_required
+@require_GET
+def facturas_de_proyecto(request, idproyecto):
+    """Facturas de un proyecto (CO_FacturaxProyecto), para elegir una y recuperar su descripción."""
+    proyecto = get_object_or_404(Proyecto, pk=idproyecto)
+    return JsonResponse({'ok': True, 'facturas': srv.facturas_del_proyecto(proyecto.pk)})
+
+
+@login_required
 @require_POST
 def factura_glosa(request, idproyecto):
     """Genera la descripción (botón 'Generar descripción', Button3 del formulario anterior)."""
