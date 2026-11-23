@@ -396,6 +396,7 @@
     const URL_EDITAR = "{% url 'factura_comentario_editar' 0 0 %}";
     const URL_ELIMINAR = "{% url 'factura_comentario_eliminar' 0 0 %}";
     const ESTADO_PAGADA = {{ estado_pagada }};
+    const ESTADOS_EDITABLES = {{ estados_editables }};  // una factura emitida no puede volver a estos estados
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
     const modalEl = document.getElementById('modalSeg');
     const modal = new bootstrap.Modal(modalEl);
@@ -487,6 +488,11 @@
         $('#dMonto').text('$' + actual.monto_texto);
         $('#dPorc').text(actual.porc_fact ? actual.porc_fact + ' %' : '');
         $('#dEstado').text(actual.estado_nombre);
+        const emitida = !ESTADOS_EDITABLES.includes(actual.estado);
+        $('#selEstado option').each(function () {
+            const bloqueado = emitida && this.value !== '' && ESTADOS_EDITABLES.includes(Number(this.value));
+            $(this).prop('disabled', bloqueado).attr('title', bloqueado ? 'Una factura ya emitida no puede volver a este estado.' : '');
+        });
         $('#dVenc').text(actual.vencimiento ?? '');
         $('#dProyecto').text((actual.idproyecto ?? '') + ' ' + actual.nombre_proyecto);
         $('#dDetalle').text(actual.detalle);

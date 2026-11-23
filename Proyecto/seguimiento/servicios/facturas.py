@@ -43,6 +43,22 @@ class ErrorValidacion(ValueError):
     pass
 
 
+MENSAJE_NO_VUELVE = ('Una factura ya emitida no puede volver a Provisoria o Para Emitir: '
+                     'solo esos estados permiten modificar la factura.')
+
+
+def puede_cambiar_estado(estado_actual, estado_nuevo):
+    """Una factura que ya salió de Provisoria / Para Emitir (emitida, pagada, nula...) no puede volver a esos
+    estados: así no se puede modificar una factura emitida (decisión de Paulo, 2026-11-23). Solo web y API;
+    el escritorio cambia estados con su propio procedimiento."""
+    return not (estado_actual not in ESTADOS_EDITABLES and estado_nuevo in ESTADOS_EDITABLES)
+
+
+def validar_cambio_estado(estado_actual, estado_nuevo):
+    if not puede_cambiar_estado(estado_actual, estado_nuevo):
+        raise ErrorValidacion(MENSAJE_NO_VUELVE)
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Formatos (iguales a los del sistema anterior)
 # ---------------------------------------------------------------------------------------------------------------
@@ -271,6 +287,7 @@ def registrar_seguimiento(factura, comentario, usuario, *, es_recordatorio=False
     if cod_estado is not None:
         if cod_estado not in estados_dict():
             raise ErrorValidacion('Debe seleccionar el nuevo estado.')
+        validar_cambio_estado(factura.estado, cod_estado)
         if cod_estado != ESTADO_PAGADA:
             fecha_pago = None
     if es_recordatorio and fecha_recordatorio <= timezone.localdate():
@@ -602,6 +619,7 @@ def cambiar_estado_pago(factura, nuevo_estado, nueva_fecha_pago, usuario):
     Devuelve la lista de cambios en texto (vacía si no hubo cambios). Debe llamarse dentro de transaction.atomic().
     """
     catalogo = estados_dict()
+    validar_cambio_estado(factura.estado, nuevo_estado)
     cambios = []
     if nuevo_estado != factura.estado:
         cambios.append(f"estado: {catalogo.get(factura.estado, factura.estado)} -> {catalogo[nuevo_estado]}")

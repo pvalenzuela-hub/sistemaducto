@@ -277,6 +277,8 @@ def _actualizar_factura(request, factura):
         nueva_fecha_pago = None if data['fecha_pago'] is None else _parse_date(data['fecha_pago'], 'fecha_pago')
         if nueva_fecha_pago and nueva_fecha_pago > timezone.localdate():
             raise ParamError("'fecha_pago' no puede ser futura")
+    if not srv_facturas.puede_cambiar_estado(factura.estado, nuevo_estado):
+        raise ParamError(srv_facturas.MENSAJE_NO_VUELVE)
     if nuevo_estado in ESTADOS_PAGADA and nueva_fecha_pago is None:
         raise ParamError(f"El estado {nuevo_estado} ({estados[nuevo_estado]}) requiere 'fecha_pago'")
 

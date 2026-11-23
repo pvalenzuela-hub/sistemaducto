@@ -129,6 +129,7 @@ def facturas_seguimiento(request):
         'total_texto': srv.pesos(sum(float(f['monto'] or 0) for f in filas)),
         'cantidad': len(filas),
         'estado_pagada': ESTADO_PAGADA,
+        'estados_editables': list(srv.ESTADOS_EDITABLES),
     })
 
 
@@ -211,6 +212,7 @@ def factura_seguimiento_guardar(request, idfactura):
                 cod_estado = None
             if cod_estado not in estados:
                 raise ErrorValidacion('Debe seleccionar el nuevo estado.')
+            srv.validar_cambio_estado(factura.estado, cod_estado)
             if cod_estado == ESTADO_PAGADA:
                 fecha_pago = _fecha(request.POST.get('fecha_pago'), 'Fecha de pago')
 
