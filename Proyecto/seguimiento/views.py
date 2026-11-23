@@ -1392,6 +1392,12 @@ def _url_seguimiento_con_filtros(filtros):
     return f"{reverse('seguimiento_proyectos')}?{urlencode(params)}"
 
 
+def _estados_factura_catalogo():
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT CodEstado, Descrip FROM tEstado WHERE TipoEstado = 3 ORDER BY CodEstado')
+        return [(cod, (descrip or '').strip()) for cod, descrip in cursor.fetchall()]
+
+
 def puede_facturar(user):
     return user.is_authenticated and (user.is_superuser or user.groups.filter(name__in=GRUPOS_FACTURACION).exists())
 
@@ -1532,6 +1538,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         contexto["estados_marcados"] = estados_sel
         contexto["estados_defecto"] = ESTADOS_PROYECTO_ACTIVOS
         contexto["estado_anulado"] = ESTADO_PROYECTO_ANULADO
+        contexto["estados_factura"] = _estados_factura_catalogo()
         contexto["puede_facturar"] = puede_facturar(self.request.user)
         contexto["filtro_mandante"] = mandante_id
         contexto["filtro_numero_proyecto"] = numero_proyecto
@@ -1846,6 +1853,14 @@ def crear_factura_proyecto(request):
     else:
         valor_uf = 1.0
 
+    # Estado con que nace la factura (como el "Cambiar Estado" de Creación de Facturas del escritorio)
+    try:
+        estado_factura = int(request.POST.get('estado_factura') or 0)
+    except ValueError:
+        estado_factura = -1
+    if estado_factura not in dict(_estados_factura_catalogo()):
+        return _error('Estado de la factura no válido.')
+
     num_hes = (request.POST.get('numhes_eepp') or '').strip()[:50]
     fecha_hes = _fecha_form(request.POST.get('fechahes_eepp'))
     try:
@@ -1858,10 +1873,10 @@ def crear_factura_proyecto(request):
         cursor.execute(
             'SET NOCOUNT ON; EXEC GR_CreaFactura @IdFactura=%s, @NumFactura=%s, @FechaEmision=%s, @IdCliente=%s, '
             '@IdProyecto=%s, @NumHES_EEPP=%s, @FechaHES_EEPP=%s, @ValorTotal=%s, @ValorUF=%s, @ValorTotalPesos=%s, '
-            '@PorcFact=%s, @Detalle=%s, @Moneda=%s, @MontoFacturarMonOrig=%s, @NuevoEstado=NULL, @Vencimiento=%s',
+            '@PorcFact=%s, @Detalle=%s, @Moneda=%s, @MontoFacturarMonOrig=%s, @NuevoEstado=%s, @Vencimiento=%s',
             [0, numfactura_int, fecha_emision, proyecto.idcliente_id, proyecto.pk, num_hes, fecha_hes,
              float(proyecto.valor or 0), round(valor_uf, 2), total_pesos, porc, detalle[:100],
-             (proyecto.moneda or '')[:2], monto, vencimiento])
+             (proyecto.moneda or '')[:2], monto, estado_factura or None, vencimiento])
         # Datos que el formulario web ya guardaba y el procedimiento no recibe
         Factura.objects.filter(numfactura=numfactura_int, idproyecto=proyecto).update(
             idcontacto=proyecto.idcontactofacturacion_id)

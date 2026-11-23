@@ -53,6 +53,7 @@
     #modalFacturacion .encabezado-facturacion {
         font-size: 1.15rem;
     }
+    #modalFacturacion .proj-fixed textarea.notas-cliente { font-size: .9rem !important; line-height: 1.45; color: #1f2733; min-height: 9rem; }
     #modalFacturacion .proj-fixed {
         font-size: 0.78rem;
     }
@@ -403,7 +404,7 @@
                     <input type="hidden" name="coneepp" id="fact_coneepp_hidden">
                     <input type="hidden" name="conotro" id="fact_conotro_hidden">
                     <input type="hidden" name="idcontactofacturacion" id="fact_idcontacto_hidden">
-                    <div class="row g-3">
+                    <div class="row g-3 align-items-end">
                         <div class="col-12 proj-fixed">
                             <div class="border rounded-2 p-2">
                                 <div class="alert alert-info py-2 px-3 mb-2 small">
@@ -423,8 +424,8 @@
                                     <div class="col-12 col-md-2"><label class="form-label mb-1">Con EEPP</label><input type="text" id="proj_coneepp" class="form-control form-control-sm" readonly></div>
                                     <div class="col-12 col-md-2"><label class="form-label mb-1">Con Otro</label><input type="text" id="proj_conotro" class="form-control form-control-sm" readonly></div>
                                     <div class="col-12 col-md-6"><label class="form-label mb-1">Forma de Pago</label><input type="text" id="proj_fpago" class="form-control form-control-sm" readonly></div>
-                                    <div class="col-12 col-md-6"><label class="form-label mb-1">Saldo por Facturar $</label><input type="text" id="proj_saldo_facturar" class="form-control form-control-sm" readonly></div>
-                                    <div class="col-12"><label class="form-label mb-1">Notas del cliente</label><textarea id="proj_notas_cliente" class="form-control form-control-sm" rows="3" readonly></textarea></div>
+                                    <div class="col-12 col-md-6"><label class="form-label mb-1">Saldo por Facturar %</label><input type="text" id="proj_saldo_facturar" class="form-control form-control-sm" readonly></div>
+                                    <div class="col-12"><label class="form-label mb-1">Notas del cliente</label><textarea id="proj_notas_cliente" class="form-control form-control-sm notas-cliente" rows="6" readonly></textarea></div>
                                 </div>
                             </div>
                         </div>
@@ -476,6 +477,12 @@
                         <div class="col-12 col-md-1">
                             <label class="form-label">Valor Total $</label>
                             <input type="text" id="fact_valor_total_pesos" class="form-control" readonly>
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label" for="fact_estado">Estado de la factura</label>
+                            <select name="estado_factura" id="fact_estado" class="form-select">
+                                {% for cod, nombre in estados_factura %}<option value="{{ cod }}" {% if cod == 0 %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+                            </select>
                         </div>
                         <div class="col-12 col-md-1">
                             <label class="form-label">Plazo Vcto (días)</label>
@@ -935,9 +942,10 @@ $(document).ready(function() {
         $('#fact_porcfact').val('');
         $('#fact_monto_facturar').val('');
         $('#fact_valor_total_pesos').val('');
-        $('#fact_vencimiento').val('');
+        $('#fact_vencimiento').val('30');
         $('#fact_detallefactura').val('');
         $('#fact_numhes_eepp').val('');
+        $('#fact_estado').val('0');
         $('#fact_fechahes_eepp').val('');
         $('#fact_valor_uf').val('');
         $('#fact_descripcionfactura').val('');
