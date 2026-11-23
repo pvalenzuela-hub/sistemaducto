@@ -1378,6 +1378,8 @@ class Vista1(LoginRequiredMixin,TemplateView):
 # Facturación, Entrega Versión Revisión, Con Observaciones, Con VB para Ingreso a SEREMI, A Espera de VB y EN PAUSA.
 # Quedan fuera los estados SEREMI avanzados, terminados y anulados (pedido de Paulo, 2026-11-20).
 ESTADOS_PROYECTO_ACTIVOS = [1, 2, 3, 4, 5, 9, 11]
+# No se facturan proyectos anulados (estadoproyecto_id de 'Proyecto ANULADO')
+ESTADO_PROYECTO_ANULADO = 8
 # Crear factura y datos de facturación: perfil 0 del escritorio = grupo Director + grupo Facturación
 GRUPOS_FACTURACION = ('Director', 'Facturación')
 
@@ -1529,6 +1531,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         contexto["filtro_estado"] = estado_id
         contexto["estados_marcados"] = estados_sel
         contexto["estados_defecto"] = ESTADOS_PROYECTO_ACTIVOS
+        contexto["estado_anulado"] = ESTADO_PROYECTO_ANULADO
         contexto["puede_facturar"] = puede_facturar(self.request.user)
         contexto["filtro_mandante"] = mandante_id
         contexto["filtro_numero_proyecto"] = numero_proyecto
@@ -1764,6 +1767,12 @@ def crear_factura_proyecto(request):
     if not puede_facturar(request.user):
         return _sin_permiso_facturar(request)
     proyecto = get_object_or_404(Proyecto.objects.select_related('idcliente', 'idcontactofacturacion', 'estadoproyecto'), pk=request.POST.get('idproyecto'))
+    if proyecto.estadoproyecto_id == ESTADO_PROYECTO_ANULADO:
+        msg = 'No se puede facturar un proyecto anulado.'
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'ok': False, 'message': msg}, status=400)
+        messages.error(request, msg)
+        return redirect('seguimiento_proyectos')
     if not _facturacion_completa_proyecto(proyecto):
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'ok': False, 'message': 'El proyecto no tiene datos de facturación completos.'}, status=400)
