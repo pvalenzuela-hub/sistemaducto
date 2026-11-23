@@ -89,10 +89,11 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
             <div class="text-muted small">Use los botones de cada fila: <b>Seguimiento</b>, <b>Comentarios</b>, <b>Facturar</b> (crear o modificar facturas del proyecto) y <b>Cliente</b>.</div>
+            <div class="d-flex align-items-center gap-2"><input type="search" class="form-control form-control-sm filtro-nombre" style="min-width: 260px;" data-tabla="#tablaFacturas" data-columna="Nombre Proyecto" data-contador="#cuentaFacturas" placeholder="Nombre del proyecto (o parte)…" aria-label="Filtrar por nombre del proyecto"><span id="cuentaFacturas" class="small text-muted text-nowrap"></span></div>
             <div class="totales">Facturas: {{ cantidad }} &nbsp;·&nbsp; TOTAL: ${{ total_texto }}</div>
         </div>
         <div class="table-responsive">
-            <table class="table table-bordered table-sm tabla-facturas tabla-ordenable mb-0">
+            <table id="tablaFacturas" class="table table-bordered table-sm tabla-facturas tabla-ordenable mb-0">
                 <thead class="table-light">
                     <tr>
                         <th data-no-ordenar>Acciones</th>
@@ -387,6 +388,7 @@
 {% load static %}
 <script src="{% static 'assets/js/tabla-ordenable.js' %}"></script>
 <script src="{% static 'assets/js/select-check.js' %}"></script>
+<script src="{% static 'assets/js/filtro-nombre.js' %}"></script>
 <script>
 (function () {
     const URL_DETALLE = "{% url 'factura_seguimiento_detalle' 0 %}";

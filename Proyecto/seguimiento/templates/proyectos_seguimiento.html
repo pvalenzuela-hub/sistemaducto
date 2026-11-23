@@ -151,6 +151,7 @@
 </div>
 
 <div class="card">
+    <div class="px-3 pt-3"><div class="d-flex align-items-center gap-2"><input type="search" class="form-control form-control-sm filtro-nombre" style="min-width: 260px;" data-tabla="#basic-datatable" data-columna="Nombre Proyecto" placeholder="Nombre del proyecto (o parte)…" aria-label="Filtrar por nombre del proyecto"></div></div>
     <div class="table-responsive table-scroll-x">
         <table class="table table-bordered table-striped nowrap w-100" id="basic-datatable">
             <thead>
@@ -647,6 +648,7 @@
 {% block extra_js %}
 {% load static %}
 <script src="{% static 'assets/js/select-check.js' %}"></script>
+<script src="{% static 'assets/js/filtro-nombre.js' %}"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(document).ready(function() {

@@ -72,10 +72,11 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
             <div class="text-muted small">Use los botones de cada fila: <b>Datos SEREMI</b>, <b>Estado</b> y <b>Seguimiento</b>.</div>
+            <div class="d-flex align-items-center gap-2"><input type="search" class="form-control form-control-sm filtro-nombre" style="min-width: 260px;" data-tabla="#tablaSeremi" data-columna="Proyecto" data-contador="#cuentaSeremi" placeholder="Nombre del proyecto (o parte)…" aria-label="Filtrar por nombre del proyecto"><span id="cuentaSeremi" class="small text-muted text-nowrap"></span></div>
             <div class="fw-semibold">Proyectos: {{ filas|length }}</div>
         </div>
         <div class="table-responsive">
-            <table class="table table-bordered table-sm tabla-seremi tabla-ordenable mb-0">
+            <table id="tablaSeremi" class="table table-bordered table-sm tabla-seremi tabla-ordenable mb-0">
                 <thead class="table-light">
                     <tr>
                         <th data-no-ordenar>Acciones</th>
@@ -213,6 +214,7 @@
 {% load static %}
 <script src="{% static 'assets/js/tabla-ordenable.js' %}"></script>
 <script src="{% static 'assets/js/select-check.js' %}"></script>
+<script src="{% static 'assets/js/filtro-nombre.js' %}"></script>
 <script>
 (function () {
     const URL_PROY = "{% url 'seremi_proyecto' 0 %}";
