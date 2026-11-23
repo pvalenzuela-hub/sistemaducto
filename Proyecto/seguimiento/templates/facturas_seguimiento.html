@@ -759,7 +759,7 @@
         mensajeFact(`La factura N° ${numero} ya existe: se cargaron sus datos.`, false);
     });
 
-    // UF de la fecha de emisión (si falta en el sistema, se trae de mindicador.cl)
+    // UF de la fecha de emisión (si falta en el sistema, se trae de mindicador.cl, findic.cl o SII)
     $ff.find('[name=fecha_emision]').on('change', async function () {
         if (!esUF() || !this.value) return;
         const [y, m, d] = this.value.split('-');

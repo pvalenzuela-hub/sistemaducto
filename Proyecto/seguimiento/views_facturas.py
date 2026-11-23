@@ -339,11 +339,11 @@ def factura_glosa(request, idproyecto):
         if (proyecto.moneda or '') == 'UF':
             if (request.POST.get('valor_uf') or '').strip():
                 valor_uf = _decimal(request, 'valor_uf', 'Valor UF')
-            else:  # la pantalla aún no tenía la UF: se usa la de la fecha de la factura (tValorUF o mindicador.cl)
+            else:  # la pantalla aún no tenía la UF: se usa la de la fecha de la factura (tValorUF o internet)
                 from .views import _valor_uf_por_fecha
                 valor_uf = round(float(_valor_uf_por_fecha(fecha_emision) or 0), 2)
                 if valor_uf <= 0:
-                    raise ErrorValidacion('No hay valor UF para la fecha de la factura (no está en el sistema y mindicador.cl no respondió). '
+                    raise ErrorValidacion('No hay valor UF para la fecha de la factura (no está en el sistema ni en mindicador.cl, findic.cl o SII). '
                                           'Elija la UF con la opción "Manual" o cambie la fecha.')
         monto, valor_uf, total_pesos = srv.calculo(proyecto, porc, valor_uf)
         if total_pesos <= 0:

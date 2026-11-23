@@ -37,6 +37,7 @@ from .forms import ClienteForm, ClienteContactoFormSet, ClienteSeguimientoForm, 
 from weasyprint import HTML
 from django.db import DatabaseError
 from .servicios import proyectos as srv_proyectos
+from .servicios import uf as srv_uf
 
 
 
@@ -99,34 +100,9 @@ def _facturacion_completa_proyecto(proyecto):
     return srv_proyectos.facturacion_completa(proyecto)
 
 
-MINDICADOR_UF_URL = 'https://mindicador.cl/api/uf'
-
-
-def _uf_desde_mindicador(fecha):
-    """Valor UF de una fecha según mindicador.cl, o None si no está publicado o el servicio no responde."""
-    try:
-        with urlopen(f"{MINDICADOR_UF_URL}/{fecha:%d-%m-%Y}", timeout=15) as response:
-            payload = _json.loads(response.read().decode('utf-8'))
-    except Exception:
-        return None
-    for item in payload.get('serie') or []:
-        if (item.get('fecha') or '')[:10] == fecha.isoformat() and item.get('valor') is not None:
-            return float(item['valor'])
-    return None
-
-
 def _valor_uf_por_fecha(fecha):
-    """UF de la fecha desde tValorUF; si falta, la busca en mindicador.cl y la guarda."""
-    if not fecha:
-        return None
-    row = tValorUF.objects.filter(Fecha=fecha).values('ValorUF').first()
-    if row:
-        return row['ValorUF']
-    valor = _uf_desde_mindicador(fecha)
-    if valor is None:
-        return None
-    obj, _ = tValorUF.objects.get_or_create(Fecha=fecha, defaults={'ValorUF': valor})
-    return obj.ValorUF
+    """UF de la fecha desde tValorUF; si falta, la busca en internet (mindicador.cl, findic.cl o SII) y la guarda."""
+    return srv_uf.valor_por_fecha(fecha)
 
 
 def _siguiente_num_factura():
@@ -152,7 +128,7 @@ def api_valor_uf_por_fecha(request):
 
     valor = _valor_uf_por_fecha(fecha)
     if valor is None:
-        return JsonResponse({'ok': False, 'message': 'No existe UF para esa fecha, ni en el sistema ni en mindicador.cl.'}, status=404)
+        return JsonResponse({'ok': False, 'message': f'No existe UF para esa fecha, ni en el sistema ni en {srv_uf.FUENTES_TEXTO}.'}, status=404)
     return JsonResponse({'ok': True, 'valoruf': round(float(valor), 2)})  # tValorUF es real: sin decimales de más
 
 
@@ -185,33 +161,8 @@ def _direccion_mandante(cliente):
 
 
 def _sincronizar_uf_faltantes():
-    try:
-        with urlopen('https://mindicador.cl/api/uf', timeout=20) as response:
-            payload = _json.loads(response.read().decode('utf-8'))
-    except Exception:
-        return 0
+    return srv_uf.sincronizar_faltantes()[0]
 
-    serie = payload.get('serie', [])
-    if not serie:
-        return 0
-
-    existentes = set(tValorUF.objects.values_list('Fecha', flat=True))
-    creados = 0
-
-    for item in serie:
-        fecha = (item.get('fecha') or '')[:10]
-        valor = item.get('valor')
-        if not fecha or valor is None:
-            continue
-
-        fecha_obj = date.fromisoformat(fecha)
-        if fecha_obj in existentes:
-            continue
-
-        tValorUF.objects.create(Fecha=fecha_obj, ValorUF=valor)
-        creados += 1
-
-    return creados
 
 User = get_user_model()
 
