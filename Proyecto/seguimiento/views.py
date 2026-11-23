@@ -7,7 +7,6 @@ from urllib.request import urlopen
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from .models import *
-import pyodbc
 from django.conf import settings
 from django.views.generic import TemplateView, ListView, DetailView
 from django.views.decorators.http import require_POST, require_GET
@@ -36,6 +35,8 @@ from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from .forms import ClienteForm, ClienteContactoFormSet, ClienteSeguimientoForm, CotizacionForm, TipoEntregaForm, SeguimientoCotizacionForm, ValorUFForm
 from weasyprint import HTML
+from django.db import DatabaseError
+from .servicios import proyectos as srv_proyectos
 
 
 
@@ -94,109 +95,8 @@ def _cotizacion_estado_visual(cotizacion):
     }
 
 
-def _texto_seguimiento_proyectos(ids_proyecto):
-    ids_proyecto = [str(pid) for pid in ids_proyecto if pid is not None]
-    if not ids_proyecto:
-        return {}
-
-    placeholders = ",".join(["?"] * len(ids_proyecto))
-    filas = exec_query(
-        f"""
-            SELECT IdProyecto, Comentario, Fecha, ISNULL(IdUsuario,'')
-            FROM Proyecto_Seg
-            WHERE IdProyecto IN ({placeholders})
-            ORDER BY IdProyecto, Fecha
-        """,
-        tuple(ids_proyecto)
-    )
-
-    textos = defaultdict(list)
-    for idproyecto, comentario, fecha, idusuario in filas:
-        fecha_txt = fecha.strftime('%d/%m/%Y %H:%M') if fecha else ''
-        textos[str(idproyecto)].append(f"{fecha_txt} : ({idusuario or ''}) {str(comentario).rstrip()}")
-
-    return {k: "\n".join(v) for k, v in textos.items()}
-
-
-def _ultima_fecha_seguimiento_proyectos(ids_proyecto):
-    ids_proyecto = [str(pid) for pid in ids_proyecto if pid is not None]
-    if not ids_proyecto:
-        return {}
-
-    placeholders = ",".join(["?"] * len(ids_proyecto))
-    filas = exec_query(
-        f"""
-            SELECT IdProyecto, MAX(Fecha) AS FechaUltima
-            FROM Proyecto_Seg
-            WHERE IdProyecto IN ({placeholders})
-            GROUP BY IdProyecto
-        """,
-        tuple(ids_proyecto)
-    )
-    return {str(idproyecto): fecha for idproyecto, fecha in filas}
-
-
-def _saldo_por_facturar_proyectos(ids_proyecto):
-    ids_proyecto = [str(pid) for pid in ids_proyecto if pid is not None]
-    if not ids_proyecto:
-        return {}
-
-    placeholders = ",".join(["?"] * len(ids_proyecto))
-    filas = exec_query(
-        f"""
-            SELECT IdProyecto, 100 - ISNULL(SUM(PorcFact), 0) AS Saldo
-            FROM Factura
-            WHERE IdProyecto IN ({placeholders})
-              AND Estado IN (2,3,4,5,8)
-            GROUP BY IdProyecto
-        """,
-        tuple(ids_proyecto)
-    )
-    return {str(idproyecto): saldo for idproyecto, saldo in filas}
-
-
-def _saldo_por_facturar_porcentaje(proyectos):
-    proyectos = list(proyectos or [])
-    if not proyectos:
-        return {}
-
-    ids_proyecto = [str(p.idproyecto) for p in proyectos if getattr(p, 'idproyecto', None) is not None]
-    if not ids_proyecto:
-        return {}
-
-    placeholders = ",".join(["?"] * len(ids_proyecto))
-    filas = exec_query(
-        f"""
-            SELECT IdProyecto, PorcFact, ValorTotal
-            FROM Factura
-            WHERE IdProyecto IN ({placeholders})
-              AND ISNULL(Estado, 1) <> 9
-        """,
-        tuple(ids_proyecto)
-    )
-
-    por_proyecto = defaultdict(Decimal)
-    for idproyecto, porc_fact, valor_total in filas:
-        if porc_fact is not None:
-            por_proyecto[str(idproyecto)] += Decimal(str(porc_fact))
-        elif valor_total is not None:
-            total_proyecto = next((Decimal(str(p.valor or 0)) for p in proyectos if str(p.idproyecto) == str(idproyecto)), Decimal('0'))
-            if total_proyecto > 0:
-                por_proyecto[str(idproyecto)] += (Decimal(str(valor_total)) / total_proyecto) * Decimal('100')
-
-    return {pid: max(Decimal('0'), Decimal('100') - total) for pid, total in por_proyecto.items()}
-
-
 def _facturacion_completa_proyecto(proyecto):
-    return all([
-        proyecto.idcliente_id,
-        proyecto.numconf,
-        proyecto.medioconf,
-        proyecto.fechaconf,
-        proyecto.conhes is not None,
-        proyecto.coneepp is not None,
-        proyecto.conotro is not None,
-    ])
+    return srv_proyectos.facturacion_completa(proyecto)
 
 
 MINDICADOR_UF_URL = 'https://mindicador.cl/api/uf'
@@ -742,24 +642,9 @@ def cotizacion_seguimiento(request, pk):
                     cotizacion.estadocotizacion = nuevo_estado
                     if nuevo_estado_nombre == 'Aprobada, Es Proyecto':
                         cotizacion.estado = 1
-                        proyecto_id = (Proyecto.objects.aggregate(mx=Max('idproyecto'))['mx'] or Decimal('0')) + Decimal('1')
-                        if not Proyecto.objects.filter(idcotizacion=cotizacion).exists():
-                            Proyecto.objects.create(
-                                idproyecto=proyecto_id,
-                                fechacreacion=timezone.localdate(),
-                                idcotizacion=cotizacion,
-                                fpago='',
-                                valor=float(cotizacion.valortotal or 0),
-                                estadoproyecto_id=1,
-                                estado=0,
-                                idcliente=cotizacion.idcliente,
-                                fechaact=timezone.localdate(),
-                                quienadjudica=quien_adjudica or None,
-                                emailadjudicacion=email_adjudicacion or None,
-                                fechaadjudicacion=fecha_adjudicacion,
-                                moneda=cotizacion.moneda,
-                                fecharegistro=_ahora_santiago_naive(),
-                            )
+                        srv_proyectos.crear_desde_cotizacion(
+                            cotizacion, quien_adjudica=quien_adjudica, email_adjudicacion=email_adjudicacion,
+                            fecha_adjudicacion=fecha_adjudicacion)
                     cotizacion.fechaact = _ahora_santiago_naive()
                     cotizacion.save(update_fields=['estadocotizacion', 'estado', 'fechaact'])
                 messages.success(request, 'Seguimiento registrado correctamente.')
@@ -1292,32 +1177,6 @@ def _asignar_nombre_usuario_notas(notas):
 
         nota.fecha_mostrada = _fecha_cliente_seg_mostrada(nota.fecha)
 
-def get_sql_conn() -> pyodbc.Connection:
-    # Connection string directo (sin DSN)
-    conn_str = (
-        f"DRIVER={{{settings.DUCTO_SQL_DRIVER}}};"
-        f"SERVER={settings.DUCTO_SQL_SERVER};"
-        f"DATABASE={settings.DUCTO_SQL_DB};"
-        f"UID={settings.DUCTO_SQL_USER};"
-        f"PWD={settings.DUCTO_SQL_PASSWORD};"
-        f"Encrypt={settings.DUCTO_SQL_ENCRYPT};"
-        f"TrustServerCertificate={settings.DUCTO_SQL_TRUST_CERT};"
-        "Connection Timeout=30;"
-    )
-    return pyodbc.connect(conn_str)
-
-def exec_query(sql: str, params: tuple = ()) -> list:
-    with get_sql_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, params)
-        return cur.fetchall()
-
-def exec_non_query(sql: str, params: tuple = ()) -> None:
-    with get_sql_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, params)
-        conn.commit()
-
 # Create your views here.
 
 class HomeView(LoginRequiredMixin,TemplateView):
@@ -1356,11 +1215,9 @@ class Vista1(LoginRequiredMixin,TemplateView):
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
 
-        consulta = "exec [ducto].[SEG_ConsultaProyecto_WEB] ?"
         try:
-            rows = exec_query(consulta, (1,))
-            contexto["proyecto"] = rows
-        except pyodbc.Error as e:
+            contexto["proyecto"] = srv_proyectos.consulta_web(1)
+        except DatabaseError as e:
             print("Error SQL:", e)
             contexto["proyecto"] = []
             contexto["error_sql"] = "No se pudo consultar la base de datos."
@@ -1377,9 +1234,9 @@ class Vista1(LoginRequiredMixin,TemplateView):
 # Estados marcados por defecto en el filtro de Seguimiento de Proyectos (estadoproyecto_id): Nuevo, Con Datos de
 # Facturación, Entrega Versión Revisión, Con Observaciones, Con VB para Ingreso a SEREMI, A Espera de VB y EN PAUSA.
 # Quedan fuera los estados SEREMI avanzados, terminados y anulados (pedido de Paulo, 2026-11-20).
-ESTADOS_PROYECTO_ACTIVOS = [1, 2, 3, 4, 5, 9, 11]
+ESTADOS_PROYECTO_ACTIVOS = srv_proyectos.ESTADOS_PROYECTO_ACTIVOS
 # No se facturan proyectos anulados (estadoproyecto_id de 'Proyecto ANULADO')
-ESTADO_PROYECTO_ANULADO = 8
+ESTADO_PROYECTO_ANULADO = srv_proyectos.ESTADO_PROYECTO_ANULADO
 # Crear factura y datos de facturación: perfil 0 del escritorio = grupo Director + grupo Facturación
 GRUPOS_FACTURACION = ('Director', 'Facturación')
 
@@ -1418,7 +1275,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         # Filtro de estados con selección múltiple; al abrir se marcan los estados por defecto
         filtrado = 'filtrado' in self.request.GET or 'estado' in self.request.GET
         valores_estado = [e.strip() for e in self.request.GET.getlist('estado') if e.strip()]
-        todos_ids = list(estadoproyecto.objects.values_list('id', flat=True))
+        todos_ids = srv_proyectos.ids_estados()
         if 'todos' in valores_estado:
             estados_sel = todos_ids
         elif filtrado:
@@ -1429,45 +1286,22 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         mandante_id = (self.request.GET.get('mandante') or '').strip()
         numero_proyecto = (self.request.GET.get('numero_proyecto') or '').strip()
 
-        proyectos_qs = Proyecto.objects.select_related(
-            'idcotizacion',
-            'idcotizacion__idcliente',
-            'idcotizacion__idcontacto',
-            'idcliente',
-            'idcontactofacturacion',
-            'estadoproyecto',
-        )
+        proyectos = srv_proyectos.buscar_seguimiento(estados_sel, mandante_id, numero_proyecto)
 
-        if not numero_proyecto:  # buscar por N° de proyecto busca en todos los estados, como el escritorio
-            proyectos_qs = proyectos_qs.filter(estadoproyecto_id__in=estados_sel)
-        if mandante_id:
-            proyectos_qs = proyectos_qs.filter(idcotizacion__idcliente_id=mandante_id)
-        if numero_proyecto:
-            proyectos_qs = proyectos_qs.filter(idproyecto__icontains=numero_proyecto)
-
-        proyectos_qs = proyectos_qs.order_by('idcotizacion__codregion', 'idproyecto')
-        proyectos = list(proyectos_qs)
-
-        estados_proyecto = estadoproyecto.objects.order_by('id')
+        estados_proyecto = srv_proyectos.estados()
         monedas = MonedaCotizacion.objects.order_by('nombre')
         formas_pago = TFpago.objects.all().order_by('idfpago')
-        medios_conf = [
-            'Orden de Compra', 'Contrato', 'eMail', 'Orden de Trabajo', 'Carta Adjudicación', '........'
-        ]
+        medios_conf = srv_proyectos.MEDIOS_CONF
         booleanos_si_no = ['NO', 'SI']
         valores_uf = tValorUF.objects.order_by('-Fecha')
-        mandantes = Cliente.objects.filter(
-            idcliente__in=Proyecto.objects.values('idcotizacion__idcliente_id').distinct()
-        ).distinct().order_by('razonsocial')
-        clientes_proyecto = Cliente.objects.filter(
-            Q(proyectos_principales__isnull=False) | Q(proyectos_secundarios__isnull=False)
-        ).distinct().order_by('razonsocial')
-        contactos_facturacion = Clientecontacto.objects.select_related('idcliente').order_by('nombrecontacto')
+        mandantes = srv_proyectos.mandantes()
+        clientes_proyecto = srv_proyectos.clientes()
+        contactos_facturacion = srv_proyectos.contactos_facturacion()
 
-        regiones = {r.codregion: r.descrip for r in Tregion.objects.all()}
-        seguimientos = _texto_seguimiento_proyectos([pro.idproyecto for pro in proyectos])
-        ultimas_fechas_seg = _ultima_fecha_seguimiento_proyectos([pro.idproyecto for pro in proyectos])
-        saldos_por_facturar = _saldo_por_facturar_porcentaje(proyectos)
+        regiones = srv_proyectos.regiones()
+        seguimientos = srv_proyectos.textos_seguimiento([pro.idproyecto for pro in proyectos])
+        ultimas_fechas_seg = srv_proyectos.ultimas_fechas_seguimiento([pro.idproyecto for pro in proyectos])
+        saldos_por_facturar = srv_proyectos.saldo_por_facturar_listado(proyectos)
 
         for pro in proyectos:
             cot = pro.idcotizacion
@@ -1551,12 +1385,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         return contexto
 
 
-# (código tEstado del nuevo estado, campo del formulario, campo del modelo, nombre, obligatoria)
-FECHAS_POR_ESTADO_PROYECTO = [
-    (2, 'fecha_primer_envio', 'fechaprimereenvio', 'la Fecha de Primera Entrega', True),     # Entrega Versión Revisión
-    (5, 'fecha_ingreso_seremi', 'fechaingresoseremi', 'la Fecha de Ingreso a SEREMI', True),  # Proyecto Ingresado a SEREMI
-    (6, 'fecha_aprob_seremi', 'fechaaprobseremi', 'la Fecha de Aprobación SEREMI', False),   # Terminado y Aprobado en SEREMI
-]
+FECHAS_POR_ESTADO_PROYECTO = srv_proyectos.FECHAS_POR_ESTADO_PROYECTO
 
 
 @login_required
@@ -1579,8 +1408,7 @@ def guardar_seguimiento_proyecto(request):
     if not idproyecto:
         return _redirigir_con_filtros('No se recibió el proyecto.', 'error')
 
-    proyecto = get_object_or_404(Proyecto, pk=idproyecto)
-    estado_anterior = proyecto.estadoproyecto_id
+    proyecto = get_object_or_404(srv_proyectos.todos(), pk=idproyecto)
 
     fecha_recordatorio = None
     if request.POST.get('es_recordatorio'):
@@ -1588,80 +1416,22 @@ def guardar_seguimiento_proyecto(request):
             fecha_recordatorio = date.fromisoformat((request.POST.get('fecha_recordatorio') or '').strip())
         except ValueError:
             return _redirigir_con_filtros('Ingrese la fecha de recordatorio.', 'error')
-        if fecha_recordatorio <= timezone.localdate():
-            return _redirigir_con_filtros('La fecha de recordatorio debe ser posterior a hoy.', 'error')
-        if not comentario:
-            return _redirigir_con_filtros('Debe ingresar comentario del seguimiento.', 'error')
 
-    cambia_estado = bool(nuevo_estado_id) and int(nuevo_estado_id) != estado_anterior
-    if cambia_estado and not comentario:
-        return _redirigir_con_filtros('Debe ingresar comentario del seguimiento.', 'error')
-
-    # Igual que SEG_EditaProyecto / GR_Proyecto_SEG del escritorio: según el nuevo estado se pide y guarda una fecha
-    fechas_estado = {}
-    if cambia_estado:
-        codigo_nuevo = int(nuevo_estado_id) - 1
-        for codigo, campo_post, campo_modelo, nombre, obligatoria in FECHAS_POR_ESTADO_PROYECTO:
-            if codigo != codigo_nuevo:
-                continue
-            texto = (request.POST.get(campo_post) or '').strip()
-            try:
-                valor = date.fromisoformat(texto) if texto else None
-            except ValueError:
-                return _redirigir_con_filtros(f'{nombre}: fecha inválida.', 'error')
-            if obligatoria and not valor:
-                return _redirigir_con_filtros(f'Debe ingresar {nombre}.', 'error')
-            if valor:
-                fechas_estado[campo_modelo] = valor
-
-    if cambia_estado:
-        Proyecto.objects.filter(pk=proyecto.pk).update(
-            estadoproyecto_id=int(nuevo_estado_id),
-            estado=int(nuevo_estado_id) - 1,  # Estado usa el código de tEstado (= estadoproyecto_id - 1)
-            fechaact=timezone.localdate(),
-            **fechas_estado,
-        )
-        proyecto.refresh_from_db()
-
-    if comentario:
-        ultimo_idreg = ProyectoSeg.objects.filter(idproyecto_id=idproyecto).aggregate(mx=Max('idreg'))['mx'] or 0
-        data = {
-            'idproyecto_id': idproyecto,
-            'idreg': int(ultimo_idreg) + 1,
-            'fecha': _ahora_santiago_naive(),
-            'comentario': comentario,
-            'idusuario': (request.user.username or '')[:15],
-            'estado': proyecto.estadoproyecto_id or 0,
-        }
-        if request.POST.get('es_recordatorio'):
-            data['esrecordatorio'] = True
-            data['fecharecordatorio'] = fecha_recordatorio
-        ProyectoSeg.objects.create(**data)
+    try:
+        srv_proyectos.registrar_seguimiento(
+            proyecto, request.user.username, comentario=comentario, nuevo_estado_id=nuevo_estado_id,
+            fechas=request.POST, fecha_recordatorio=fecha_recordatorio)
+    except srv_proyectos.ErrorValidacion as e:
+        return _redirigir_con_filtros(str(e), 'error')
 
     return _redirigir_con_filtros('Seguimiento guardado correctamente.')
-
-
-def _comentarios_proyecto(idproyecto):
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT IdReg, Fecha, Comentario, ISNULL(EsRecordatorio, 0), FechaRecordatorio, ISNULL(IdUsuario, '') "
-            "FROM Proyecto_Seg WHERE IdProyecto = %s ORDER BY IdReg DESC", [idproyecto])
-        return [{
-            'idreg': idreg,
-            'fecha': fecha.strftime('%d/%m/%Y %H:%M') if fecha else '',
-            'fecha_iso': fecha.strftime('%Y-%m-%d') if fecha else '',
-            'comentario': (comentario or '').rstrip(),
-            'es_recordatorio': bool(es_rec),
-            'fecha_recordatorio': fecha_rec.strftime('%Y-%m-%d') if fecha_rec else '',
-            'usuario': usuario,
-        } for idreg, fecha, comentario, es_rec, fecha_rec, usuario in cursor.fetchall()]
 
 
 @login_required
 @require_GET
 def proyecto_comentarios(request, idproyecto):
-    get_object_or_404(Proyecto, pk=idproyecto)
-    return JsonResponse({'ok': True, 'comentarios': _comentarios_proyecto(idproyecto)})
+    get_object_or_404(srv_proyectos.todos(), pk=idproyecto)
+    return JsonResponse({'ok': True, 'comentarios': srv_proyectos.comentarios(idproyecto)})
 
 
 @login_required
@@ -1669,7 +1439,7 @@ def proyecto_comentarios(request, idproyecto):
 def proyecto_comentario_editar(request, idproyecto, idreg):
     """Como AC_Proyecto_SEG: cambia fecha, texto y recordatorio; el usuario queda como quien editó.
     Si el día no cambia se conserva la hora (el procedimiento recibe solo la fecha y la perdía)."""
-    get_object_or_404(Proyecto, pk=idproyecto)
+    get_object_or_404(srv_proyectos.todos(), pk=idproyecto)
     comentario = (request.POST.get('comentario') or '').strip()
     if not comentario:
         return JsonResponse({'ok': False, 'message': 'El comentario no puede quedar vacío.'}, status=400)
@@ -1679,26 +1449,18 @@ def proyecto_comentario_editar(request, idproyecto, idreg):
         fecha_rec = date.fromisoformat(request.POST.get('fecha_recordatorio') or '') if es_rec else None
     except ValueError:
         return JsonResponse({'ok': False, 'message': 'Fecha inválida.'}, status=400)
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT Fecha FROM Proyecto_Seg WHERE IdProyecto = %s AND IdReg = %s', [idproyecto, idreg])
-        fila = cursor.fetchone()
-        if fila is None:
-            return JsonResponse({'ok': False, 'message': 'El comentario ya no existe.'}, status=404)
-        fecha = fila[0] if fila[0] and fila[0].date() == dia else datetime.combine(dia, time.min)
-        cursor.execute(
-            'UPDATE Proyecto_Seg SET Fecha = %s, Comentario = %s, IdUsuario = %s, EsRecordatorio = %s, '
-            'FechaRecordatorio = %s WHERE IdProyecto = %s AND IdReg = %s',
-            [fecha, comentario, (request.user.username or '')[:15], int(es_rec), fecha_rec, idproyecto, idreg])
-    return JsonResponse({'ok': True, 'comentarios': _comentarios_proyecto(idproyecto)})
+    if not srv_proyectos.editar_comentario(idproyecto, idreg, comentario, dia, request.user.username,
+                                           es_recordatorio=es_rec, fecha_recordatorio=fecha_rec):
+        return JsonResponse({'ok': False, 'message': 'El comentario ya no existe.'}, status=404)
+    return JsonResponse({'ok': True, 'comentarios': srv_proyectos.comentarios(idproyecto)})
 
 
 @login_required
 @require_POST
 def proyecto_comentario_eliminar(request, idproyecto, idreg):
-    get_object_or_404(Proyecto, pk=idproyecto)
-    with connection.cursor() as cursor:
-        cursor.execute('SET NOCOUNT ON; EXEC EL_Proyecto_SEG %s, %s', [idproyecto, idreg])
-    return JsonResponse({'ok': True, 'comentarios': _comentarios_proyecto(idproyecto)})
+    get_object_or_404(srv_proyectos.todos(), pk=idproyecto)
+    srv_proyectos.eliminar_comentario(idproyecto, idreg)
+    return JsonResponse({'ok': True, 'comentarios': srv_proyectos.comentarios(idproyecto)})
 
 
 @login_required
@@ -1706,61 +1468,31 @@ def proyecto_comentario_eliminar(request, idproyecto, idreg):
 def guardar_datos_facturacion_proyecto(request):
     if not puede_facturar(request.user):
         return _sin_permiso_facturar(request)
-    proyecto = get_object_or_404(Proyecto, pk=request.POST.get('idproyecto'))
+    proyecto = get_object_or_404(srv_proyectos.todos(), pk=request.POST.get('idproyecto'))
     filtros = {
         'estado': (request.POST.get('filtro_estado') or '').strip(),
         'mandante': (request.POST.get('filtro_mandante') or '').strip(),
         'numero_proyecto': (request.POST.get('filtro_numero_proyecto') or '').strip(),
     }
 
-    proyecto.idcliente_id = request.POST.get('idcliente') or None
-    proyecto.moneda = request.POST.get('moneda') or None
     valor = request.POST.get('valor')
-    proyecto.valor = float(valor) if valor not in (None, '') else None
-    proyecto.medioconf = request.POST.get('medioconf') or None
-    proyecto.fpago = request.POST.get('fpago') or None
-    proyecto.numconf = request.POST.get('numconf') or None
     fechaconf = request.POST.get('fechaconf')
-    proyecto.fechaconf = datetime.strptime(fechaconf, '%d/%m/%Y').date() if fechaconf else None
-    proyecto.conhes = request.POST.get('conhes') or None
-    proyecto.coneepp = request.POST.get('coneepp') or None
-    proyecto.conotro = request.POST.get('conotro') or None
-    # Igual que GR_Proyecto_DatosFactura del escritorio: el email de facturación es el del contacto elegido
-    # (si se escribe otro, se respeta) y se registra cuándo se asignó el contacto.
-    idcontacto = request.POST.get('idcontactofacturacion') or None
-    email_post = (request.POST.get('emailcontactofacturacion') or '').strip()
-    if idcontacto:
-        contacto = Clientecontacto.objects.filter(pk=idcontacto).first()
-        if contacto and contacto.pk != proyecto.idcontactofacturacion_id:
-            proyecto.fecharegistrocontacto = _ahora_santiago_naive()
-        proyecto.idcontactofacturacion_id = idcontacto
-        proyecto.emailcontactofacturacion = email_post or (contacto.email if contacto else None)
-    else:
-        proyecto.idcontactofacturacion_id = None
-        proyecto.emailcontactofacturacion = email_post or None
-    proyecto.fechaact = timezone.now().date()
-    # El escritorio no cambia el estado al guardar datos de facturación. En la web este botón es la vía para pasar
-    # de "Proyecto Nuevo" a "Proyecto con Datos de Facturación"; un proyecto más avanzado conserva su estado.
-    avanza_estado = proyecto.estadoproyecto_id in (None, 1)
-    if avanza_estado:
-        proyecto.estadoproyecto_id = 2
-        proyecto.estado = 1  # código tEstado de 'Proyecto con Datos de Facturación'
-    proyecto.save()
-    # Facturas del proyecto sin cliente quedan con el cliente de facturación (como GR_Proyecto_DatosFactura)
-    if proyecto.idcliente_id:
-        Factura.objects.filter(idproyecto=proyecto, idcliente__isnull=True).update(idcliente_id=proyecto.idcliente_id)
-
-    comentario = (request.POST.get('comentario') or '').strip()
-    if comentario:
-        ultimo_idreg = ProyectoSeg.objects.filter(idproyecto_id=proyecto.idproyecto).aggregate(mx=Max('idreg'))['mx'] or 0
-        ProyectoSeg.objects.create(
-            idproyecto_id=proyecto.idproyecto,
-            idreg=int(ultimo_idreg) + 1,
-            fecha=_ahora_santiago_naive(),
-            comentario=comentario,
-            idusuario=(request.user.username or '')[:15],
-            estado=proyecto.estadoproyecto_id or 0,
-        )
+    avanza_estado = srv_proyectos.guardar_datos_facturacion(
+        proyecto, request.user.username,
+        idcliente=request.POST.get('idcliente') or None,
+        moneda=request.POST.get('moneda') or None,
+        valor=float(valor) if valor not in (None, '') else None,
+        medioconf=request.POST.get('medioconf') or None,
+        fpago=request.POST.get('fpago') or None,
+        numconf=request.POST.get('numconf') or None,
+        fechaconf=datetime.strptime(fechaconf, '%d/%m/%Y').date() if fechaconf else None,
+        conhes=request.POST.get('conhes') or None,
+        coneepp=request.POST.get('coneepp') or None,
+        conotro=request.POST.get('conotro') or None,
+        idcontacto=request.POST.get('idcontactofacturacion') or None,
+        email_contacto=(request.POST.get('emailcontactofacturacion') or '').strip(),
+        comentario=(request.POST.get('comentario') or '').strip(),
+    )
 
     messages.success(request, 'Datos de facturación guardados correctamente.' if avanza_estado else
                      'Datos de facturación guardados correctamente. El estado del proyecto no cambió.')
@@ -1772,7 +1504,7 @@ def guardar_datos_facturacion_proyecto(request):
 def crear_factura_proyecto(request):
     if not puede_facturar(request.user):
         return _sin_permiso_facturar(request)
-    proyecto = get_object_or_404(Proyecto.objects.select_related('idcliente', 'idcontactofacturacion', 'estadoproyecto'), pk=request.POST.get('idproyecto'))
+    proyecto = get_object_or_404(srv_proyectos.para_facturar(), pk=request.POST.get('idproyecto'))
     if proyecto.estadoproyecto_id == ESTADO_PROYECTO_ANULADO:
         msg = 'No se puede facturar un proyecto anulado.'
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -1893,11 +1625,9 @@ class Vista2(LoginRequiredMixin,TemplateView):
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
 
-        consulta = "exec [ducto].[SEG_ConsultaProyecto_WEB] ?"
         try:
-            rows = exec_query(consulta, (2,))
-            contexto["proyecto"] = rows
-        except pyodbc.Error as e:
+            contexto["proyecto"] = srv_proyectos.consulta_web(2)
+        except DatabaseError as e:
             print("Error SQL:", e)
             contexto["proyecto"] = []
             contexto["error_sql"] = "No se pudo consultar la base de datos."
@@ -1917,11 +1647,9 @@ class Vista3(LoginRequiredMixin,TemplateView):
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
 
-        consulta = "exec [ducto].[SEG_ConsultaProyecto_WEB] ?"
         try:
-            rows = exec_query(consulta, (3,))
-            contexto["proyecto"] = rows
-        except pyodbc.Error as e:
+            contexto["proyecto"] = srv_proyectos.consulta_web(3)
+        except DatabaseError as e:
             print("Error SQL:", e)
             contexto["proyecto"] = []
             contexto["error_sql"] = "No se pudo consultar la base de datos."
@@ -1948,22 +1676,8 @@ class VisorComentario(LoginRequiredMixin,DetailView):
             3: "Proyectos en Desarrollo",
         }.get(int(tabla), "Seguimiento")
 
-        consulta_nom = """
-            SELECT b.NombreProyecto
-            FROM Proyecto a
-            JOIN Cotizacion b ON b.IdCotizacion = a.IdCotizacion
-            WHERE a.IdProyecto = ?
-        """
-        rows_nom = exec_query(consulta_nom, (pk,))
-        nompro = rows_nom[0][0] if rows_nom else ""
-
-        consulta_seg = """
-            SELECT IdProyecto, Comentario, Fecha
-            FROM [ducto].[Proyecto_Seg]
-            WHERE IdProyecto = ?
-            ORDER BY Fecha
-        """
-        rows = exec_query(consulta_seg, (pk,))
+        nompro = srv_proyectos.nombre(pk)
+        rows = srv_proyectos.seguimiento_cronologico(pk)
 
         contexto = {
             "filas": rows,
@@ -1984,15 +1698,7 @@ def guardacomentario(request):
     idproyecto = request.POST.get("idproyecto")
     tabla = request.POST.get("tabla")
 
-    ultimo_idreg = ProyectoSeg.objects.filter(idproyecto_id=idproyecto).aggregate(mx=Max('idreg'))['mx'] or 0
-    ProyectoSeg.objects.create(
-        idproyecto_id=idproyecto,
-        idreg=int(ultimo_idreg) + 1,
-        fecha=_ahora_santiago_naive(),
-        comentario=comentario,
-        idusuario=(request.user.username or '')[:15],
-        estado=0,
-    )
+    srv_proyectos.agregar_comentario(idproyecto, comentario, request.user.username, 0)
 
     return redirect(f"{idproyecto}/{tabla}")
 
@@ -2554,35 +2260,11 @@ def proyectos_totales(request):
     cliente_id = request.GET.get('cliente', '').strip()
     numero_proyecto = request.GET.get('numero_proyecto', '').strip()
 
-    proyectos_qs = Proyecto.objects.select_related(
-        'idcotizacion',
-        'idcotizacion__idcliente',
-        'idcliente',
-        'estadoproyecto'
-    )
+    proyectos = srv_proyectos.buscar_reporte(estados_sel, mandante_id, cliente_id, numero_proyecto)
 
-    if estados_sel:
-        proyectos_qs = proyectos_qs.filter(estadoproyecto_id__in=estados_sel)
-    if mandante_id:
-        proyectos_qs = proyectos_qs.filter(idcotizacion__idcliente_id=mandante_id)
-    if cliente_id:
-        proyectos_qs = proyectos_qs.filter(idcliente_id=cliente_id)
-    if numero_proyecto:
-        proyectos_qs = proyectos_qs.filter(idproyecto__icontains=numero_proyecto)
-
-    proyectos_qs = proyectos_qs.order_by('idcotizacion__codregion', 'idproyecto')
-
-    proyectos = list(proyectos_qs)
-
-    estados_proyecto = estadoproyecto.objects.order_by('nombre')
-    clientes_proyecto = Cliente.objects.filter(
-        Q(proyectos_principales__isnull=False) | Q(proyectos_secundarios__isnull=False)
-    ).distinct().order_by('razonsocial')
-
-    regiones = {
-        r.codregion: r.descrip
-        for r in Tregion.objects.all()
-    }
+    estados_proyecto = srv_proyectos.estados_por_nombre()
+    clientes_proyecto = srv_proyectos.clientes()
+    regiones = srv_proyectos.regiones()
 
     for pro in proyectos:
         cot = pro.idcotizacion
@@ -3127,7 +2809,7 @@ def crear_entrega_proyecto(request):
     proyecto.save(update_fields=['idtamano'])
 
     # Validaciones simples de existencia
-    get_object_or_404(Proyecto, pk=idproyecto)
+    get_object_or_404(srv_proyectos.todos(), pk=idproyecto)
     get_object_or_404(TipoEntrega, pk=idtipoentrega)
     get_object_or_404(Urgencia, pk=idurgencia)
 

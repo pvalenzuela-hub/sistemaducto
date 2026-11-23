@@ -445,6 +445,55 @@ def eliminar(idfactura):
 
 
 # ---------------------------------------------------------------------------------------------------------------
+# Reporte de Facturas (une Emitidas, Rep_Factura1, y Pagadas, Rep_Factura2, del escritorio)
+# ---------------------------------------------------------------------------------------------------------------
+
+ESTADOS_EMITIDAS = [2, 3, 4, 5, 8]  # Emitidas: Estado >= 2 y no 6 (NULA) ni 7 (PAUSA), como Rep_Factura1
+
+
+def reporte(campo_fecha, desde, hasta, estados_filtro, cliente, proyecto):
+    """Filas (año, mes, N°, emisión, razón social, rut, dv, proyecto, total $, pago, estado, idproyecto) por
+    fecha de emisión o de pago ('pago'), ordenadas por año, mes y N°. cliente: nombre o RUT; proyecto: nombre o N°."""
+    columna = 'a.FechaPago' if campo_fecha == 'pago' else 'a.FechaEmision'
+    sql = [f'''
+        SELECT YEAR({columna}), MONTH({columna}), a.NumFactura, a.FechaEmision, b.RazonSocial, b.Rut, b.DVrut,
+               d.NombreProyecto, a.ValorTotalPesos, a.FechaPago, a.Estado, a.IdProyecto
+          FROM Factura a
+          LEFT OUTER JOIN Cliente b ON b.IdCliente = a.IdCliente
+          LEFT OUTER JOIN Proyecto c ON c.IdProyecto = a.IdProyecto
+          LEFT OUTER JOIN Cotizacion d ON d.IdCotizacion = c.IdCotizacion
+         WHERE {columna} BETWEEN %s AND %s''']
+    params = [desde, hasta]
+    if estados_filtro:
+        sql.append(f"AND a.Estado IN ({', '.join(['%s'] * len(estados_filtro))})")
+        params += estados_filtro
+    if cliente:
+        digitos = cliente.split('-')[0].replace('.', '').strip()
+        if digitos.isdigit():
+            sql.append('AND (b.RazonSocial LIKE %s OR b.Rut = %s)')
+            params += [f'%{cliente}%', int(digitos)]
+        else:
+            sql.append('AND b.RazonSocial LIKE %s')
+            params.append(f'%{cliente}%')
+    if proyecto:
+        if proyecto.isdigit():
+            sql.append('AND (d.NombreProyecto LIKE %s OR a.IdProyecto = %s)')
+            params += [f'%{proyecto}%', int(proyecto)]
+        else:
+            sql.append('AND d.NombreProyecto LIKE %s')
+            params.append(f'%{proyecto}%')
+    sql.append('ORDER BY 1, 2, 3')
+    with connection.cursor() as cursor:
+        cursor.execute(' '.join(sql), params)
+        return cursor.fetchall()
+
+
+def del_proyecto(idproyecto):
+    """Facturas de un proyecto por fecha de emisión."""
+    return list(Factura.objects.filter(idproyecto_id=idproyecto).order_by('fechaemision', 'idfactura'))
+
+
+# ---------------------------------------------------------------------------------------------------------------
 # Búsqueda (API)
 # ---------------------------------------------------------------------------------------------------------------
 

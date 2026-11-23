@@ -10,11 +10,13 @@ from datetime import date
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from functools import wraps
-from django.db import connection
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
+
+from .servicios import facturas as srv_facturas
+from .servicios import proyectos as srv_proyectos
 
 GRUPO_DIRECTOR = 'Director'
 
@@ -41,18 +43,13 @@ def solo_director(vista):
     return envoltura
 
 
-TIPO_ESTADO_FACTURA = 3
-# Emitidas: Estado >= 2 y no 6 (NULA) ni 7 (PAUSA), como Rep_Factura1
-ESTADOS_EMITIDAS = [2, 3, 4, 5, 8]
+ESTADOS_EMITIDAS = srv_facturas.ESTADOS_EMITIDAS
 MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre',
          'Noviembre', 'Diciembre']
 
 
 def _estados_factura():
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT CodEstado, Descrip FROM tEstado WHERE TipoEstado = %s ORDER BY CodEstado',
-                       [TIPO_ESTADO_FACTURA])
-        return [(cod, (descrip or '').strip()) for cod, descrip in cursor.fetchall()]
+    return srv_facturas.estados()
 
 
 def _fecha(valor, defecto):
@@ -68,41 +65,6 @@ def _pesos(valor):
 
 def _rut(rut, dv):
     return f"{int(rut)}-{dv or ''}" if rut is not None else ''
-
-
-def _consulta(campo_fecha, desde, hasta, estados, cliente, proyecto):
-    columna = 'a.FechaPago' if campo_fecha == 'pago' else 'a.FechaEmision'
-    sql = [f'''
-        SELECT YEAR({columna}), MONTH({columna}), a.NumFactura, a.FechaEmision, b.RazonSocial, b.Rut, b.DVrut,
-               d.NombreProyecto, a.ValorTotalPesos, a.FechaPago, a.Estado, a.IdProyecto
-          FROM Factura a
-          LEFT OUTER JOIN Cliente b ON b.IdCliente = a.IdCliente
-          LEFT OUTER JOIN Proyecto c ON c.IdProyecto = a.IdProyecto
-          LEFT OUTER JOIN Cotizacion d ON d.IdCotizacion = c.IdCotizacion
-         WHERE {columna} BETWEEN %s AND %s''']
-    params = [desde, hasta]
-    if estados:
-        sql.append(f"AND a.Estado IN ({', '.join(['%s'] * len(estados))})")
-        params += estados
-    if cliente:
-        digitos = cliente.split('-')[0].replace('.', '').strip()
-        if digitos.isdigit():
-            sql.append('AND (b.RazonSocial LIKE %s OR b.Rut = %s)')
-            params += [f'%{cliente}%', int(digitos)]
-        else:
-            sql.append('AND b.RazonSocial LIKE %s')
-            params.append(f'%{cliente}%')
-    if proyecto:
-        if proyecto.isdigit():
-            sql.append('AND (d.NombreProyecto LIKE %s OR a.IdProyecto = %s)')
-            params += [f'%{proyecto}%', int(proyecto)]
-        else:
-            sql.append('AND d.NombreProyecto LIKE %s')
-            params.append(f'%{proyecto}%')
-    sql.append('ORDER BY 1, 2, 3')
-    with connection.cursor() as cursor:
-        cursor.execute(' '.join(sql), params)
-        return cursor.fetchall()
 
 
 @login_required
@@ -138,7 +100,7 @@ def reporte_facturas(request):
         'total': float(r[8] or 0),
         'fecha_pago': r[9].strftime('%d/%m/%Y') if r[9] else '',
         'estado': nombres_estado.get(r[10], ''),
-    } for r in _consulta(campo_fecha, desde, hasta, estados, cliente, proyecto)]
+    } for r in srv_facturas.reporte(campo_fecha, desde, hasta, estados, cliente, proyecto)]
 
     if request.GET.get('formato') == 'csv':
         return _csv(filas, campo_fecha, desde, hasta)
@@ -200,42 +162,18 @@ def _uf(valor):
     return f"{float(valor or 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
-def _anios_adjudicacion():
-    with connection.cursor() as cursor:
-        cursor.execute('SET NOCOUNT ON; EXEC Consulta_AgnoAdjudicacion')
-        return [int(r[0]) for r in cursor.fetchall()]
-
-
-def _adjudicaciones(desde_anio):
-    with connection.cursor() as cursor:
-        cursor.execute('SET NOCOUNT ON; EXEC REP_Adjudicacion %s', [desde_anio])
-        return [{
-            'agno': int(r[0]),
-            'mes': (r[1] or '').strip(),
-            'idproyecto': int(r[2]),
-            'cotizacion': r[3] or '',
-            'proyecto': r[4] or '',
-            'moneda': r[5] or '',
-            'valor_uf': float(r[6] or 0),
-            'valor_peso': float(r[7] or 0),
-            'mandante': r[8] or '',
-            'estado': (r[9] or '').strip(),
-            'adjudicacion': r[10] or '',
-        } for r in cursor.fetchall()]
-
-
 @login_required
 @solo_grupos(GRUPO_DIRECTOR, 'Facturación')  # en el escritorio, solo el perfil 0
 @require_GET
 def reporte_adjudicaciones(request):
-    anios = _anios_adjudicacion()
+    anios = srv_proyectos.anios_adjudicacion()
     try:
         desde_anio = int(request.GET.get('desde') or 0)
     except ValueError:
         desde_anio = 0
     if desde_anio not in anios:
         desde_anio = anios[0] if anios else timezone.localdate().year  # al abrir: el año más reciente
-    filas = _adjudicaciones(desde_anio)
+    filas = srv_proyectos.adjudicaciones(desde_anio)
 
     if request.GET.get('formato') == 'csv':
         resp = HttpResponse(content_type='text/csv; charset=utf-8')

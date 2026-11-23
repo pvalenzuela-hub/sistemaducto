@@ -7,11 +7,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from seguimiento.models import (
-    Cotizacion, CotizacionFpago, CotizacionNota, CotizacionValor, EntregaProyecto, Estadocotizacion, Factura,
-    Proyecto, Tregion, estadoproyecto,
+    Cotizacion, CotizacionFpago, CotizacionNota, CotizacionValor, EntregaProyecto, Estadocotizacion,
 )
+from seguimiento.servicios import facturas as srv_facturas
+from seguimiento.servicios import proyectos as srv_proyectos
 
-from . import seg
 from .auth import api_key_required
 from .models import ApiCambio
 from .views import (
@@ -19,7 +19,6 @@ from .views import (
     _parse_int_list, _parse_rut, _pesos, _read_body, _serialize_cliente,
 )
 
-ESTADO_FACTURA_NULA = 6
 ESTADO_ENTREGA_ENTREGADA = 5  # T_EstadosEntrega: 'Entregado a Cliente'
 
 
@@ -39,10 +38,7 @@ def _numero_cotizacion(c):
 
 
 def _regiones(codigos):
-    codigos = {c for c in codigos if c is not None}
-    if not codigos:
-        return {}
-    return dict(Tregion.objects.filter(codregion__in=codigos).values_list('codregion', 'descrip'))
+    return srv_proyectos.regiones_de(codigos)
 
 
 def _estado(obj):
@@ -106,27 +102,10 @@ def _valores_por_cotizacion(ids):
     return por_cot
 
 
-def _facturado_por_proyecto(proyectos):
-    """{idproyecto: % facturado}. Usa PorcFact de cada factura no nula o, si falta, su monto / valor del proyecto."""
-    valor = {int(p.idproyecto): float(p.valor or 0) for p in proyectos}
-    if not valor:
-        return {}
-    porcentaje = defaultdict(float)
-    filas = Factura.objects.filter(idproyecto_id__in=list(valor)).exclude(estado=ESTADO_FACTURA_NULA) \
-        .values_list('idproyecto_id', 'porcfact', 'valortotal')
-    for idproyecto, porcfact, valortotal in filas:
-        idproyecto = int(idproyecto)
-        if porcfact is not None:
-            porcentaje[idproyecto] += float(porcfact)
-        elif valortotal is not None and valor[idproyecto] > 0:
-            porcentaje[idproyecto] += float(valortotal) / valor[idproyecto] * 100
-    return {pid: round(porcentaje.get(pid, 0.0), 2) for pid in valor}
-
-
 # ---------------------------------------------------------------- proyectos
 
 def _proyectos_qs():
-    return Proyecto.objects.select_related('idcliente', 'estadoproyecto', 'idcotizacion__idcliente')
+    return srv_proyectos.para_api()
 
 
 def _serialize_proyecto(p, comentario, porcentaje, regiones):
@@ -155,15 +134,15 @@ def _serialize_proyecto_detalle(p):
     cot = p.idcotizacion
     valores = list(CotizacionValor.objects.filter(idcotizacion=cot).order_by('item'))
     resumen = _resumen_items(valores)
-    porcentaje = _facturado_por_proyecto([p])[int(p.idproyecto)]
-    comentarios = seg.proyecto.listar(p.idproyecto)
+    porcentaje = srv_proyectos.porcentaje_facturado_api([p])[int(p.idproyecto)]
+    comentarios = srv_proyectos.listar_comentarios_api(p.idproyecto)
     data = _serialize_proyecto(p, comentarios[0]['comentario'] if comentarios else None, porcentaje,
                                _regiones([cot.codregion]))
 
     entregas = list(EntregaProyecto.objects.filter(idproyecto=p).select_related('idtipoentrega', 'idestadoentrega')
                     .order_by('fechaentrega', 'identrega'))
     estados_factura = _estados_factura()
-    facturas = list(Factura.objects.filter(idproyecto=p).order_by('fechaemision', 'idfactura'))
+    facturas = srv_facturas.del_proyecto(p.pk)
     contacto = p.idcontactofacturacion
 
     data.update({
@@ -226,27 +205,24 @@ def _serialize_proyecto_detalle(p):
 def proyectos_list(request):
     """Filtros: estado (ids con comas), idcliente, rut (cliente o mandante), desde, hasta (fecha de creación), q."""
     params = request.GET
-    qs = _proyectos_qs()
     try:
+        filtros = {'q': params.get('q', '').strip()}
         if params.get('estado'):
-            qs = qs.filter(estadoproyecto_id__in=_parse_int_list(params['estado'], 'estado'))
-        qs = _filtrar_por_cliente(params, qs, ['idcliente', 'idcotizacion__idcliente'])
+            filtros['estados_filtro'] = _parse_int_list(params['estado'], 'estado')
+        if params.get('idcliente'):
+            filtros['idcliente'] = _parse_int(params['idcliente'], 'idcliente')
+        if params.get('rut'):
+            filtros['rut'] = _parse_rut(params['rut'])
         if params.get('desde'):
-            qs = qs.filter(fechacreacion__gte=_parse_date(params['desde'], 'desde'))
+            filtros['desde'] = _parse_date(params['desde'], 'desde')
         if params.get('hasta'):
-            qs = qs.filter(fechacreacion__lte=_parse_date(params['hasta'], 'hasta'))
-        q = params.get('q', '').strip()
-        if q:
-            cond = Q(idcotizacion__nombreproyecto__icontains=q)
-            if q.isdigit():
-                cond |= Q(idproyecto=int(q)) | Q(idcotizacion__numcotizacion=int(q))
-            qs = qs.filter(cond)
-        proyectos, meta = _paginate(request, qs.order_by('-idproyecto'))
+            filtros['hasta'] = _parse_date(params['hasta'], 'hasta')
+        proyectos, meta = _paginate(request, srv_proyectos.buscar_api(**filtros))
     except ParamError as e:
         return _error(str(e))
 
-    comentarios = seg.proyecto.ultimos(int(p.idproyecto) for p in proyectos)
-    porcentajes = _facturado_por_proyecto(proyectos)
+    comentarios = srv_proyectos.ultimos_comentarios(int(p.idproyecto) for p in proyectos)
+    porcentajes = srv_proyectos.porcentaje_facturado_api(proyectos)
     regiones = _regiones(p.idcotizacion.codregion for p in proyectos)
     results = [_serialize_proyecto(p, comentarios.get(int(p.idproyecto)), porcentajes[int(p.idproyecto)], regiones)
                for p in proyectos]
@@ -281,7 +257,7 @@ def _actualizar_proyecto(request, proyecto):
     if not data:
         raise ParamError("Indique al menos uno de: estado, comentario")
 
-    estados = dict(estadoproyecto.objects.values_list('id', 'nombre'))
+    estados = srv_proyectos.nombres_estados()
     estado_actual = proyecto.estadoproyecto_id
     nuevo_estado = estado_actual
     if 'estado' in data:
@@ -291,31 +267,26 @@ def _actualizar_proyecto(request, proyecto):
         nuevo_estado = data['estado']
 
     comentario = _clean_comentario(data['comentario']) if 'comentario' in data else None
-    cambia_estado = nuevo_estado != estado_actual
-    if cambia_estado and not comentario:
-        raise ParamError("Para cambiar el estado se requiere 'comentario', igual que en la aplicación web")
 
-    usuario = request.api_key.usuario_seg
     with transaction.atomic():
+        try:
+            cambia_estado, nuevo = srv_proyectos.cambiar_estado_api(proyecto, nuevo_estado, comentario,
+                                                                    request.api_key.usuario_seg)
+        except srv_proyectos.ErrorValidacion as e:
+            raise ParamError(str(e))
         if cambia_estado:
-            # Estado guarda el código de tEstado (= estadoproyecto_id - 1), como el sistema de escritorio
-            Proyecto.objects.filter(pk=proyecto.pk).update(estadoproyecto_id=nuevo_estado, estado=nuevo_estado - 1)
             ApiCambio.registrar(request, 'proyecto', int(proyecto.pk), 'editar',
                                 antes={'estado': estado_actual}, despues={'estado': nuevo_estado})
-        if comentario:
-            if cambia_estado:
-                comentario = f"[API] Estado: {(estados.get(estado_actual) or '-').strip()} -> " \
-                             f"{estados[nuevo_estado].strip()}. {comentario}"
-            nuevo = seg.proyecto.agregar(proyecto.pk, comentario, usuario, estado=nuevo_estado)
+        if nuevo:
             ApiCambio.registrar(request, 'proyecto_comentario', f"{int(proyecto.pk)}/{nuevo['idreg']}", 'comentar',
-                                despues={'comentario': comentario})
+                                despues={'comentario': nuevo['comentario']})
 
 
 @csrf_exempt
 @require_http_methods(['GET', 'POST'])
 @api_key_required({'POST': 'comentar'})
 def proyecto_comentarios(request, idproyecto):
-    proyecto = Proyecto.objects.filter(pk=idproyecto).only('idproyecto', 'estadoproyecto_id').first()
+    proyecto = srv_proyectos.obtener(idproyecto)
     if proyecto is None:
         return _error('Proyecto no encontrado', 404)
 
@@ -325,20 +296,20 @@ def proyecto_comentarios(request, idproyecto):
         except ParamError as e:
             return _error(str(e))
         with transaction.atomic():
-            nuevo = seg.proyecto.agregar(proyecto.pk, comentario, request.api_key.usuario_seg,
-                                         estado=proyecto.estadoproyecto_id)
+            nuevo = srv_proyectos.comentar_api(proyecto.pk, comentario, request.api_key.usuario_seg,
+                                               proyecto.estadoproyecto_id)
             ApiCambio.registrar(request, 'proyecto_comentario', f"{int(proyecto.pk)}/{nuevo['idreg']}", 'comentar',
                                 despues={'comentario': comentario})
         return _json(nuevo, status=201)
 
-    return _json(seg.proyecto.listar(proyecto.pk))
+    return _json(srv_proyectos.listar_comentarios_api(proyecto.pk))
 
 
 @csrf_exempt
 @require_http_methods(['GET'])
 @api_key_required()
 def proyecto_estados(request):
-    return _json([{'id': k, 'nombre': v.strip()} for k, v in estadoproyecto.objects.order_by('id').values_list('id', 'nombre')])
+    return _json([{'id': e.id, 'nombre': e.nombre.strip()} for e in srv_proyectos.estados()])
 
 
 # ---------------------------------------------------------------- cotizaciones
@@ -348,10 +319,7 @@ def _cotizaciones_qs():
 
 
 def _proyectos_por_cotizacion(ids):
-    por_cot = defaultdict(list)
-    for idcot, idproy in Proyecto.objects.filter(idcotizacion_id__in=list(ids)).values_list('idcotizacion_id', 'idproyecto'):
-        por_cot[idcot].append(int(idproy))
-    return por_cot
+    return srv_proyectos.ids_por_cotizacion(ids)
 
 
 def _serialize_cotizacion(c, valores, proyectos, regiones):
