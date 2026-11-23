@@ -164,7 +164,7 @@ def glosa_correo(factura, proyecto, cotizacion):
 
 
 def saldo_por_facturar(idproyecto):
-    """dbo.SaldoPorFacturar: % del proyecto que falta facturar (misma regla que el escritorio)."""
+    """dbo.SaldoPorFacturar: % del proyecto que falta facturar. Es la regla única (ver proyectos.saldos_por_facturar)."""
     with connection.cursor() as cursor:
         cursor.execute('SELECT dbo.SaldoPorFacturar(%s)', [idproyecto])
         return float(cursor.fetchone()[0] or 0)

@@ -32,7 +32,6 @@ ESTADOS_PROYECTO_ACTIVOS = [1, 2, 3, 4, 5, 9, 11]
 ESTADO_NUEVO = 1
 ESTADO_CON_DATOS_FACTURACION = 2
 ESTADO_PROYECTO_ANULADO = 8  # no se facturan proyectos anulados
-ESTADO_FACTURA_NULA = 6
 
 MEDIOS_CONF = ['Orden de Compra', 'Contrato', 'eMail', 'Orden de Trabajo', 'Carta Adjudicación', '........']
 
@@ -223,46 +222,28 @@ def nombre(idproyecto):
 
 
 # ---------------------------------------------------------------------------------------------------------------
-# % por facturar. Hay tres reglas distintas en uso; se dejan tal cual hasta decidir cuál vale.
+# % por facturar: una sola regla para web, glosa y API, la del escritorio (dbo.SaldoPorFacturar).
+# Solo descuentan las facturas emitidas (Emitida, Pendiente de Pago, Pago por Retirar, Pagada, Pago Verificado);
+# Provisoria, Para Emitir, En Pausa y NULA no. Un proyecto facturado sobre el 100% queda con saldo negativo, a la
+# vista para revisarlo (decisión de Paulo, 2026-11-23).
 # ---------------------------------------------------------------------------------------------------------------
 
-def saldo_por_facturar_listado(proyectos):
-    """{'idproyecto': saldo %} del listado de Seguimiento de Proyectos: suma PorcFact (o monto / valor del proyecto)
-    de las facturas con estado distinto de 9. Proyectos sin facturas no aparecen (el listado muestra 100)."""
-    proyectos = list(proyectos or [])
-    ids = [str(p.idproyecto) for p in proyectos if getattr(p, 'idproyecto', None) is not None]
-    if not ids:
-        return {}
+def saldos_por_facturar(ids_proyecto):
+    """{idproyecto (int): % que falta facturar}, calculado por dbo.SaldoPorFacturar."""
+    ids = sorted({int(i) for i in ids_proyecto if i is not None})
+    saldos = {}
     with connection.cursor() as cursor:
-        cursor.execute(f"SELECT IdProyecto, PorcFact, ValorTotal FROM Factura WHERE IdProyecto IN ({','.join(['%s'] * len(ids))}) "
-                       "AND ISNULL(Estado, 1) <> 9", ids)
-        filas = cursor.fetchall()
-    valor = {str(p.idproyecto): Decimal(str(p.valor or 0)) for p in proyectos}
-    por_proyecto = defaultdict(Decimal)
-    for idproyecto, porc_fact, valor_total in filas:
-        clave = str(idproyecto)
-        if porc_fact is not None:
-            por_proyecto[clave] += Decimal(str(porc_fact))
-        elif valor_total is not None and valor.get(clave, Decimal('0')) > 0:
-            por_proyecto[clave] += (Decimal(str(valor_total)) / valor[clave]) * Decimal('100')
-    return {pid: max(Decimal('0'), Decimal('100') - total) for pid, total in por_proyecto.items()}
+        for i in range(0, len(ids), 1000):  # SQL Server admite hasta 2.100 parámetros por consulta
+            tramo = ids[i:i + 1000]
+            cursor.execute(f"SELECT IdProyecto, dbo.SaldoPorFacturar(IdProyecto) FROM Proyecto "
+                           f"WHERE IdProyecto IN ({','.join(['%s'] * len(tramo))})", tramo)
+            saldos.update({int(pid): float(saldo) for pid, saldo in cursor.fetchall()})
+    return saldos
 
 
-def porcentaje_facturado_api(proyectos):
-    """{idproyecto: % facturado} de la API: PorcFact de cada factura no NULA o, si falta, monto / valor del proyecto."""
-    valor = {int(p.idproyecto): float(p.valor or 0) for p in proyectos}
-    if not valor:
-        return {}
-    porcentaje = defaultdict(float)
-    filas = Factura.objects.filter(idproyecto_id__in=list(valor)).exclude(estado=ESTADO_FACTURA_NULA) \
-        .values_list('idproyecto_id', 'porcfact', 'valortotal')
-    for idproyecto, porcfact, valortotal in filas:
-        idproyecto = int(idproyecto)
-        if porcfact is not None:
-            porcentaje[idproyecto] += float(porcfact)
-        elif valortotal is not None and valor[idproyecto] > 0:
-            porcentaje[idproyecto] += float(valortotal) / valor[idproyecto] * 100
-    return {pid: round(porcentaje.get(pid, 0.0), 2) for pid in valor}
+def porcentajes_facturados(ids_proyecto):
+    """{idproyecto: % facturado} = 100 - saldo por facturar, con 2 decimales."""
+    return {pid: round(100 - saldo, 2) for pid, saldo in saldos_por_facturar(ids_proyecto).items()}
 
 
 # ---------------------------------------------------------------------------------------------------------------

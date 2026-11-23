@@ -1301,7 +1301,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         regiones = srv_proyectos.regiones()
         seguimientos = srv_proyectos.textos_seguimiento([pro.idproyecto for pro in proyectos])
         ultimas_fechas_seg = srv_proyectos.ultimas_fechas_seguimiento([pro.idproyecto for pro in proyectos])
-        saldos_por_facturar = srv_proyectos.saldo_por_facturar_listado(proyectos)
+        saldos_por_facturar = srv_proyectos.saldos_por_facturar(pro.idproyecto for pro in proyectos)
 
         for pro in proyectos:
             cot = pro.idcotizacion
@@ -1346,8 +1346,7 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
                 pro.ultimoseg_texto = ''
             pro.valor_texto = formatear_numero_cl(pro.valor)
             pro.valor_raw = pro.valor or 0
-            saldo = saldos_por_facturar.get(str(pro.idproyecto))
-            pro.x_facturar_texto = format(100 if saldo is None else saldo, '.2f')
+            pro.x_facturar_texto = format(saldos_por_facturar.get(int(pro.idproyecto), 100), '.2f')
             pro.conhes_texto = pro.conhes or ''
             pro.coneepp_texto = pro.coneepp or ''
             pro.conotro_texto = pro.conotro or ''

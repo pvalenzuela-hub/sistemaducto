@@ -134,7 +134,7 @@ def _serialize_proyecto_detalle(p):
     cot = p.idcotizacion
     valores = list(CotizacionValor.objects.filter(idcotizacion=cot).order_by('item'))
     resumen = _resumen_items(valores)
-    porcentaje = srv_proyectos.porcentaje_facturado_api([p])[int(p.idproyecto)]
+    porcentaje = srv_proyectos.porcentajes_facturados([p.idproyecto]).get(int(p.idproyecto), 0.0)
     comentarios = srv_proyectos.listar_comentarios_api(p.idproyecto)
     data = _serialize_proyecto(p, comentarios[0]['comentario'] if comentarios else None, porcentaje,
                                _regiones([cot.codregion]))
@@ -222,9 +222,9 @@ def proyectos_list(request):
         return _error(str(e))
 
     comentarios = srv_proyectos.ultimos_comentarios(int(p.idproyecto) for p in proyectos)
-    porcentajes = srv_proyectos.porcentaje_facturado_api(proyectos)
+    porcentajes = srv_proyectos.porcentajes_facturados(p.idproyecto for p in proyectos)
     regiones = _regiones(p.idcotizacion.codregion for p in proyectos)
-    results = [_serialize_proyecto(p, comentarios.get(int(p.idproyecto)), porcentajes[int(p.idproyecto)], regiones)
+    results = [_serialize_proyecto(p, comentarios.get(int(p.idproyecto)), porcentajes.get(int(p.idproyecto), 0.0), regiones)
                for p in proyectos]
     return _json({**meta, 'results': results})
 
