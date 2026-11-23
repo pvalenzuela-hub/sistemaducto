@@ -518,7 +518,7 @@
                         <div class="col-12">
                             <div class="d-flex align-items-center gap-2 mb-2">
                                 <label class="form-label mb-0">Descripción Factura</label>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnArmarDescripcionFactura">Armar</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnArmarDescripcionFactura">Armar detalle</button>
                             </div>
                             <textarea name="descripcionfactura" id="fact_descripcionfactura" class="form-control" rows="3"></textarea>
                         </div>
@@ -934,8 +934,8 @@ $(document).ready(function() {
         const modal = new bootstrap.Modal(document.getElementById('modalFacturacion'));
         $('#fact_numfactura').val('');
         const hoy = new Date();
-        const fechaHoy = hoy.toISOString().slice(0, 10);
-        $('#fact_fechaemision').val('');
+        const fechaHoy = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
+        $('#fact_fechaemision').val(fechaHoy);  // como el escritorio: la factura parte con la fecha de hoy
         $('#uf_origen_factura').prop('checked', true);
         $('#fact_fecha_uf').val('').prop('disabled', true);
         $('#fact_uf_selector').prop('disabled', true).val('');
@@ -950,12 +950,19 @@ $(document).ready(function() {
         $('#fact_valor_uf').val('');
         $('#fact_descripcionfactura').val('');
         modal.show();
+        actualizarValorUF();
     });
 
     $('#btnArmarDescripcionFactura').on('click', async function() {
         // Misma descripción que genera Creación de Facturas del escritorio (GeneraGlosa), armada en el servidor
         const idproyecto = $('#factura_idproyecto').val();
         if (!idproyecto) return;
+        if (!$('#fact_fechaemision').val()) { alert('Ingrese la fecha de la factura.'); return; }
+        if (!(parseFloat($('#fact_porcfact').val()) > 0)) { alert('Ingrese el % a facturar.'); return; }
+        if (!$('#fact_detallefactura').val()) { alert('Seleccione el detalle a facturar.'); return; }
+        const $btn = $(this).prop('disabled', true);
+        try { await ufPendiente; } catch (e) { /* si no hay UF, el servidor la busca por la fecha de la factura */ }
+        $btn.prop('disabled', false);
         const fd = new FormData();
         fd.append('porc', $('#fact_porcfact').val() || '');
         fd.append('valor_uf', $('#fact_valor_uf').val() || '');
@@ -1041,6 +1048,7 @@ $(document).ready(function() {
     $('#fact_porcfact').on('input', recalcularFactura);
 
     let consultaValorUF = 0;
+    let ufPendiente = Promise.resolve();  // búsqueda de UF en curso: "Armar detalle" la espera
 
     function actualizarValorUF() {
         const usarFactura = $('#uf_origen_factura').is(':checked');
@@ -1058,7 +1066,7 @@ $(document).ready(function() {
         const $valorUf = $('#fact_valor_uf');
         $valorUf.val('').attr('placeholder', 'Buscando UF...');
         recalcularFactura();
-        fetch("{% url 'api_valor_uf_por_fecha' %}?fecha=" + encodeURIComponent(fecha), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        ufPendiente = fetch("{% url 'api_valor_uf_por_fecha' %}?fecha=" + encodeURIComponent(fecha), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(async (resp) => {
                 const data = await resp.json().catch(() => ({}));
                 if (consulta !== consultaValorUF) return;

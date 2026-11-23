@@ -153,7 +153,7 @@ def api_valor_uf_por_fecha(request):
     valor = _valor_uf_por_fecha(fecha)
     if valor is None:
         return JsonResponse({'ok': False, 'message': 'No existe UF para esa fecha, ni en el sistema ni en mindicador.cl.'}, status=404)
-    return JsonResponse({'ok': True, 'valoruf': valor})
+    return JsonResponse({'ok': True, 'valoruf': round(float(valor), 2)})  # tValorUF es real: sin decimales de más
 
 
 def _estado_cotizacion_class(nombre):
