@@ -2,16 +2,17 @@ import json
 from datetime import date, datetime
 
 from django.core.paginator import Paginator
-from django.db import connection, transaction
-from django.db.models import F, Func, Q
+from django.db import transaction
+from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from seguimiento.models import Cliente, Factura
+from seguimiento.models import Cliente
+from seguimiento.servicios import facturas as srv_facturas
 
-from . import seg
+
 from .auth import api_key_required
 from .models import ApiCambio
 
@@ -19,8 +20,7 @@ PAGE_SIZE_DEFAULT = 100
 PAGE_SIZE_MAX = 500
 COMENTARIO_MAX = 4000
 
-TIPO_ESTADO_FACTURA = 3  # tEstado.TipoEstado: 1=cotización, 2=proyecto, 3=factura
-ESTADOS_PAGADA = {5, 8}  # Factura Pagada, Pago Verificado: exigen fecha de pago
+ESTADOS_PAGADA = srv_facturas.ESTADOS_PAGADA_API  # Factura Pagada, Pago Verificado: exigen fecha de pago
 
 
 class ParamError(ValueError):
@@ -108,9 +108,7 @@ def _paginate(request, qs):
 
 
 def _estados_factura():
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT CodEstado, Descrip FROM tEstado WHERE TipoEstado = %s', [TIPO_ESTADO_FACTURA])
-        return {cod: descrip.strip() if descrip else descrip for cod, descrip in cursor.fetchall()}
+    return srv_facturas.estados_dict()
 
 
 def _rut(cliente):
@@ -153,7 +151,7 @@ def _serialize_factura(f, estados, comentario):
 def _serialize_factura_detalle(f, estados):
     data = _serialize_factura(f, estados, None)
     contacto = f.idcontacto
-    comentarios = seg.factura.listar(f.idfactura)
+    comentarios = srv_facturas.listar_comentarios_api(f.idfactura)
     data.update({
         'comentario': comentarios[0]['comentario'] if comentarios else None,
         'glosa': f.detalle,
@@ -177,32 +175,34 @@ def _serialize_factura_detalle(f, estados):
 
 
 def _facturas_qs():
-    return Factura.objects.select_related('idcliente', 'idcontacto', 'idproyecto__idcotizacion')
+    return srv_facturas.para_api()
 
 
-def _filtrar_facturas(params, qs):
+def _filtros_facturas(params):
+    """Lee y valida los filtros del listado; la consulta la arma el servicio de facturas."""
+    filtros = {}
     if params.get('desde'):
-        qs = qs.filter(fechaemision__gte=_parse_date(params['desde'], 'desde'))
+        filtros['desde'] = _parse_date(params['desde'], 'desde')
     if params.get('hasta'):
-        qs = qs.filter(fechaemision__lte=_parse_date(params['hasta'], 'hasta'))
+        filtros['hasta'] = _parse_date(params['hasta'], 'hasta')
     if params.get('modificado_desde'):
-        qs = qs.filter(fechaact__gte=_parse_datetime(params['modificado_desde'], 'modificado_desde'))
+        filtros['modificado_desde'] = _parse_datetime(params['modificado_desde'], 'modificado_desde')
     if params.get('idcliente'):
-        qs = qs.filter(idcliente_id=_parse_int(params['idcliente'], 'idcliente'))
+        filtros['idcliente'] = _parse_int(params['idcliente'], 'idcliente')
     if params.get('rut'):
-        qs = qs.filter(idcliente__rut=_parse_rut(params['rut']))
+        filtros['rut'] = _parse_rut(params['rut'])
     if params.get('idproyecto'):
-        qs = qs.filter(idproyecto_id=_parse_int(params['idproyecto'], 'idproyecto'))
+        filtros['idproyecto'] = _parse_int(params['idproyecto'], 'idproyecto')
     if params.get('folio'):
-        qs = qs.filter(numfactura=_parse_int(params['folio'], 'folio'))
+        filtros['folio'] = _parse_int(params['folio'], 'folio')
     if params.get('estado'):
-        qs = qs.filter(estado__in=_parse_int_list(params['estado'], 'estado'))
+        filtros['estados_filtro'] = _parse_int_list(params['estado'], 'estado')
 
     # Monto (total en pesos): rango explícito, o monto ± tolerancia
     if params.get('monto_min'):
-        qs = qs.filter(valortotalpesos__gte=_parse_float(params['monto_min'], 'monto_min'))
+        filtros['monto_min'] = _parse_float(params['monto_min'], 'monto_min')
     if params.get('monto_max'):
-        qs = qs.filter(valortotalpesos__lte=_parse_float(params['monto_max'], 'monto_max'))
+        filtros['monto_max'] = _parse_float(params['monto_max'], 'monto_max')
     if params.get('monto'):
         monto = _parse_float(params['monto'], 'monto')
         tolerancia = _parse_float(params.get('tolerancia', '0'), 'tolerancia')
@@ -210,11 +210,10 @@ def _filtrar_facturas(params, qs):
             tolerancia = max(tolerancia, monto * _parse_float(params['tolerancia_pct'], 'tolerancia_pct') / 100)
         if tolerancia < 0:
             raise ParamError("'tolerancia' no puede ser negativa")
-        # ±0,5 cubre el redondeo a pesos enteros
-        qs = qs.filter(valortotalpesos__gte=monto - tolerancia - 0.5, valortotalpesos__lt=monto + tolerancia + 0.5)
+        filtros['monto'], filtros['tolerancia'] = monto, tolerancia
     elif params.get('tolerancia') or params.get('tolerancia_pct'):
         raise ParamError("'tolerancia' requiere 'monto'")
-    return qs
+    return filtros
 
 
 @csrf_exempt
@@ -222,19 +221,13 @@ def _filtrar_facturas(params, qs):
 @api_key_required()
 def facturas_list(request):
     try:
-        qs = _filtrar_facturas(request.GET, _facturas_qs())
-        if request.GET.get('monto'):
-            # Búsqueda por monto: primero la más cercana al monto buscado
-            monto = float(request.GET['monto'])
-            qs = qs.annotate(dif=Func(F('valortotalpesos') - monto, function='ABS')).order_by('dif', '-fechaemision')
-        else:
-            qs = qs.order_by('-fechaemision', '-idfactura')
+        qs = srv_facturas.buscar(**_filtros_facturas(request.GET))
         facturas, meta = _paginate(request, qs)
     except ParamError as e:
         return _error(str(e))
 
     estados = _estados_factura()
-    comentarios = seg.factura.ultimos([f.idfactura for f in facturas])
+    comentarios = srv_facturas.ultimos_comentarios([f.idfactura for f in facturas])
     results = [_serialize_factura(f, estados, comentarios.get(f.idfactura)) for f in facturas]
     if request.GET.get('monto'):
         monto = float(request.GET['monto'])
@@ -289,34 +282,24 @@ def _actualizar_factura(request, factura):
 
     comentario = _clean_comentario(data['comentario']) if 'comentario' in data else None
 
-    cambios = []
-    if nuevo_estado != factura.estado:
-        cambios.append(f"estado: {estados.get(factura.estado, factura.estado)} -> {estados[nuevo_estado]}")
-    if nueva_fecha_pago != factura.fechapago:
-        cambios.append(f"fecha de pago: {factura.fechapago or '-'} -> {nueva_fecha_pago or '-'}")
-
     usuario = request.api_key.usuario_seg
     with transaction.atomic():
+        cambios = srv_facturas.cambiar_estado_pago(factura, nuevo_estado, nueva_fecha_pago, usuario)
         if cambios:
-            Factura.objects.filter(pk=factura.pk).update(
-                estado=nuevo_estado, fechapago=nueva_fecha_pago, fechaact=timezone.now())
-            seg.factura.agregar(factura.pk, f"[API] {'; '.join(cambios)}", usuario)
             ApiCambio.registrar(request, 'factura', factura.pk, 'editar',
                                 antes={'estado': factura.estado, 'fecha_pago': factura.fechapago},
                                 despues={'estado': nuevo_estado, 'fecha_pago': nueva_fecha_pago})
         if comentario:
-            nuevo = seg.factura.agregar(factura.pk, comentario, usuario)
+            nuevo = srv_facturas.comentar(factura.pk, comentario, usuario)
             ApiCambio.registrar(request, 'factura_comentario', f"{factura.pk}/{nuevo['idreg']}", 'comentar',
                                 despues={'comentario': comentario})
-            if not cambios:
-                Factura.objects.filter(pk=factura.pk).update(fechaact=timezone.now())
 
 
 @csrf_exempt
 @require_http_methods(['GET', 'POST'])
 @api_key_required({'POST': 'comentar'})
 def factura_comentarios(request, idfactura):
-    if not Factura.objects.filter(pk=idfactura).exists():
+    if not srv_facturas.existe(idfactura):
         return _error('Factura no encontrada', 404)
 
     if request.method == 'POST':
@@ -325,20 +308,19 @@ def factura_comentarios(request, idfactura):
         except ParamError as e:
             return _error(str(e))
         with transaction.atomic():
-            nuevo = seg.factura.agregar(idfactura, comentario, request.api_key.usuario_seg)
-            Factura.objects.filter(pk=idfactura).update(fechaact=timezone.now())
+            nuevo = srv_facturas.comentar(idfactura, comentario, request.api_key.usuario_seg)
             ApiCambio.registrar(request, 'factura_comentario', f"{idfactura}/{nuevo['idreg']}", 'comentar',
                                 despues={'comentario': comentario})
         return _json(nuevo, status=201)
 
-    return _json(seg.factura.listar(idfactura))
+    return _json(srv_facturas.listar_comentarios_api(idfactura))
 
 
 @csrf_exempt
 @require_http_methods(['GET', 'PATCH'])
 @api_key_required({'PATCH': 'comentar'})
 def factura_comentario_detail(request, idfactura, idreg):
-    actual = seg.factura.obtener(idfactura, idreg)
+    actual = srv_facturas.obtener_comentario(idfactura, idreg)
     if actual is None:
         return _error('Comentario no encontrado', 404)
 
@@ -351,8 +333,7 @@ def factura_comentario_detail(request, idfactura, idreg):
             return _error(str(e))
         with transaction.atomic():
             anterior = actual['comentario']
-            actual = seg.factura.editar(idfactura, idreg, comentario)
-            Factura.objects.filter(pk=idfactura).update(fechaact=timezone.now())
+            actual = srv_facturas.reemplazar_comentario(idfactura, idreg, comentario)
             ApiCambio.registrar(request, 'factura_comentario', f"{idfactura}/{idreg}", 'editar_comentario',
                                 antes={'comentario': anterior}, despues={'comentario': comentario})
 

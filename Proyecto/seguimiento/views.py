@@ -1393,9 +1393,8 @@ def _url_seguimiento_con_filtros(filtros):
 
 
 def _estados_factura_catalogo():
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT CodEstado, Descrip FROM tEstado WHERE TipoEstado = 3 ORDER BY CodEstado')
-        return [(cod, (descrip or '').strip()) for cod, descrip in cursor.fetchall()]
+    from .servicios import facturas as srv_facturas
+    return srv_facturas.estados()
 
 
 def puede_facturar(user):
@@ -1814,7 +1813,8 @@ def crear_factura_proyecto(request):
             return None
 
     # Mismas reglas y mismo procedimiento (GR_CreaFactura) que Creación de Facturas del sistema de escritorio
-    from .views_facturas import DETALLES_FACTURA, _calculo_factura
+    from .servicios import facturas as srv_facturas
+    from .servicios.facturas import DETALLES_FACTURA
 
     try:
         numfactura_int = int(str(request.POST.get('numfactura') or '').strip())
@@ -1822,9 +1822,10 @@ def crear_factura_proyecto(request):
         numfactura_int = 0
     if numfactura_int <= 0:
         return _error('N° de Factura no válido.')
-    existente = Factura.objects.filter(numfactura=numfactura_int).first()
-    if existente:
-        return _error(f'Factura N° {numfactura_int} existe por un valor ${formatear_numero_cl(existente.valortotalpesos)}.')
+    try:
+        srv_facturas.validar_grabacion(proyecto, numfactura_int)
+    except srv_facturas.ErrorValidacion as e:
+        return _error(str(e))
     if not proyecto.idcliente_id:
         return _error('No es posible crear la factura: falta la identificación del cliente.')
 
@@ -1858,30 +1859,27 @@ def crear_factura_proyecto(request):
         estado_factura = int(request.POST.get('estado_factura') or 0)
     except ValueError:
         estado_factura = -1
-    if estado_factura not in dict(_estados_factura_catalogo()):
+    if estado_factura not in srv_facturas.estados_dict():
         return _error('Estado de la factura no válido.')
 
-    num_hes = (request.POST.get('numhes_eepp') or '').strip()[:50]
+    num_hes = (request.POST.get('numhes_eepp') or '').strip()[:srv_facturas.MAX_NUM_HES]
     fecha_hes = _fecha_form(request.POST.get('fechahes_eepp'))
     try:
         vencimiento = int(request.POST.get('vencimiento') or 30)
     except ValueError:
         vencimiento = 30
 
-    monto, valor_uf, total_pesos = _calculo_factura(proyecto, porc, float(valor_uf))
-    with transaction.atomic(), connection.cursor() as cursor:
-        cursor.execute(
-            'SET NOCOUNT ON; EXEC GR_CreaFactura @IdFactura=%s, @NumFactura=%s, @FechaEmision=%s, @IdCliente=%s, '
-            '@IdProyecto=%s, @NumHES_EEPP=%s, @FechaHES_EEPP=%s, @ValorTotal=%s, @ValorUF=%s, @ValorTotalPesos=%s, '
-            '@PorcFact=%s, @Detalle=%s, @Moneda=%s, @MontoFacturarMonOrig=%s, @NuevoEstado=%s, @Vencimiento=%s',
-            [0, numfactura_int, fecha_emision, proyecto.idcliente_id, proyecto.pk, num_hes, fecha_hes,
-             float(proyecto.valor or 0), round(valor_uf, 2), total_pesos, porc, detalle[:100],
-             (proyecto.moneda or '')[:2], monto, estado_factura or None, vencimiento])
-        # Datos que el formulario web ya guardaba y el procedimiento no recibe
-        Factura.objects.filter(numfactura=numfactura_int, idproyecto=proyecto).update(
-            idcontacto=proyecto.idcontactofacturacion_id)
-        Factura.objects.filter(numfactura=numfactura_int, idproyecto=proyecto, fecharegistro__isnull=True).update(
-            fecharegistro=_ahora_santiago_naive())
+    try:
+        with transaction.atomic():
+            srv_facturas.grabar(
+                proyecto, numfactura=numfactura_int, fecha_emision=fecha_emision, idcliente=proyecto.idcliente_id,
+                porc=porc, valor_uf=float(valor_uf), detalle=detalle[:srv_facturas.MAX_DETALLE], num_hes=num_hes,
+                fecha_hes=fecha_hes, nuevo_estado=estado_factura or None, vencimiento=vencimiento)
+            # Datos que el formulario web ya guardaba y el procedimiento no recibe
+            srv_facturas.completar_datos_web(numfactura_int, proyecto, proyecto.idcontactofacturacion_id,
+                                             _ahora_santiago_naive())
+    except srv_facturas.ErrorValidacion as e:
+        return _error(str(e))
 
     if es_ajax:
         return JsonResponse({'ok': True, 'message': f'Factura creada: {numfactura_int}', 'numfactura': str(numfactura_int)})
