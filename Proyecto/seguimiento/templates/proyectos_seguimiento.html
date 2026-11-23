@@ -768,7 +768,8 @@ $(document).ready(function() {
         $('#fact_idcontacto_hidden').val(btn.data('contacto-fact') || '');
         const estadoproyectoId = parseInt(btn.data('estadoproyecto-id') || 0, 10);
         const factCompleta = !!btn.data('idcliente-fact') && !!btn.data('numconf') && !!btn.data('medioconf') && !!btn.data('fechaconf') && !!btn.data('conhes') && !!btn.data('coneepp') && !!btn.data('conotro');
-        $('#btnAbrirCrearFactura').prop('hidden', !(factCompleta && (estadoproyectoId === 1 || estadoproyectoId === 2)));
+        // Como en el escritorio: cualquier proyecto con sus datos de facturación completos, en cualquier estado
+        $('#btnAbrirCrearFactura').prop('hidden', !factCompleta);
         $('#btnAbrirCrearFactura').data('valor-raw', btn.data('valorraw') || 0);
     });
 
