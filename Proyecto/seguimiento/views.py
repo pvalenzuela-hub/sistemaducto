@@ -38,6 +38,7 @@ from weasyprint import HTML
 from django.db import DatabaseError
 from .servicios import proyectos as srv_proyectos
 from .servicios import uf as srv_uf
+from .servicios import cotizaciones as srv_cotizaciones
 
 
 
@@ -69,12 +70,7 @@ CATALOGO_COTIZACIONES = [
     },
 ]
 
-ESTADOS_COTIZACION = {
-    0: 'Borrador',
-    1: 'Activa',
-    2: 'Cerrada',
-    3: 'Anulada',
-}
+ESTADOS_COTIZACION = srv_cotizaciones.ESTADOS_COTIZACION
 
 
 def _cotizacion_estado_visual(cotizacion):
@@ -197,25 +193,6 @@ def cotizaciones_home(request):
 
 @login_required
 def cotizaciones_busqueda(request):
-    proyecto_principal = Proyecto.objects.filter(idcotizacion=OuterRef('pk')).order_by('idproyecto')
-    ultimo_seguimiento = CotizacionSeg.objects.filter(idcotizacion=OuterRef('pk')).order_by('-idreg')
-    proyecto_relacionado = Proyecto.objects.filter(idcotizacion=OuterRef('pk')).order_by('idproyecto')
-
-    qs = (
-        Cotizacion.objects
-        .select_related('idcliente', 'idcontacto', 'estadocotizacion')
-        .annotate(
-            tiene_proyecto=Exists(Proyecto.objects.filter(idcotizacion=OuterRef('pk'))),
-            proyecto_id=Subquery(proyecto_principal.values('idproyecto')[:1]),
-            num_proyecto=Subquery(proyecto_relacionado.values('idproyecto')[:1]),
-            valor_proyecto=Subquery(proyecto_relacionado.values('valor')[:1]),
-            fpago_proyecto=Subquery(proyecto_relacionado.values('fpago')[:1]),
-            fecha_ultimo_seg=Subquery(ultimo_seguimiento.values('fecharevision')[:1]),
-            comentario_ultimo_seg=Subquery(ultimo_seguimiento.values('comentario')[:1]),
-        )
-        .order_by('-numcotizacion', '-numcorr', '-fecha')
-    )
-
     numero = (request.GET.get('numero') or '').strip()
     proyecto = (request.GET.get('proyecto') or '').strip()
     mandante = (request.GET.get('mandante') or '').strip()
@@ -231,37 +208,10 @@ def cotizaciones_busqueda(request):
         fecha_hasta = ''
 
     clear_params = {'fecha_desde': fecha_desde}
-
-    if numero:
-        if numero.isdigit():
-            numero_int = int(numero)
-            qs = qs.filter(
-                Q(idcotizacion=numero_int) |
-                Q(numcotizacion=numero_int) |
-                Q(numcorr=numero_int) |
-                Q(numcotizacion__icontains=numero) |
-                Q(idcotizacion__icontains=numero)
-            )
-        else:
-            qs = qs.annotate(
-                numcotizacion_texto=Cast('numcotizacion', CharField()),
-                idcotizacion_texto=Cast('idcotizacion', CharField()),
-            ).filter(
-                Q(numcorr__icontains=numero) |
-                Q(numcotizacion_texto__icontains=numero) |
-                Q(idcotizacion_texto__icontains=numero)
-            )
-    if proyecto:
-        qs = qs.filter(nombreproyecto__icontains=proyecto)
-    if mandante:
-        qs = qs.filter(idcliente__razonsocial__icontains=mandante)
-    if fecha_desde:
-        qs = qs.filter(fecha__gte=fecha_desde)
-    if fecha_hasta:
-        qs = qs.filter(fecha__lte=fecha_hasta)
+    qs = srv_cotizaciones.buscar(numero, proyecto, mandante, fecha_desde, fecha_hasta)
 
     cotizaciones = []
-    estado_proyecto_protegido = 'Aprobada, Es Proyecto'
+    estado_proyecto_protegido = srv_cotizaciones.ESTADO_APROBADA
     for cotizacion in qs:
         cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
         cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
@@ -307,54 +257,20 @@ def _formatear_miles(valor):
 
 @login_required
 def cotizaciones_seguimiento(request):
-    ultimo_seguimiento = CotizacionSeg.objects.filter(idcotizacion=OuterRef('pk')).order_by('-idreg')
-    proyecto_relacionado = Proyecto.objects.filter(idcotizacion=OuterRef('pk')).order_by('idproyecto')
-    qs = (
-        Cotizacion.objects
-        .select_related('idcliente', 'idcontacto', 'estadocotizacion')
-        .annotate(tiene_proyecto=Exists(Proyecto.objects.filter(idcotizacion=OuterRef('pk'))))
-        .annotate(
-            valor_opcional=Coalesce(
-                Sum('cotizacionvalor__valor', filter=Q(cotizacionvalor__opcional='S')),
-                Value(0),
-                output_field=DecimalField(max_digits=18, decimal_places=2),
-            ),
-            num_proyecto=Subquery(proyecto_relacionado.values('idproyecto')[:1]),
-            valor_proyecto=Subquery(proyecto_relacionado.values('valor')[:1]),
-            fpago_proyecto=Subquery(proyecto_relacionado.values('fpago')[:1]),
-            fecha_ultimo_seg=Subquery(ultimo_seguimiento.values('fecharevision')[:1]),
-            comentario_ultimo_seg=Subquery(ultimo_seguimiento.values('comentario')[:1]),
-        )
-        .order_by('-fecha', '-numcotizacion', '-numcorr')
-    )
-
     numero = (request.GET.get('numero') or '').strip()
     proyecto = (request.GET.get('proyecto') or '').strip()
     mandante = (request.GET.get('mandante') or '').strip()
     fecha_desde = (request.GET.get('fecha_desde') or '').strip()
     fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
     # Estados con selección múltiple. Al abrir (sin filtros) se muestran las "En Espera", como antes.
-    estado_espera = Estadocotizacion.objects.filter(nombre__iexact='En Espera').values_list('pk', flat=True).first()
+    estado_espera = srv_cotizaciones.id_estado_en_espera()
     filtrado = 'filtrado' in request.GET or 'estado' in request.GET
     estados_sel = sorted({int(e) for e in request.GET.getlist('estado') if e.strip().isdigit()})
     if not filtrado and not any([numero, proyecto, mandante, fecha_desde, fecha_hasta]) and estado_espera:
         estados_sel = [estado_espera]
 
     usar_fechas = not any([numero, proyecto, mandante, estados_sel])
-
-    if numero:
-        qs = qs.filter(Q(numcotizacion__icontains=numero) | Q(idcotizacion__icontains=numero))
-    if proyecto:
-        qs = qs.filter(nombreproyecto__icontains=proyecto)
-    if mandante:
-        qs = qs.filter(idcliente__razonsocial__icontains=mandante)
-    if estados_sel:
-        qs = qs.filter(estadocotizacion_id__in=estados_sel)
-    if usar_fechas:
-        if fecha_desde:
-            qs = qs.filter(fecha__gte=fecha_desde)
-        if fecha_hasta:
-            qs = qs.filter(fecha__lte=fecha_hasta)
+    qs = srv_cotizaciones.buscar_seguimiento(numero, proyecto, mandante, estados_sel, fecha_desde, fecha_hasta, usar_fechas)
 
     cotizaciones = []
     for cotizacion in qs:
@@ -378,7 +294,7 @@ def cotizaciones_seguimiento(request):
         cotizacion.num_proyecto_texto = str(cotizacion.num_proyecto) if cotizacion.num_proyecto else ''
         cotizacion.valor_proyecto_texto = _formatear_miles(cotizacion.valor_proyecto)
         cotizacion.es_activa_texto = 'SI' if cotizacion.esactiva else 'NO'
-        cotizacion.puede_editar = cotizacion.estadocotizacion_texto == 'En Espera'
+        cotizacion.puede_editar = cotizacion.estadocotizacion_texto == srv_cotizaciones.ESTADO_EN_ESPERA
         cotizaciones.append(cotizacion)
 
     return render(request, 'cotizaciones/seguimiento_listado.html', {
@@ -397,7 +313,7 @@ def cotizaciones_seguimiento(request):
         'usar_fechas': usar_fechas,
         'estados_marcados': estados_sel,
         'estados_defecto': [estado_espera] if estado_espera else [],
-        'estados': list(Estadocotizacion.objects.order_by('orden', 'nombre')),
+        'estados': srv_cotizaciones.estados(),
         'limpiar_url': request.path,
     })
 
@@ -405,7 +321,7 @@ def cotizaciones_seguimiento(request):
 @login_required
 def cotizacion_seguimiento_historial(request, pk):
     seguimientos = []
-    for seg in CotizacionSeg.objects.select_related('usuario').filter(idcotizacion_id=pk).order_by('-fecharevision', '-idreg'):
+    for seg in srv_cotizaciones.historial(pk):
         usuario = seg.usuario
         nombre_usuario = ''
         if usuario:
@@ -429,39 +345,19 @@ def cotizaciones_ingreso(request):
     items_guardados = []
 
     if copy_from.isdigit():
-        cotizacion_origen = get_object_or_404(Cotizacion.objects.select_related('estadocotizacion', 'idcliente', 'idcontacto'), pk=int(copy_from))
-        notas_seleccionadas = list(
-            CotizacionNota.objects.filter(idcotizacion=cotizacion_origen).values_list('idnota_id', flat=True)
-        )
-        formapago_items = list(
-            CotizacionFpago.objects.filter(idcotizacion=cotizacion_origen).values('linea', 'concepto').order_by('linea')
-        )
-        items_guardados = list(
-            CotizacionValor.objects.filter(idcotizacion=cotizacion_origen).values('item', 'glosa', 'valor', 'opcional').order_by('item')
-        )
+        cotizacion_origen = get_object_or_404(srv_cotizaciones.con_relaciones(), pk=int(copy_from))
+        datos = srv_cotizaciones.datos_para_formulario(cotizacion_origen)
+        notas_seleccionadas = datos['notas_seleccionadas']
+        formapago_items = datos['formapago_items']
+        items_guardados = datos['items_guardados']
 
     if request.method == 'POST':
         form = CotizacionForm(request.POST)
         if form.is_valid():
-            cotizacion = form.save(commit=False)
-            cotizacion.fecha = form.cleaned_data.get('fecha') or timezone.localdate()
-            estado_espera = Estadocotizacion.objects.filter(pk=1).first() or Estadocotizacion.objects.filter(nombre__iexact='En Espera').first()
-            cotizacion.estadocotizacion = estado_espera
-            next_num = (Cotizacion.objects.aggregate(mx=Max('numcotizacion'))['mx'] or 0) + 1
-            cotizacion.numcotizacion = cotizacion.numcotizacion or next_num
-            cotizacion.numcorr = 0
-            cotizacion.estado = 0
-            cotizacion.esactiva = True
-            cotizacion.idusuario = (request.user.username or '')[:15]
-            cotizacion.origen = 'WEB'
-            ahora_local = _ahora_santiago_naive()
-            cotizacion.fecharegistro = ahora_local
-            cotizacion.fechaact = ahora_local
-            cotizacion.save()
-            _guardar_items_cotizacion(cotizacion, request.POST.get('items_json', ''))
-            _guardar_formapago_cotizacion(cotizacion, request.POST.get('formapago_json', ''))
-            _guardar_notas_cotizacion(cotizacion, request.POST.get('notas_json', ''))
-            _actualizar_valortotal_cotizacion(cotizacion)
+            cotizacion = srv_cotizaciones.crear(
+                form.save(commit=False), request.user.username, fecha=form.cleaned_data.get('fecha'),
+                items_json=request.POST.get('items_json', ''), formapago_json=request.POST.get('formapago_json', ''),
+                notas_json=request.POST.get('notas_json', ''))
             messages.success(request, 'Cotización creada correctamente.')
             return redirect('cotizacion_detalle', pk=cotizacion.pk)
     else:
@@ -482,7 +378,7 @@ def cotizaciones_ingreso(request):
             })
         form = CotizacionForm(initial=initial)
 
-    formapago_catalogo = list(TFpago.objects.filter(regionrm=0).order_by('idfpago').values('concepto'))
+    formapago_catalogo = list(srv_cotizaciones.formas_pago_catalogo().values('concepto'))
 
     return render(request, 'cotizaciones/form.html', {
         'titulo': 'Ingreso de Cotizaciones',
@@ -503,12 +399,10 @@ def cotizaciones_ingreso(request):
 
 @login_required
 def cotizacion_visor(request, pk):
-    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto', 'estadocotizacion'), pk=pk)
-    proyectos = list(Proyecto.objects.filter(idcotizacion=cotizacion).order_by('idproyecto'))
-    valores = list(CotizacionValor.objects.filter(idcotizacion=cotizacion).order_by('item'))
-    formas_pago = list(CotizacionFpago.objects.filter(idcotizacion=cotizacion).order_by('linea'))
-    notas = list(CotizacionNota.objects.select_related('idnota').filter(idcotizacion=cotizacion).order_by('idcotizacionnota'))
-    seguimientos = list(CotizacionSeg.objects.filter(idcotizacion=cotizacion).order_by('-idreg'))
+    cotizacion = get_object_or_404(srv_cotizaciones.con_relaciones(), pk=pk)
+    tablas = srv_cotizaciones.detalle(cotizacion)
+    proyectos, valores, formas_pago, notas = tablas['proyectos'], tablas['valores'], tablas['formas_pago'], tablas['notas']
+    seguimientos = srv_cotizaciones.seguimientos(cotizacion)
 
     cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
     cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
@@ -519,16 +413,12 @@ def cotizacion_visor(request, pk):
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
     cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
     cotizacion.proyecto_texto = cotizacion.nombreproyecto or ''
-    cotizacion.region_texto = ''
-    if cotizacion.codregion:
-        region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
-        cotizacion.region_texto = region.descrip if region else ''
+    cotizacion.region_texto = srv_cotizaciones.nombre_region(cotizacion.codregion)
     cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
     cotizacion.cotizacion_pdf_url = request.build_absolute_uri(reverse('cotizacion_reporte_pdf', args=[cotizacion.pk]))
     cotizacion.mt2_texto = cotizacion.mt2 if cotizacion.mt2 is not None else 'No informado'
-    cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
-    cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
-    cotizacion.puede_editar = (cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else '') == 'En Espera'
+    cotizacion.total_proyecto, cotizacion.total_con_opcional = srv_cotizaciones.totales(valores)
+    cotizacion.puede_editar = srv_cotizaciones.puede_editar(cotizacion)
 
     return render(request, 'cotizaciones/detalle.html', {
         'titulo': f'Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',
@@ -548,7 +438,7 @@ def cotizacion_visor(request, pk):
 @login_required
 @transaction.atomic
 def cotizacion_seguimiento(request, pk):
-    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto', 'estadocotizacion'), pk=pk)
+    cotizacion = get_object_or_404(srv_cotizaciones.con_relaciones(), pk=pk)
     return_to = (request.GET.get('return_to') or request.POST.get('return_to') or '').strip()
     is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
     if request.method == 'POST':
@@ -558,46 +448,24 @@ def cotizacion_seguimiento(request, pk):
             es_recordatorio = form.cleaned_data.get('es_recordatorio', False)
             cambia_estado = form.cleaned_data.get('cambia_estado', False)
             nuevo_estado = form.cleaned_data.get('nuevo_estado')
-            nuevo_estado_nombre = nuevo_estado.nombre if nuevo_estado else None
             quien_adjudica = (form.cleaned_data.get('quien_adjudica') or '').strip()
             email_adjudicacion = (form.cleaned_data.get('email_adjudicacion') or '').strip()
             fecha_adjudicacion = form.cleaned_data.get('fecha_adjudicacion')
             fecha_recordatorio = form.cleaned_data.get('fecha_recordatorio')
 
-            if not comentario:
-                form.add_error('comentario', 'Debe ingresar comentario del seguimiento.')
-            if cambia_estado and nuevo_estado_nombre == 'Aprobada, Es Proyecto':
-                if not fecha_adjudicacion:
-                    form.add_error('fecha_adjudicacion', 'Debe ingresar fecha de adjudicación.')
-                if not quien_adjudica:
-                    form.add_error('quien_adjudica', 'Debe ingresar quién adjudica.')
-                if not email_adjudicacion:
-                    form.add_error('email_adjudicacion', 'Debe ingresar eMail quien adjudica.')
-            if es_recordatorio and fecha_recordatorio and fecha_recordatorio <= timezone.localdate():
-                form.add_error('fecha_recordatorio', 'Ingrese fecha de recordatorio mayor a hoy.')
+            errores = srv_cotizaciones.validar_seguimiento(
+                comentario=comentario, cambia_estado=cambia_estado, nuevo_estado=nuevo_estado,
+                es_recordatorio=es_recordatorio, fecha_recordatorio=fecha_recordatorio, quien_adjudica=quien_adjudica,
+                email_adjudicacion=email_adjudicacion, fecha_adjudicacion=fecha_adjudicacion)
+            for campo, mensaje in errores.items():
+                form.add_error(campo, mensaje)
 
             if not form.errors:
-                ultimo_idreg = CotizacionSeg.objects.filter(idcotizacion=cotizacion).aggregate(mx=Max('idreg'))['mx'] or 0
-                seguimiento = CotizacionSeg(
-                    idcotizacion=cotizacion,
-                    idreg=ultimo_idreg + 1,
-                    usuario=request.user,
-                    fecharevision=_ahora_santiago_naive(),
-                    comentario=comentario,
-                    esrecordatorio=es_recordatorio,
-                    fecharecordatorio=fecha_recordatorio,
-                )
-                seguimiento.save(force_insert=True)
-
-                if cambia_estado:
-                    cotizacion.estadocotizacion = nuevo_estado
-                    if nuevo_estado_nombre == 'Aprobada, Es Proyecto':
-                        cotizacion.estado = 1
-                        srv_proyectos.crear_desde_cotizacion(
-                            cotizacion, quien_adjudica=quien_adjudica, email_adjudicacion=email_adjudicacion,
-                            fecha_adjudicacion=fecha_adjudicacion)
-                    cotizacion.fechaact = _ahora_santiago_naive()
-                    cotizacion.save(update_fields=['estadocotizacion', 'estado', 'fechaact'])
+                srv_cotizaciones.registrar_seguimiento(
+                    cotizacion, request.user, comentario=comentario, es_recordatorio=es_recordatorio,
+                    fecha_recordatorio=fecha_recordatorio, nuevo_estado=nuevo_estado if cambia_estado else None,
+                    quien_adjudica=quien_adjudica, email_adjudicacion=email_adjudicacion,
+                    fecha_adjudicacion=fecha_adjudicacion)
                 messages.success(request, 'Seguimiento registrado correctamente.')
                 if is_ajax:
                     return JsonResponse({'ok': True})
@@ -629,33 +497,23 @@ def cotizacion_seguimiento(request, pk):
 
 @login_required
 def cotizacion_editar(request, pk):
-    cotizacion = get_object_or_404(Cotizacion.objects.select_related('estadocotizacion'), pk=pk)
+    cotizacion = get_object_or_404(srv_cotizaciones.con_relaciones(), pk=pk)
     return_to = (request.GET.get('return_to') or request.POST.get('return_to') or '').strip()
     volver_url_name = 'cotizaciones_seguimiento' if return_to == 'seguimiento' else 'cotizacion_detalle'
-    if (cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else '') != 'En Espera':
+    if not srv_cotizaciones.puede_editar(cotizacion):
         messages.info(request, 'Esta cotización no se puede editar en su estado actual.')
         return redirect('cotizacion_visor', pk=cotizacion.pk)
-    notas_seleccionadas = list(
-        CotizacionNota.objects.filter(idcotizacion=cotizacion).values_list('idnota_id', flat=True)
-    )
-    formapago_items = list(
-        CotizacionFpago.objects.filter(idcotizacion=cotizacion).values('linea', 'concepto').order_by('linea')
-    )
-    items_guardados = list(
-        CotizacionValor.objects.filter(idcotizacion=cotizacion).values('item', 'glosa', 'valor', 'opcional').order_by('item')
-    )
+    datos = srv_cotizaciones.datos_para_formulario(cotizacion)
+    notas_seleccionadas = datos['notas_seleccionadas']
+    formapago_items = datos['formapago_items']
+    items_guardados = datos['items_guardados']
     if request.method == 'POST':
         form = CotizacionForm(request.POST, instance=cotizacion)
         if form.is_valid():
-            cotizacion = form.save(commit=False)
-            cotizacion.fecha = form.cleaned_data.get('fecha') or cotizacion.fecha
-            cotizacion.fechaact = _ahora_santiago_naive()
-            cotizacion.origen = cotizacion.origen or 'WEB'
-            cotizacion.save()
-            _guardar_items_cotizacion(cotizacion, request.POST.get('items_json', ''))
-            _guardar_formapago_cotizacion(cotizacion, request.POST.get('formapago_json', ''))
-            _guardar_notas_cotizacion(cotizacion, request.POST.get('notas_json', ''))
-            _actualizar_valortotal_cotizacion(cotizacion)
+            cotizacion = srv_cotizaciones.modificar(
+                form.save(commit=False), fecha=form.cleaned_data.get('fecha'),
+                items_json=request.POST.get('items_json', ''), formapago_json=request.POST.get('formapago_json', ''),
+                notas_json=request.POST.get('notas_json', ''))
             messages.success(request, 'Cotización actualizada correctamente.')
             if volver_url_name == 'cotizaciones_seguimiento':
                 return redirect(volver_url_name)
@@ -663,7 +521,7 @@ def cotizacion_editar(request, pk):
     else:
         form = CotizacionForm(instance=cotizacion, initial={'fecha': cotizacion.fecha})
 
-    formapago_catalogo = list(TFpago.objects.filter(regionrm=0).order_by('idfpago').values('concepto'))
+    formapago_catalogo = list(srv_cotizaciones.formas_pago_catalogo().values('concepto'))
 
     return render(request, 'cotizaciones/form.html', {
         'titulo': 'Editar Cotización',
@@ -688,36 +546,8 @@ def cotizacion_editar(request, pk):
 @login_required
 @transaction.atomic
 def cotizacion_versionar(request, pk):
-    base = get_object_or_404(Cotizacion, pk=pk)
-
-    nuevo_corr = (base.numcorr or 0) + 1
-
-    nueva = Cotizacion(
-        numcotizacion=base.numcotizacion,
-        numcorr=nuevo_corr,
-        fecha=timezone.localdate(),
-        idcliente=base.idcliente,
-        idcontacto=base.idcontacto,
-        nombreproyecto=base.nombreproyecto,
-        dirproyecto=base.dirproyecto,
-        codregion=base.codregion,
-        destino=base.destino,
-        pisos=base.pisos,
-        edificios=base.edificios,
-        valortotal=base.valortotal,
-        moneda=base.moneda,
-        estado=0,
-        estadocotizacion=Estadocotizacion.objects.filter(pk=1).first() or Estadocotizacion.objects.filter(nombre__iexact='En Espera').first(),
-        idusuario=(request.user.username or '')[:15],
-        origen='WEB',
-        fechaact=_ahora_santiago_naive(),
-        esactiva=True,
-        mt2=base.mt2,
-        fecharegistro=_ahora_santiago_naive(),
-    )
-    nueva.save()
-    _copiar_detalle_cotizacion(base, nueva)
-    _actualizar_valortotal_cotizacion(nueva)
+    base = get_object_or_404(srv_cotizaciones.todas(), pk=pk)
+    nueva = srv_cotizaciones.versionar(base, request.user.username)
 
     messages.success(request, 'Nueva versión creada correctamente.')
     return redirect('cotizacion_detalle', pk=nueva.pk)
@@ -725,13 +555,9 @@ def cotizacion_versionar(request, pk):
 
 @login_required
 def cotizacion_detalle(request, pk):
-    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto', 'estadocotizacion'), pk=pk)
-    proyectos = list(Proyecto.objects.filter(idcotizacion=cotizacion).order_by('idproyecto'))
-    valores = list(CotizacionValor.objects.filter(idcotizacion=cotizacion).order_by('item'))
-    formas_pago = list(CotizacionFpago.objects.filter(idcotizacion=cotizacion).order_by('linea'))
-    notas = list(
-        CotizacionNota.objects.select_related('idnota').filter(idcotizacion=cotizacion).order_by('idcotizacionnota')
-    )
+    cotizacion = get_object_or_404(srv_cotizaciones.con_relaciones(), pk=pk)
+    tablas = srv_cotizaciones.detalle(cotizacion)
+    proyectos, valores, formas_pago, notas = tablas['proyectos'], tablas['valores'], tablas['formas_pago'], tablas['notas']
 
     cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
     cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
@@ -741,16 +567,12 @@ def cotizacion_detalle(request, pk):
     cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
     cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
-    cotizacion.region_texto = ''
-    if cotizacion.codregion:
-        region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
-        cotizacion.region_texto = region.descrip if region else ''
+    cotizacion.region_texto = srv_cotizaciones.nombre_region(cotizacion.codregion)
     cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
     cotizacion.cotizacion_pdf_url = request.build_absolute_uri(reverse('cotizacion_reporte_pdf', args=[cotizacion.pk]))
     cotizacion.mt2_texto = cotizacion.mt2 if cotizacion.mt2 is not None else 'No informado'
-    cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
-    cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
-    cotizacion.puede_editar = (cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else '') == 'En Espera'
+    cotizacion.total_proyecto, cotizacion.total_con_opcional = srv_cotizaciones.totales(valores)
+    cotizacion.puede_editar = srv_cotizaciones.puede_editar(cotizacion)
 
     return render(request, 'cotizaciones/detalle.html', {
         'titulo': f'Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',
@@ -776,11 +598,9 @@ def _render_pdf_con_weasyprint(html, base_url):
 
 @login_required
 def cotizacion_reporte_pdf(request, pk):
-    cotizacion = get_object_or_404(Cotizacion.objects.select_related('idcliente', 'idcontacto'), pk=pk)
-    proyectos = list(Proyecto.objects.filter(idcotizacion=cotizacion).order_by('idproyecto'))
-    valores = list(CotizacionValor.objects.filter(idcotizacion=cotizacion).order_by('item'))
-    formas_pago = list(CotizacionFpago.objects.filter(idcotizacion=cotizacion).order_by('linea'))
-    notas = list(CotizacionNota.objects.select_related('idnota').filter(idcotizacion=cotizacion).order_by('idcotizacionnota'))
+    cotizacion = get_object_or_404(srv_cotizaciones.con_relaciones(), pk=pk)
+    tablas = srv_cotizaciones.detalle(cotizacion)
+    proyectos, valores, formas_pago, notas = tablas['proyectos'], tablas['valores'], tablas['formas_pago'], tablas['notas']
 
     cotizacion.estado_texto = ESTADOS_COTIZACION.get(cotizacion.estado, 'Sin estado')
     cotizacion.estadocotizacion_texto = cotizacion.estadocotizacion.nombre if cotizacion.estadocotizacion_id else 'Sin estado'
@@ -790,14 +610,10 @@ def cotizacion_reporte_pdf(request, pk):
     cotizacion.contacto_texto = cotizacion.idcontacto.nombrecontacto if cotizacion.idcontacto else ''
     cotizacion.telefono_contacto = cotizacion.idcontacto.telefono if cotizacion.idcontacto else ''
     cotizacion.email_contacto = cotizacion.idcontacto.email if cotizacion.idcontacto else ''
-    cotizacion.region_texto = ''
-    if cotizacion.codregion:
-        region = Tregion.objects.filter(codregion=cotizacion.codregion).only('descrip').first()
-        cotizacion.region_texto = region.descrip if region else ''
+    cotizacion.region_texto = srv_cotizaciones.nombre_region(cotizacion.codregion)
     cotizacion.estado_visual = _cotizacion_estado_visual(cotizacion)
     cotizacion.mt2_texto = cotizacion.mt2 if cotizacion.mt2 is not None else 'No informado'
-    cotizacion.total_proyecto = sum(float(v.valor or 0) for v in valores if (v.opcional or 'N') != 'S')
-    cotizacion.total_con_opcional = sum(float(v.valor or 0) for v in valores)
+    cotizacion.total_proyecto, cotizacion.total_con_opcional = srv_cotizaciones.totales(valores)
 
     context = {
         'titulo': f'Reporte Cotización {cotizacion.numcotizacion or cotizacion.idcotizacion}',
@@ -826,9 +642,6 @@ def cotizacion_reporte_pdf(request, pk):
 @require_GET
 def api_cotizaciones_mandantes(request):
     term = (request.GET.get('term') or '').strip()
-    qs = Cliente.objects.order_by('razonsocial')
-    if term:
-        qs = qs.filter(razonsocial__icontains=term)
     data = [
         {
             'id': c.idcliente,
@@ -836,7 +649,7 @@ def api_cotizaciones_mandantes(request):
             'direccion': c.direccion or '',
             'telefono': c.telefono or '',
         }
-        for c in qs[:20]
+        for c in srv_cotizaciones.buscar_mandantes(term)
     ]
     return JsonResponse({'results': data})
 
@@ -844,7 +657,7 @@ def api_cotizaciones_mandantes(request):
 @login_required
 @require_GET
 def api_cotizaciones_mandante_detalle(request, pk):
-    cliente = Cliente.objects.filter(idcliente=pk).only('idcliente', 'razonsocial', 'direccion', 'telefono').first()
+    cliente = srv_cotizaciones.mandante(pk)
     if not cliente:
         return JsonResponse({'ok': False, 'detail': {}}, status=404)
     return JsonResponse({
@@ -864,11 +677,7 @@ def api_cotizaciones_contactos(request):
     cliente_id = (request.GET.get('cliente_id') or '').strip()
     term = (request.GET.get('term') or '').strip()
 
-    qs = Clientecontacto.objects.select_related('idcliente').order_by('nombrecontacto', 'idcontacto')
-    if cliente_id.isdigit():
-        qs = qs.filter(idcliente_id=int(cliente_id))
-    if term:
-        qs = qs.filter(nombrecontacto__icontains=term)
+    qs = srv_cotizaciones.buscar_contactos(int(cliente_id) if cliente_id.isdigit() else None, term)
 
     data = [
         {
@@ -879,7 +688,7 @@ def api_cotizaciones_contactos(request):
             'telefono': contacto.telefono or '',
             'email': contacto.email or '',
         }
-        for contacto in qs[:20]
+        for contacto in qs
     ]
     return JsonResponse({'results': data})
 
@@ -887,9 +696,7 @@ def api_cotizaciones_contactos(request):
 @login_required
 @require_GET
 def api_cotizaciones_contacto_detalle(request, pk):
-    contacto = Clientecontacto.objects.filter(idcontacto=pk).only(
-        'idcontacto', 'nombrecontacto', 'cargo', 'telefono', 'email', 'idcliente_id'
-    ).first()
+    contacto = srv_cotizaciones.contacto(pk)
     if not contacto:
         return JsonResponse({'ok': False, 'detail': {}}, status=404)
     return JsonResponse({
@@ -908,7 +715,7 @@ def api_cotizaciones_contacto_detalle(request, pk):
 @login_required
 @require_GET
 def api_cotizaciones_items(request):
-    qs = ItemCotizacion.objects.all().order_by('iditem')
+    qs = srv_cotizaciones.items_catalogo()
     data = [{'id': item.iditem, 'text': item.nombre} for item in qs]
     return JsonResponse({'results': data})
 
@@ -916,7 +723,7 @@ def api_cotizaciones_items(request):
 @login_required
 @require_GET
 def api_cotizaciones_notas(request):
-    qs = NotaCotizacion.objects.all().order_by('idnota')
+    qs = srv_cotizaciones.notas_catalogo()
     data = [{'id': nota.idnota, 'text': nota.nota} for nota in qs]
     return JsonResponse({'results': data})
 
@@ -924,7 +731,7 @@ def api_cotizaciones_notas(request):
 @login_required
 @require_GET
 def api_cotizaciones_formapago(request):
-    qs = TFpago.objects.filter(regionrm=0).order_by('idfpago')
+    qs = srv_cotizaciones.formas_pago_catalogo()
     data = [{'id': fp.idfpago, 'text': fp.concepto} for fp in qs]
     return JsonResponse({'results': data})
 
@@ -950,103 +757,6 @@ def _fecha_cliente_seg_guardado():
 
 def _ahora_santiago_naive():
     return timezone.localtime(timezone.now()).replace(tzinfo=None)
-
-
-def _guardar_notas_cotizacion(cotizacion, items_json):
-    try:
-        datos = json.loads(items_json or '[]')
-    except json.JSONDecodeError:
-        datos = []
-
-    ids_notas = []
-    for dato in datos:
-        if dato.get('selected'):
-            try:
-                ids_notas.append(int(dato.get('id')))
-            except (TypeError, ValueError):
-                continue
-
-    CotizacionNota.objects.filter(idcotizacion=cotizacion).delete()
-    if not ids_notas:
-        return
-
-    notas = NotaCotizacion.objects.filter(idnota__in=ids_notas)
-    for nota in notas:
-        CotizacionNota.objects.create(idcotizacion=cotizacion, idnota=nota)
-
-
-def _guardar_formapago_cotizacion(cotizacion, formapago_json):
-    try:
-        datos = json.loads(formapago_json or '[]')
-    except json.JSONDecodeError:
-        datos = []
-
-    conceptos = []
-    for dato in datos:
-        if not isinstance(dato, dict):
-            continue
-        concepto = (dato.get('concepto') or '').strip()
-        if concepto:
-            conceptos.append(concepto)
-
-    CotizacionFpago.objects.filter(idcotizacion=cotizacion).delete()
-    for idx, concepto in enumerate(conceptos, start=1):
-        CotizacionFpago.objects.create(idcotizacion=cotizacion, linea=idx, concepto=concepto)
-
-
-def _actualizar_valortotal_cotizacion(cotizacion):
-    total = CotizacionValor.objects.filter(idcotizacion=cotizacion).aggregate(total=Sum('valor'))['total'] or 0
-    Cotizacion.objects.filter(pk=cotizacion.pk).update(valortotal=total)
-
-
-def _guardar_items_cotizacion(cotizacion, items_json):
-    try:
-        datos = json.loads(items_json or '[]')
-    except json.JSONDecodeError:
-        datos = []
-
-    # Item = número de línea (1, 2, 3...), como en el sistema anterior. La llave de Cotizacion_Valor es
-    # (IdCotizacion, Item): usar el código del catálogo impedía repetir un item y limitaba las líneas al catálogo.
-    items = []
-    for dato in datos:
-        if not isinstance(dato, dict):
-            continue
-        glosa = (dato.get('glosa') or '').strip()
-        if not glosa:
-            continue
-        try:
-            valor = float(dato.get('valor') or 0)
-        except (TypeError, ValueError):
-            valor = 0
-        opcional = 'S' if dato.get('opcional') == 'S' else 'N'
-        items.append((len(items) + 1, glosa, valor, opcional))
-
-    CotizacionValor.objects.filter(idcotizacion=cotizacion).delete()
-    for item_num, glosa, valor, opcional in items:
-        CotizacionValor.objects.create(
-            idcotizacion=cotizacion,
-            item=item_num,
-            glosa=glosa,
-            valor=valor,
-            opcional=opcional,
-        )
-
-
-def _copiar_detalle_cotizacion(origen, destino):
-    for nota in CotizacionNota.objects.filter(idcotizacion=origen).select_related('idnota').order_by('idcotizacionnota'):
-        CotizacionNota.objects.create(idcotizacion=destino, idnota=nota.idnota)
-
-    for fp in CotizacionFpago.objects.filter(idcotizacion=origen).order_by('linea'):
-        CotizacionFpago.objects.create(idcotizacion=destino, linea=fp.linea, concepto=fp.concepto)
-
-    for valor in CotizacionValor.objects.filter(idcotizacion=origen).order_by('item'):
-        CotizacionValor.objects.create(
-            idcotizacion=destino,
-            item=valor.item,
-            glosa=valor.glosa,
-            valor=valor.valor,
-            opcional=valor.opcional,
-        )
 
 
 def _fecha_cliente_seg_mostrada(fecha):

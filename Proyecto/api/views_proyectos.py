@@ -1,14 +1,11 @@
 """Endpoints de proyectos y cotizaciones."""
-from collections import defaultdict
 
 from django.db import transaction
-from django.db.models import Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from seguimiento.models import (
-    Cotizacion, CotizacionFpago, CotizacionNota, CotizacionValor, EntregaProyecto, Estadocotizacion,
-)
+from seguimiento.models import EntregaProyecto
+from seguimiento.servicios import cotizaciones as srv_cotizaciones
 from seguimiento.servicios import facturas as srv_facturas
 from seguimiento.servicios import proyectos as srv_proyectos
 
@@ -45,21 +42,20 @@ def _estado(obj):
     return {'id': obj.pk, 'nombre': obj.nombre} if obj else None
 
 
-def _filtrar_por_cliente(params, qs, campos):
-    """Filtra por idcliente o rut en cualquiera de los campos de cliente indicados."""
+def _filtros_comunes(params):
+    """Filtros de los listados: estado (ids con comas), idcliente, rut, desde, hasta y q."""
+    filtros = {'q': params.get('q', '').strip()}
+    if params.get('estado'):
+        filtros['estados_filtro'] = _parse_int_list(params['estado'], 'estado')
     if params.get('idcliente'):
-        idcliente = _parse_int(params['idcliente'], 'idcliente')
-        cond = Q()
-        for campo in campos:
-            cond |= Q(**{f'{campo}_id': idcliente})
-        qs = qs.filter(cond)
+        filtros['idcliente'] = _parse_int(params['idcliente'], 'idcliente')
     if params.get('rut'):
-        rut = _parse_rut(params['rut'])
-        cond = Q()
-        for campo in campos:
-            cond |= Q(**{f'{campo}__rut': rut})
-        qs = qs.filter(cond)
-    return qs
+        filtros['rut'] = _parse_rut(params['rut'])
+    if params.get('desde'):
+        filtros['desde'] = _parse_date(params['desde'], 'desde')
+    if params.get('hasta'):
+        filtros['hasta'] = _parse_date(params['hasta'], 'hasta')
+    return filtros
 
 
 def _es_seremi(valor):
@@ -96,10 +92,7 @@ def _serialize_items(valores):
 
 
 def _valores_por_cotizacion(ids):
-    por_cot = defaultdict(list)
-    for v in CotizacionValor.objects.filter(idcotizacion_id__in=list(ids)).order_by('item'):
-        por_cot[v.idcotizacion_id].append(v)
-    return por_cot
+    return srv_cotizaciones.valores_por_cotizacion(ids)
 
 
 # ---------------------------------------------------------------- proyectos
@@ -132,7 +125,7 @@ def _serialize_proyecto(p, comentario, porcentaje, regiones):
 
 def _serialize_proyecto_detalle(p):
     cot = p.idcotizacion
-    valores = list(CotizacionValor.objects.filter(idcotizacion=cot).order_by('item'))
+    valores = srv_cotizaciones.valores(cot)
     resumen = _resumen_items(valores)
     porcentaje = srv_proyectos.porcentajes_facturados([p.idproyecto]).get(int(p.idproyecto), 0.0)
     comentarios = srv_proyectos.listar_comentarios_api(p.idproyecto)
@@ -174,8 +167,7 @@ def _serialize_proyecto_detalle(p):
             **resumen,
             'monto_uf': resumen['monto'] if cot.moneda == 'UF' else None,
             'items': _serialize_items(valores),
-            'forma_pago': list(CotizacionFpago.objects.filter(idcotizacion=cot).order_by('linea')
-                               .values_list('concepto', flat=True)),
+            'forma_pago': srv_cotizaciones.conceptos_forma_pago(cot),
         },
         'versiones_entregadas': sum(1 for e in entregas if e.idestadoentrega_id == ESTADO_ENTREGA_ENTREGADA),
         'entregas': [{
@@ -206,18 +198,7 @@ def proyectos_list(request):
     """Filtros: estado (ids con comas), idcliente, rut (cliente o mandante), desde, hasta (fecha de creación), q."""
     params = request.GET
     try:
-        filtros = {'q': params.get('q', '').strip()}
-        if params.get('estado'):
-            filtros['estados_filtro'] = _parse_int_list(params['estado'], 'estado')
-        if params.get('idcliente'):
-            filtros['idcliente'] = _parse_int(params['idcliente'], 'idcliente')
-        if params.get('rut'):
-            filtros['rut'] = _parse_rut(params['rut'])
-        if params.get('desde'):
-            filtros['desde'] = _parse_date(params['desde'], 'desde')
-        if params.get('hasta'):
-            filtros['hasta'] = _parse_date(params['hasta'], 'hasta')
-        proyectos, meta = _paginate(request, srv_proyectos.buscar_api(**filtros))
+        proyectos, meta = _paginate(request, srv_proyectos.buscar_api(**_filtros_comunes(params)))
     except ParamError as e:
         return _error(str(e))
 
@@ -315,7 +296,7 @@ def proyecto_estados(request):
 # ---------------------------------------------------------------- cotizaciones
 
 def _cotizaciones_qs():
-    return Cotizacion.objects.select_related('idcliente', 'idcontacto', 'estadocotizacion')
+    return srv_cotizaciones.para_api()
 
 
 def _proyectos_por_cotizacion(ids):
@@ -346,23 +327,8 @@ def _serialize_cotizacion(c, valores, proyectos, regiones):
 def cotizaciones_list(request):
     """Filtros: estado (ids con comas), idcliente, rut, desde, hasta (fecha), q (nombre o número)."""
     params = request.GET
-    qs = _cotizaciones_qs()
     try:
-        if params.get('estado'):
-            qs = qs.filter(estadocotizacion_id__in=_parse_int_list(params['estado'], 'estado'))
-        qs = _filtrar_por_cliente(params, qs, ['idcliente'])
-        if params.get('desde'):
-            qs = qs.filter(fecha__gte=_parse_date(params['desde'], 'desde'))
-        if params.get('hasta'):
-            qs = qs.filter(fecha__lte=_parse_date(params['hasta'], 'hasta'))
-        q = params.get('q', '').strip()
-        if q:
-            cond = Q(nombreproyecto__icontains=q)
-            numero = q.split('-')[0]
-            if numero.isdigit():
-                cond |= Q(numcotizacion=int(numero))
-            qs = qs.filter(cond)
-        cotizaciones, meta = _paginate(request, qs.order_by('-fecha', '-idcotizacion'))
+        cotizaciones, meta = _paginate(request, srv_cotizaciones.buscar_api(**_filtros_comunes(params)))
     except ParamError as e:
         return _error(str(e))
 
@@ -383,7 +349,7 @@ def cotizacion_detail(request, idcotizacion):
     if c is None:
         return _error('Cotización no encontrada', 404)
 
-    valores = list(CotizacionValor.objects.filter(idcotizacion=c).order_by('item'))
+    valores = srv_cotizaciones.valores(c)
     data = _serialize_cotizacion(c, valores, _proyectos_por_cotizacion([c.pk])[c.pk], _regiones([c.codregion]))
     contacto = c.idcontacto
     data.update({
@@ -400,10 +366,8 @@ def cotizacion_detail(request, idcotizacion):
         } if contacto else None,
         'fecha_aceptacion': c.fechaaceptacion,
         'items': _serialize_items(valores),
-        'forma_pago': list(CotizacionFpago.objects.filter(idcotizacion=c).order_by('linea')
-                           .values_list('concepto', flat=True)),
-        'notas': list(CotizacionNota.objects.filter(idcotizacion=c).order_by('idcotizacionnota')
-                      .values_list('idnota__nota', flat=True)),
+        'forma_pago': srv_cotizaciones.conceptos_forma_pago(c),
+        'notas': srv_cotizaciones.textos_notas(c),
     })
     return _json(data)
 
@@ -412,4 +376,4 @@ def cotizacion_detail(request, idcotizacion):
 @require_http_methods(['GET'])
 @api_key_required()
 def cotizacion_estados(request):
-    return _json([{'id': e.pk, 'nombre': e.nombre} for e in Estadocotizacion.objects.order_by('pk')])
+    return _json([{'id': e.pk, 'nombre': e.nombre} for e in srv_cotizaciones.estados_por_id()])

@@ -458,7 +458,7 @@
                             <label class="form-label">UF Disponible</label>
                             <select id="fact_uf_selector" class="form-select" disabled>
                                 {% for uf in valores_uf %}
-                                    <option value="{{ uf.ValorUF }}" data-fecha="{{ uf.Fecha|date:'d/m/Y' }}">{{ uf.Fecha|date:'d/m/Y' }} - {{ uf.ValorUF }}</option>
+                                    <option value="{{ uf.ValorUF|floatformat:2 }}" data-fecha="{{ uf.Fecha|date:'d/m/Y' }}">{{ uf.Fecha|date:'d/m/Y' }} - {{ uf.ValorUF|floatformat:2 }}</option>
                                 {% endfor %}
                             </select>
                         </div>
