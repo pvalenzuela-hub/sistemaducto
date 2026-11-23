@@ -1208,6 +1208,11 @@ def crear_factura_proyecto(request):
     from .servicios import facturas as srv_facturas
     from .servicios.facturas import DETALLES_FACTURA
 
+    # idfactura > 0: modificar una factura del proyecto (solo Provisoria o Para Emitir, lo valida el servicio)
+    try:
+        idfactura = int(request.POST.get('idfactura') or 0)
+    except ValueError:
+        idfactura = 0
     try:
         numfactura_int = int(str(request.POST.get('numfactura') or '').strip())
     except ValueError:
@@ -1215,7 +1220,7 @@ def crear_factura_proyecto(request):
     if numfactura_int <= 0:
         return _error('N° de Factura no válido.')
     try:
-        srv_facturas.validar_grabacion(proyecto, numfactura_int)
+        srv_facturas.validar_grabacion(proyecto, numfactura_int, idfactura)
     except srv_facturas.ErrorValidacion as e:
         return _error(str(e))
     if not proyecto.idcliente_id:
@@ -1263,19 +1268,24 @@ def crear_factura_proyecto(request):
 
     try:
         with transaction.atomic():
-            srv_facturas.grabar(
-                proyecto, numfactura=numfactura_int, fecha_emision=fecha_emision, idcliente=proyecto.idcliente_id,
-                porc=porc, valor_uf=float(valor_uf), detalle=detalle[:srv_facturas.MAX_DETALLE], num_hes=num_hes,
-                fecha_hes=fecha_hes, nuevo_estado=estado_factura or None, vencimiento=vencimiento)
-            # Datos que el formulario web ya guardaba y el procedimiento no recibe
-            srv_facturas.completar_datos_web(numfactura_int, proyecto, proyecto.idcontactofacturacion_id,
-                                             _ahora_santiago_naive())
+            guardada = srv_facturas.grabar(
+                proyecto, idfactura=idfactura, numfactura=numfactura_int, fecha_emision=fecha_emision,
+                idcliente=proyecto.idcliente_id, porc=porc, valor_uf=float(valor_uf),
+                detalle=detalle[:srv_facturas.MAX_DETALLE], num_hes=num_hes, fecha_hes=fecha_hes,
+                # al crear, Provisoria (0) es el estado con que nace; al modificar se envía siempre el elegido
+                nuevo_estado=estado_factura if idfactura else (estado_factura or None), vencimiento=vencimiento)
+            if not idfactura:
+                # Datos que el formulario web ya guardaba y el procedimiento no recibe
+                srv_facturas.completar_datos_web(numfactura_int, proyecto, proyecto.idcontactofacturacion_id,
+                                                 _ahora_santiago_naive())
     except srv_facturas.ErrorValidacion as e:
         return _error(str(e))
 
+    mensaje = f'Factura {"modificada" if idfactura else "creada"}: {numfactura_int}'
     if es_ajax:
-        return JsonResponse({'ok': True, 'message': f'Factura creada: {numfactura_int}', 'numfactura': str(numfactura_int)})
-    messages.success(request, f'Factura creada: {numfactura_int}')
+        return JsonResponse({'ok': True, 'message': mensaje, 'numfactura': str(numfactura_int),
+                             'idfactura': guardada.idfactura if guardada else None})
+    messages.success(request, mensaje)
     return redirect('seguimiento_proyectos')
 
 

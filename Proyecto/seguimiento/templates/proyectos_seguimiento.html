@@ -429,6 +429,20 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="col-12">
+                            <input type="hidden" name="idfactura" id="fact_idfactura" value="">
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <label class="form-label mb-0 fw-semibold" for="fact_existente">Factura</label>
+                                <select id="fact_existente" class="form-select form-select-sm w-auto">
+                                    <option value="">Nueva factura</option>
+                                </select>
+                                <span id="fact_modo" class="badge bg-success">Nueva</span>
+                                <span id="fact_existente_msg" class="small text-muted"></span>
+                            </div>
+                            <div id="fact_aviso_lectura" class="alert alert-warning py-1 px-2 small mt-2 mb-0 d-none">
+                                Factura ya emitida: solo lectura. Solo se pueden modificar facturas en estado Provisoria o Para Emitir.
+                            </div>
+                        </div>
                         <div class="col-12 col-md-2">
                             <label class="form-label">N° Factura</label>
                             <input type="text" name="numfactura" id="fact_numfactura" class="form-control">
@@ -519,22 +533,15 @@
                             <div class="d-flex align-items-center gap-2 mb-2">
                                 <label class="form-label mb-0">Descripción Factura</label>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btnArmarDescripcionFactura">Armar detalle</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCopiarDescripcion">Copiar</button>
+                                <span id="fact_copiado_msg" class="small text-muted"></span>
                             </div>
-                            <textarea name="descripcionfactura" id="fact_descripcionfactura" class="form-control" rows="3"></textarea>
-                        </div>
-                        <div class="col-12 border-top pt-3">
-                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                                <label class="form-label mb-0" for="fact_existente">Descripción de una factura ya creada</label>
-                                <select id="fact_existente" class="form-select form-select-sm w-auto"><option value="">Seleccione factura...</option></select>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCopiarDescripcionExistente" disabled>Copiar</button>
-                                <span id="fact_existente_msg" class="small text-muted"></span>
-                            </div>
-                            <textarea id="fact_descripcion_existente" class="form-control" rows="9" readonly placeholder="Elija una factura del proyecto para ver su descripción y copiarla al emitirla en el SII."></textarea>
+                            <textarea name="descripcionfactura" id="fact_descripcionfactura" class="form-control" rows="9"></textarea>
                         </div>
                     </div>
                     <div class="modal-footer px-0 pb-0">
                         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
-                        <button type="submit" class="btn btn-primary">Crear Factura</button>
+                        <button type="submit" class="btn btn-primary" id="btnGrabarFacturaProyecto">Crear Factura</button>
                     </div>
                 </form>
             </div>
@@ -939,12 +946,36 @@ $(document).ready(function() {
         modal.show();
     });
 
-    $('#btnAbrirCrearFactura').on('click', function() {
-        const modal = new bootstrap.Modal(document.getElementById('modalFacturacion'));
-        $('#fact_numfactura').val('');
+    const URL_FACT_LISTA = "{% url 'facturas_de_proyecto' 0 %}";
+    const URL_FACT_DATOS = "{% url 'factura_datos' 0 %}";
+    const URL_FACT_GLOSA_EXISTENTE = "{% url 'factura_glosa_existente' 0 %}";
+    const urlCon = (url, id) => url.replace('/0/', '/' + id + '/');
+    // Campos que se bloquean cuando la factura elegida ya está emitida (solo lectura)
+    const CAMPOS_FACTURA = '#fact_numfactura, #fact_fechaemision, #uf_origen_factura, #uf_origen_manual, #fact_porcfact, '
+        + '#fact_estado, #fact_vencimiento, #fact_detallefactura, #fact_numhes_eepp, #fact_fechahes_eepp, #btnArmarDescripcionFactura';
+
+    function fechaHoyISO() {
         const hoy = new Date();
-        const fechaHoy = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
-        $('#fact_fechaemision').val(fechaHoy);  // como el escritorio: la factura parte con la fecha de hoy
+        return hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
+    }
+
+    function modoFactura(modo) {
+        // 'nueva', 'editar' (Provisoria o Para Emitir) o 'lectura' (ya emitida)
+        const lectura = modo === 'lectura';
+        $(CAMPOS_FACTURA).prop('disabled', lectura);
+        if (lectura) $('#fact_fecha_uf, #fact_uf_selector').prop('disabled', true);
+        $('#fact_descripcionfactura').prop('readonly', lectura);
+        $('#fact_aviso_lectura').toggleClass('d-none', !lectura);
+        $('#btnGrabarFacturaProyecto').toggleClass('d-none', lectura).text(modo === 'editar' ? 'Guardar cambios' : 'Crear Factura');
+        $('#fact_modo').text({ nueva: 'Nueva', editar: 'Modificable', lectura: 'Solo lectura' }[modo])
+            .attr('class', 'badge ' + ({ nueva: 'bg-success', editar: 'bg-primary', lectura: 'bg-secondary' }[modo]));
+    }
+
+    function limpiarFactura() {
+        consultaValorUF++;  // descarta búsquedas de UF en curso
+        $('#fact_idfactura').val('');
+        $('#fact_numfactura').val('');
+        $('#fact_fechaemision').val(fechaHoyISO());  // como el escritorio: la factura parte con la fecha de hoy
         $('#uf_origen_factura').prop('checked', true);
         $('#fact_fecha_uf').val('').prop('disabled', true);
         $('#fact_uf_selector').prop('disabled', true).val('');
@@ -958,42 +989,81 @@ $(document).ready(function() {
         $('#fact_fechahes_eepp').val('');
         $('#fact_valor_uf').val('');
         $('#fact_descripcionfactura').val('');
+        $('#fact_copiado_msg, #fact_existente_msg').text('');
+        modoFactura('nueva');
+    }
+
+    function asegurarOpcion(selector, valor) {
+        // valores guardados que no están en la lista (p. ej. un detalle escrito en el escritorio)
+        const $sel = $(selector);
+        if (valor !== '' && valor !== null && !$sel.find('option').filter(function () { return this.value === String(valor); }).length) {
+            $sel.append($('<option>').val(valor).text(valor));
+        }
+        $sel.val(String(valor ?? ''));
+    }
+
+    async function cargarFacturasExistentes(idproyecto, seleccionar) {
+        const $lista = $('#fact_existente').html('<option value="">Nueva factura</option>');
+        if (!idproyecto) return;
+        const resp = await fetch(urlCon(URL_FACT_LISTA, idproyecto), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const data = await resp.json().catch(() => ({}));
+        ((data && data.facturas) || []).forEach(f => $lista.append($('<option>').val(f.idfactura)
+            .text(`N° ${f.numfactura} · ${f.fecha_emision} · ${f.porc}% ${f.detalle} · $${f.total_texto} · ${f.estado_nombre}`)));
+        if (seleccionar) $lista.val(String(seleccionar));
+    }
+
+    async function cargarFactura(idfactura) {
+        $('#fact_existente_msg').text('Cargando factura...');
+        const resp = await fetch(urlCon(URL_FACT_DATOS, idfactura), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const data = await resp.json().catch(() => ({}));
+        if ($('#fact_existente').val() !== String(idfactura)) return;  // se eligió otra mientras cargaba
+        if (!resp.ok || !data.ok) { $('#fact_existente_msg').text(data.message || 'No se pudo cargar la factura.'); return; }
+        const f = data.factura;
+        consultaValorUF++;  // la UF es la guardada en la factura, no la del día
+        $('#fact_idfactura').val(f.editable ? f.idfactura : '');
+        $('#fact_numfactura').val(f.numfactura);
+        $('#fact_fechaemision').val(f.fecha_emision || '');
+        $('#uf_origen_factura').prop('checked', true);
+        $('#fact_fecha_uf').val('').prop('disabled', true);
+        $('#fact_uf_selector').prop('disabled', true).val('');
+        $('#fact_valor_uf').val(f.valor_uf != null ? Number(f.valor_uf).toFixed(2) : '').attr('placeholder', '');
+        $('#fact_porcfact').val(f.porc != null ? Math.round(Number(f.porc) * 100) / 100 : '');  // PorcFact es real: sin decimales de más
+        asegurarOpcion('#fact_detallefactura', f.detalle || '');
+        asegurarOpcion('#fact_vencimiento', f.vencimiento ?? 30);
+        $('#fact_estado').val(String(f.estado));
+        $('#fact_numhes_eepp').val((f.num_hes_eepp || '').trim());
+        $('#fact_fechahes_eepp').val(f.fecha_hes_eepp || '');
+        $('#fact_descripcionfactura').val('');
+        recalcularFactura();
+        modoFactura(f.editable ? 'editar' : 'lectura');
+        $('#fact_existente_msg').text('Armando descripción...');
+        const r2 = await fetch(urlCon(URL_FACT_GLOSA_EXISTENTE, idfactura), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const g = await r2.json().catch(() => ({}));
+        if ($('#fact_existente').val() !== String(idfactura)) return;
+        $('#fact_descripcionfactura').val(g.ok ? g.glosa : '');
+        $('#fact_existente_msg').text(g.ok ? '' : (g.message || 'No se pudo armar la descripción.'));
+    }
+
+    $('#btnAbrirCrearFactura').on('click', function() {
+        const modal = new bootstrap.Modal(document.getElementById('modalFacturacion'));
+        limpiarFactura();
         cargarFacturasExistentes($('#factura_idproyecto').val());
         modal.show();
         actualizarValorUF();
     });
 
-    // Facturas ya creadas del proyecto: al elegir una se arma su descripción (como "Facturas Emitidas" del escritorio)
-    async function cargarFacturasExistentes(idproyecto) {
-        const lista$ = $('#fact_existente').html('<option value="">Seleccione factura...</option>');
-        $('#fact_descripcion_existente').val(''); $('#btnCopiarDescripcionExistente').prop('disabled', true); $('#fact_existente_msg').text('');
-        if (!idproyecto) return;
-        const resp = await fetch("{% url 'facturas_de_proyecto' 0 %}".replace('/0/', '/' + idproyecto + '/'), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-        const data = await resp.json().catch(() => ({}));
-        const facturas = (data && data.facturas) || [];
-        facturas.forEach(f => lista$.append($('<option>').val(f.idfactura).text(`N° ${f.numfactura} · ${f.fecha_emision} · ${f.porc}% ${f.detalle} · $${f.total_texto} · ${f.estado_nombre}`)));
-        $('#fact_existente_msg').text(facturas.length ? '' : 'El proyecto aún no tiene facturas.');
-    }
-
-    $('#fact_existente').on('change', async function() {
-        const id = this.value;
-        $('#fact_descripcion_existente').val(''); $('#btnCopiarDescripcionExistente').prop('disabled', true); $('#fact_existente_msg').text('');
-        if (!id) return;
-        $('#fact_existente_msg').text('Armando descripción...');
-        const resp = await fetch("{% url 'factura_glosa_existente' 0 %}".replace('/0/', '/' + id + '/'), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-        const data = await resp.json().catch(() => ({}));
-        if (this.value !== id) return;
-        if (resp.ok && data.ok) {
-            $('#fact_descripcion_existente').val(data.glosa); $('#btnCopiarDescripcionExistente').prop('disabled', false); $('#fact_existente_msg').text('');
-        } else {
-            $('#fact_existente_msg').text(data.message || 'No se pudo armar la descripción.');
-        }
+    // Como la lista "Facturas Emitidas" del escritorio: al elegir una factura se cargan sus datos y su descripción.
+    // Provisoria o Para Emitir se pueden modificar; las ya emitidas quedan de solo lectura.
+    $('#fact_existente').on('change', function() {
+        if (!this.value) { limpiarFactura(); actualizarValorUF(); return; }
+        cargarFactura(this.value);
     });
 
-    $('#btnCopiarDescripcionExistente').on('click', async function() {
-        const texto = $('#fact_descripcion_existente').val();
-        try { await navigator.clipboard.writeText(texto); } catch (e) { $('#fact_descripcion_existente').select(); document.execCommand('copy'); }
-        $('#fact_existente_msg').text('Descripción copiada.');
+    $('#btnCopiarDescripcion').on('click', async function() {
+        const texto = $('#fact_descripcionfactura').val();
+        if (!texto) { $('#fact_copiado_msg').text('No hay descripción para copiar.'); return; }
+        try { await navigator.clipboard.writeText(texto); } catch (e) { $('#fact_descripcionfactura').select(); document.execCommand('copy'); }
+        $('#fact_copiado_msg').text('Descripción copiada.');
     });
 
     $('#btnArmarDescripcionFactura').on('click', async function() {
@@ -1159,13 +1229,19 @@ $(document).ready(function() {
             .then(async (resp) => {
                 const data = await resp.json().catch(() => ({}));
                 if (!resp.ok || !data.ok) {
-                    alert(data.message || 'No se pudo crear la factura.');
+                    alert(data.message || 'No se pudo grabar la factura.');
                     return;
                 }
-                alert(data.message || 'Factura creada.');
-                bootstrap.Modal.getInstance(document.getElementById('modalFacturacion')).hide();
+                alert(data.message || 'Factura grabada.');
+                // queda elegida la factura grabada, con su descripción lista para copiar
+                const descripcion = $('#fact_descripcionfactura').val();
+                await cargarFacturasExistentes($('#factura_idproyecto').val(), data.idfactura);
+                if (data.idfactura) {
+                    await cargarFactura(data.idfactura);
+                    if (!$('#fact_descripcionfactura').val()) $('#fact_descripcionfactura').val(descripcion);
+                }
             })
-            .catch(() => alert('No se pudo crear la factura.'));
+            .catch(() => alert('No se pudo grabar la factura.'));
     });
 });
 </script>
