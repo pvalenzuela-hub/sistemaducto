@@ -699,6 +699,13 @@ $(document).ready(function() {
         $('#visor_numero').val(numeroFila);
         $('#visor_cotizacion').val(btn.data('cotizacion'));
         $('#visor_nombre').val(btn.data('nombreproyecto'));
+        // Fecha de cotización, moneda y valor del proyecto (no se copiaban al visor)
+        $('#visor_fechacot').val(btn.data('fechacot') || '');
+        const monedaVisor = String(btn.data('moneda') || '').trim();
+        $('#visor_moneda').val(monedaVisor);
+        const valorVisor = btn.data('valorraw');
+        $('#visor_valor').val(valorVisor === undefined || valorVisor === '' ? '' :
+            (monedaVisor === 'UF' ? formatearNumero(String(valorVisor)) : formatearEnteroCL(String(valorVisor))));
         $('#visor_mandante').val(btn.data('mandante'));
         $('#visor_cliente').val(btn.data('cliente'));
         $('#visor_fpago').val(btn.data('fpago'));

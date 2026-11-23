@@ -1473,8 +1473,8 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
             pro.dirproyecto_texto = cot.dirproyecto or '' if cot else ''
             pro.destino_texto = cot.destino or '' if cot else ''
             pro.fpago_texto = pro.fpago or ''
-            pro.numconf_texto = pro.numconf or ''
-            pro.medioconf_texto = pro.medioconf or ''
+            pro.numconf_texto = (pro.numconf or '').strip()  # el escritorio lo guarda con largo fijo (nchar)
+            pro.medioconf_texto = (pro.medioconf or '').strip()
             pro.fechaconf_texto = pro.fechaconf.strftime('%d/%m/%Y') if pro.fechaconf else ''
             pro.mandante_texto = cot.idcliente.razonsocial if cot and cot.idcliente else ''
             pro.mandante_comentario_texto = cot.idcliente.comentario if cot and cot.idcliente and cot.idcliente.comentario else ''
