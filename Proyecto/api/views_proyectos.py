@@ -4,8 +4,8 @@ from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from seguimiento.models import EntregaProyecto
 from seguimiento.servicios import cotizaciones as srv_cotizaciones
+from seguimiento.servicios import entregas as srv_entregas
 from seguimiento.servicios import facturas as srv_facturas
 from seguimiento.servicios import proyectos as srv_proyectos
 
@@ -16,7 +16,7 @@ from .views import (
     _parse_int_list, _parse_rut, _pesos, _read_body, _serialize_cliente,
 )
 
-ESTADO_ENTREGA_ENTREGADA = 5  # T_EstadosEntrega: 'Entregado a Cliente'
+ESTADO_ENTREGA_ENTREGADA = srv_entregas.ESTADO_ENTREGADO
 
 
 # ---------------------------------------------------------------- utilidades
@@ -132,8 +132,7 @@ def _serialize_proyecto_detalle(p):
     data = _serialize_proyecto(p, comentarios[0]['comentario'] if comentarios else None, porcentaje,
                                _regiones([cot.codregion]))
 
-    entregas = list(EntregaProyecto.objects.filter(idproyecto=p).select_related('idtipoentrega', 'idestadoentrega')
-                    .order_by('fechaentrega', 'identrega'))
+    entregas = srv_entregas.de_proyecto(p)
     estados_factura = _estados_factura()
     facturas = srv_facturas.del_proyecto(p.pk)
     contacto = p.idcontactofacturacion

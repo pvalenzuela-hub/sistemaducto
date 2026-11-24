@@ -40,17 +40,12 @@ from .servicios import proyectos as srv_proyectos
 from .servicios import uf as srv_uf
 from .servicios import cotizaciones as srv_cotizaciones
 from .servicios import clientes as srv_clientes
+from .servicios import entregas as srv_entregas
 from django.http import Http404
 
 
 
 
-ESTADO_ENTREGA_NUEVA = 1
-ESTADO_ENTREGA_DESARROLLO = 2
-ESTADO_ENTREGA_CORRECCIONES = 3
-ESTADO_ENTREGA_REVISION = 4
-ESTADO_ENTREGA_ENTREGADO = 5
-ESTADO_ENTREGA_NULA = 6
 
 ESTADO_CLIENTE_ELIMINADO = 5
 
@@ -1835,1267 +1830,199 @@ def mover_agenda_cliente(request, agenda_id):
         'mensaje': 'Evento movido correctamente.'
     })
 
+def _json_payload(request):
+    try:
+        return json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return None
+
+
+def _respuesta_entrega(accion, mensaje_ok, **extra):
+    """Ejecuta una acción del servicio de Entregas y arma la respuesta JSON de siempre."""
+    try:
+        resultado = accion()
+    except srv_entregas.ErrorValidacion as e:
+        return JsonResponse({'ok': False, 'mensaje': str(e)}, status=400)
+    except srv_entregas.NoEncontrado as e:
+        raise Http404(str(e))
+    datos = {'ok': True, 'mensaje': mensaje_ok}
+    datos.update({k: f(resultado) for k, f in extra.items()})
+    return JsonResponse(datos)
+
+
+def _datos_invalidos():
+    return JsonResponse({'ok': False, 'mensaje': 'Datos inválidos.'}, status=400)
+
+
 @login_required
 def calendario_entregas_proyecto(request):
-    proyectos = Proyecto.objects.select_related(
-        'idcotizacion',
-        'idtamano'
-    ).order_by('idproyecto')
-
-    tipos_entrega = TipoEntrega.objects.order_by('descripcion')
-    urgencias = Urgencia.objects.order_by('descrip')
-    tamanos = TDuracionProyecto.objects.order_by('descripcion')
-
     context = {
         'titulo': 'Calendario de entregas',
         'encabezado': 'Calendario de entregas de proyectos',
         'submenu': 'Agenda mensual de entregas',
-        'proyectos': proyectos,
-        'tipos_entrega': tipos_entrega,
-        'urgencias': urgencias,
-        'tamanos': tamanos,
+        'proyectos': srv_entregas.proyectos_para_calendario(),
+        'tipos_entrega': srv_entregas.tipos_entrega(),
+        'urgencias': srv_entregas.urgencias(),
+        'tamanos': srv_entregas.tamanos(),
     }
     return render(request, 'calendario_entregas_proyecto.html', context)
 
+
 @login_required
 def eventos_calendario_entregas(request):
-    start = request.GET.get('start')
-    end = request.GET.get('end')
-
-    start_local = _to_local_naive(start)
-    end_local = _to_local_naive(end)
-
-    qs = EntregaProyecto.objects.select_related(
-        'idproyecto',
-        'idproyecto__idcotizacion',
-        'idproyecto__idtamano',
-        'idtipoentrega',
-        'idurgencia',
-        'idestadoentrega',
-    ).filter(
-        fechacalendario__isnull=False
-    ).exclude(
-        idestadoentrega_id=ESTADO_ENTREGA_NULA
-    )
-
-    if start_local:
-        qs = qs.filter(fechacalendario__gte=start_local)
-
-    if end_local:
-        qs = qs.filter(fechacalendario__lt=end_local)
-
-    usernames_desarrollo = set()
-    for e in qs:
-        rut_actual = _rut_desarrollador_actual(e)
-        if rut_actual:
-            usernames_desarrollo.add(rut_actual)
-
-    mapa_usuarios = {
-        u.username: (u.get_full_name().strip() or u.username)
-        for u in User.objects.filter(username__in=usernames_desarrollo)
-    }
-
-    eventos = []
-
-    for e in qs:
-        proyecto_codigo = ''
-        proyecto_nombre = ''
-
-        if e.idproyecto:
-            proyecto_codigo = str(e.idproyecto.idproyecto)
-            if e.idproyecto.idcotizacion:
-                proyecto_nombre = e.idproyecto.idcotizacion.nombreproyecto or ''
-
-        color = '#6c757d'
-        if e.idestadoentrega_id == ESTADO_ENTREGA_ENTREGADO:
-            color = '#b3ad9f'
-        elif e.idtipoentrega and e.idtipoentrega.color:
-            color = e.idtipoentrega.color
-
-        titulo = f"{proyecto_codigo} - {proyecto_nombre}".strip()
-
-        rut_desarrollador_actual = _rut_desarrollador_actual(e)
-        nombre_desarrollador = mapa_usuarios.get(
-            rut_desarrollador_actual,
-            rut_desarrollador_actual or ''
-        )
-
-        eventos.append({
-            'id': e.identrega,
-            'title': titulo,
-            'start': e.fechacalendario.strftime('%Y-%m-%dT%H:%M:%S') if e.fechacalendario else None,
-            'allDay': False,
-            'display': 'block',
-            'backgroundColor': color,
-            'borderColor': color,
-            'textColor': '#ffffff',
-            'extendedProps': {
-                'identrega': e.identrega,
-                'idproyecto': proyecto_codigo,
-                'nombreproyecto': proyecto_nombre,
-                'tipoentrega': e.idtipoentrega.descripcion if e.idtipoentrega else '',
-                'horaentrega': e.horaentrega or '',
-                'fechaentrega': e.fechaentrega.strftime('%d-%m-%Y') if e.fechaentrega else '',
-                'plazo': e.plazoestdesarrollo or '',
-                'urgencia_id': e.idurgencia_id,
-                'urgencia': e.idurgencia.descrip if e.idurgencia else '',
-                'estadoentrega_id': e.idestadoentrega_id,
-                'estadoentrega': e.idestadoentrega.descrip if e.idestadoentrega else '',
-                'tamano': e.idproyecto.idtamano.descripcion if e.idproyecto and e.idproyecto.idtamano else '',
-                'asignado_a': nombre_desarrollador,
-            }
-        })
-
+    eventos = srv_entregas.eventos_calendario(_to_local_naive(request.GET.get('start')),
+                                              _to_local_naive(request.GET.get('end')))
     return JsonResponse(eventos, safe=False)
 
 
-def _rut_desarrollador_actual(entrega):
-    return (
-        entrega.rutuserdesa3
-        or entrega.rutuserdesa2
-        or entrega.rutuserdesa1
-        or ''
-    )
-
-def _fecha_desarrollador_actual(entrega):
-    return (
-        entrega.fechaasigdesa3
-        or entrega.fechaasigdesa2
-        or entrega.fechaasigdesa1
-    )
-
-@login_required
 def obtener_rut_usuario(request):
-    if request.user.is_authenticated:
-        return request.user.username
-    return None
+    return request.user.username if request.user.is_authenticated else None
+
 
 @login_required
 @require_POST
 def crear_entrega_proyecto(request):
-    rut_user = obtener_rut_usuario(request)
-    if not rut_user:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'No fue posible determinar el usuario creador.'
-        }, status=400)
+    if not obtener_rut_usuario(request):
+        return JsonResponse({'ok': False, 'mensaje': 'No fue posible determinar el usuario creador.'}, status=400)
+    payload = _json_payload(request)
+    if payload is None:
+        return _datos_invalidos()
+    return _respuesta_entrega(lambda: srv_entregas.crear(obtener_rut_usuario(request), payload),
+                              'Entrega creada correctamente.', identrega=lambda e: e.identrega)
 
-    try:
-        payload = json.loads(request.body or '{}')
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Datos inválidos.'
-        }, status=400)
-
-    fecha_calendario = payload.get('fecha_calendario')
-    idproyecto = payload.get('idproyecto')
-    idtipoentrega = payload.get('idtipoentrega')
-    idurgencia = payload.get('idurgencia')
-    fecha_entrega = payload.get('fecha_entrega')
-    hora_entrega = payload.get('hora_entrega')
-    plazo = payload.get('plazo')
-
-    if not fecha_calendario:
-        return JsonResponse({'ok': False, 'mensaje': 'Falta la fecha del calendario.'}, status=400)
-
-    if not idproyecto:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes seleccionar un proyecto.'}, status=400)
-
-    if not idtipoentrega:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes seleccionar un tipo de entrega.'}, status=400)
-
-    if not idurgencia:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes seleccionar un tipo de urgencia.'}, status=400)
-
-    if not fecha_entrega:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes indicar la fecha de entrega al cliente.'}, status=400)
-
-    if not hora_entrega:
-        hora_entrega = '06:00'
-
-    # Validar fecha clickeada: hoy o futuro
-    try:
-        fecha_cal = datetime.strptime(fecha_calendario, '%Y-%m-%d').date()
-    except ValueError:
-        return JsonResponse({'ok': False, 'mensaje': 'Fecha de calendario inválida.'}, status=400)
-
-    try:
-        fecha_ent = datetime.strptime(fecha_entrega, '%Y-%m-%d').date()
-    except ValueError:
-        return JsonResponse({'ok': False, 'mensaje': 'Fecha de entrega inválida.'}, status=400)
-
-    # FechaCalendario = fecha clickeada + hora de entrega
-    try:
-        dt_cal = datetime.strptime(f'{fecha_calendario} {hora_entrega}', '%Y-%m-%d %H:%M')
-    except ValueError:
-        return JsonResponse({'ok': False, 'mensaje': 'Hora de entrega inválida.'}, status=400)
-
-    if timezone.is_naive(dt_cal):
-        dt_cal = timezone.make_aware(dt_cal, timezone.get_current_timezone())
-
-    idtamano = payload.get('idtamano')
-
-    if not idtamano:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Debes seleccionar el tamaño del proyecto.'
-        }, status=400)
-
-    proyecto = get_object_or_404(Proyecto, pk=idproyecto)
-    get_object_or_404(TDuracionProyecto, pk=idtamano)
-
-    proyecto.idtamano_id = idtamano
-    proyecto.save(update_fields=['idtamano'])
-
-    # Validaciones simples de existencia
-    get_object_or_404(srv_proyectos.todos(), pk=idproyecto)
-    get_object_or_404(TipoEntrega, pk=idtipoentrega)
-    get_object_or_404(Urgencia, pk=idurgencia)
-
-    entrega = EntregaProyecto(
-        rutusercreador=rut_user,
-        fechacreacion=_ahora_santiago_naive(),
-        fechacalendario=dt_cal,
-        idproyecto_id=idproyecto,
-        idtipoentrega_id=idtipoentrega,
-        idurgencia_id=idurgencia,
-        fechaentrega=fecha_ent,
-        horaentrega=hora_entrega,
-        plazoestdesarrollo=plazo or '',
-        idestadoentrega_id=1,
-    )
-    entrega.save()
-
-    return JsonResponse({
-        'ok': True,
-        'mensaje': 'Entrega creada correctamente.',
-        'identrega': entrega.identrega
-    })
-    
-User = get_user_model()
 
 @login_required
 @require_GET
 def usuarios_desarrollo_activos(request):
-    usuarios = (
-        User.objects
-        .filter(is_active=True, is_superuser=False)
-        .exclude(username__iexact='admin')
-        .order_by('first_name', 'last_name', 'username')
-    )
-
-    data = []
-    for u in usuarios:
-        nombre = u.get_full_name().strip() or u.username
-        data.append({
-            'rut': u.username,
-            'nombrecompleto': nombre,
-        })
-
-    return JsonResponse(data, safe=False)
-
-from django.contrib.auth import get_user_model
-from django.views.decorators.http import require_GET
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-
-User = get_user_model()
+    return JsonResponse(srv_entregas.usuarios_activos(), safe=False)
 
 
 @login_required
 @require_GET
 def usuarios_revision_activos(request):
-    usuarios = (
-        User.objects
-        .filter(is_active=True, is_superuser=False)
-        .exclude(username__iexact='admin')
-        .order_by('first_name', 'last_name', 'username')
-    )
-
-    data = []
-    for u in usuarios:
-        data.append({
-            'rut': u.username,
-            'nombrecompleto': u.get_full_name().strip() or u.username,
-        })
-
-    return JsonResponse({
-        'ok': True,
-        'usuarios': data
-    })
-
-
+    return JsonResponse({'ok': True, 'usuarios': srv_entregas.usuarios_activos()})
 
 
 @login_required
 @require_POST
 def anular_entrega(request, identrega):
-    rut_user = obtener_rut_usuario(request)
-    if not rut_user:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'No fue posible determinar el usuario que anula.'
-        }, status=400)
+    return _respuesta_entrega(lambda: srv_entregas.anular(identrega, obtener_rut_usuario(request)),
+                              'Entrega anulada correctamente.')
 
-    with transaction.atomic():
-        entrega = get_object_or_404(
-            EntregaProyecto.objects.select_for_update(),
-            pk=identrega
-        )
 
-        if entrega.idestadoentrega_id != 1:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'Solo se puede anular una entrega con estado 1.'
-            }, status=400)
-
-        entrega.idestadoentrega_id = 6
-        entrega.rutuseranula = rut_user
-        entrega.fechaanulacion = _ahora_santiago_naive()
-        entrega.rutuserupdate = rut_user
-        entrega.fechaupdate = _ahora_santiago_naive()
-
-        entrega.save(update_fields=[
-            'idestadoentrega',
-            'rutuseranula',
-            'fechaanulacion',
-            'rutuserupdate',
-            'fechaupdate',
-        ])
-
-    return JsonResponse({
-        'ok': True,
-        'mensaje': 'Entrega anulada correctamente.'
-    })
-    
 @login_required
 @require_POST
 def asignar_entrega_desarrollo(request, identrega):
-    rut_user = request.user.username
+    payload = _json_payload(request)
+    if payload is None:
+        return _datos_invalidos()
+    return _respuesta_entrega(
+        lambda: srv_entregas.enviar_a_desarrollo(identrega, request.user.username, payload.get('rut_usuario')),
+        'Entrega enviada a desarrollo correctamente.')
 
-    try:
-        payload = json.loads(request.body or '{}')
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Datos inválidos.'
-        }, status=400)
 
-    rut_desarrollador = payload.get('rut_usuario')
-    if not rut_desarrollador:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Debes seleccionar un usuario.'
-        }, status=400)
-
-    usuario_auth = User.objects.filter(
-        username=rut_desarrollador,
-        is_active=True
-    ).first()
-
-    if not usuario_auth:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'El usuario seleccionado no existe o está inactivo.'
-        }, status=400)
-
-    with transaction.atomic():
-        entrega = get_object_or_404(
-            EntregaProyecto.objects.select_for_update(),
-            pk=identrega
-        )
-
-        if entrega.idestadoentrega_id != ESTADO_ENTREGA_NUEVA:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'Solo se puede enviar a desarrollo una entrega con estado 1.'
-            }, status=400)
-
-        evento = _registrar_evento(
-            entrega,
-            ['A Desarrollo', 'Enviar a Desarrollo'],
-            origen=rut_user,
-            destino=rut_desarrollador
-        )
-
-        campos_desarrollo = _set_asignacion_desarrollo_por_flujo(
-            entrega,
-            rut_desarrollador,
-            evento.fechahora
-        )
-
-        entrega.idestadoentrega_id = ESTADO_ENTREGA_DESARROLLO
-        entrega.rutuserupdate = rut_user
-        entrega.fechaupdate = evento.fechahora
-
-        entrega.save(update_fields=[
-            'idestadoentrega',
-            'rutuserupdate',
-            'fechaupdate',
-            *campos_desarrollo
-        ])
-
-    return JsonResponse({
-        'ok': True,
-        'mensaje': 'Entrega enviada a desarrollo correctamente.'
-    })
-    
 @login_required
 @require_POST
 def mover_entrega_calendario(request, identrega):
-    rut_user = obtener_rut_usuario(request)
-    
-    if not rut_user:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'No fue posible determinar el usuario.'
-        }, status=400)
+    if not obtener_rut_usuario(request):
+        return JsonResponse({'ok': False, 'mensaje': 'No fue posible determinar el usuario.'}, status=400)
+    payload = _json_payload(request)
+    if payload is None:
+        return _datos_invalidos()
+    return _respuesta_entrega(
+        lambda: srv_entregas.mover(identrega, obtener_rut_usuario(request), payload.get('nueva_fecha')),
+        'Fecha de calendario actualizada correctamente.')
 
-    try:
-        payload = json.loads(request.body or '{}')
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Datos inválidos.'
-        }, status=400)
 
-    nueva_fecha = payload.get('nueva_fecha')
-    if not nueva_fecha:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Falta la nueva fecha.'
-        }, status=400)
+def _listado_entregas(request, plantilla, titulo, encabezado, submenu, estados=None, **extra):
+    context = {
+        'titulo': titulo,
+        'encabezado': encabezado,
+        'submenu': submenu,
+        'entregas': srv_entregas.listado(estados),
+        **extra,
+    }
+    return render(request, plantilla, context)
 
-    try:
-        fecha_nueva = datetime.strptime(nueva_fecha, '%Y-%m-%d').date()
-    except ValueError:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Formato de fecha inválido.'
-        }, status=400)
 
-    with transaction.atomic():
-        entrega = get_object_or_404(
-            EntregaProyecto.objects.select_for_update(),
-            pk=identrega
-        )
-
-        if entrega.idestadoentrega_id == 5:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'No se puede mover una entrega con estado 5.'
-            }, status=400)
-
-        if not entrega.fechacalendario:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'La entrega no tiene fecha calendario.'
-            }, status=400)
-
-        fecha_actual = entrega.fechacalendario
-
-        # conserva hora/minuto/segundo, cambia solo el día
-        fecha_actualizada = fecha_actual.replace(
-            year=fecha_nueva.year,
-            month=fecha_nueva.month,
-            day=fecha_nueva.day
-        )
-
-        entrega.fechacalendario = fecha_actualizada
-        entrega.rutuserupdate = rut_user
-        entrega.fechaupdate = _ahora_santiago_naive()
-        entrega.save()
-
-    return JsonResponse({
-        'ok': True,
-        'mensaje': 'Fecha de calendario actualizada correctamente.'
-    })    
-    
 @login_required
 def entregas_general(request):
-    observaciones_qs = (
-        Entregaobservacion.objects
-        .filter(entrega_id=OuterRef('pk'), estado=1)
-        .values('entrega_id')
-        .annotate(total=Count('id'))
-        .values('total')[:1]
-    )
-
-    creador_qs = (
-        tusuario.objects
-        .filter(idusuario=OuterRef('rutusercreador'))
-        .values('nombreusuario')[:1]
-    )
-
-    entregas = (
-        EntregaProyecto.objects
-        .exclude(idestadoentrega_id=ESTADO_ENTREGA_NULA)
-        .select_related(
-            'idproyecto',
-            'idproyecto__idcotizacion',
-            'idproyecto__idcliente',
-            'idproyecto__idtamano',
-            'idtipoentrega',
-            'idurgencia',
-            'idestadoentrega',
-        )
-        .annotate(
-            rut_cliente=F('idproyecto__idcliente__rut'),
-            fecha_adjudicacion=F('idproyecto__fechaadjudicacion'),
-            descripcion_urgencia=F('idurgencia__descrip'),
-            simbolo_urgencia=F('idurgencia__simbolo'),
-            nombre_usuario_creador=Subquery(
-                creador_qs,
-                output_field=CharField()
-            ),
-            nombre_proyecto=F('idproyecto__idcotizacion__nombreproyecto'),
-            descripcion_tipo_entrega=F('idtipoentrega__descripcion'),
-            descripcion_estado_entrega=F('idestadoentrega__descrip'),
-            estado_proyecto=F('idproyecto__estado'),
-            color_tipo_entrega=F('idtipoentrega__color'),
-            descripcion_tamanio_proyecto=F('idproyecto__idtamano__descripcion'),
-            observaciones=Coalesce(
-                Subquery(observaciones_qs, output_field=IntegerField()),
-                Value(0)
-            ),
-        )
-        .order_by('-fechacalendario', '-identrega')
-    )
-
-    usernames = set()
-    for e in entregas:
-        rut_actual = _rut_desarrollador_actual(e)
-        if rut_actual:
-            usernames.add(rut_actual)
-
-    mapa_usuarios = {
-        u.username: (u.get_full_name().strip() or u.username)
-        for u in User.objects.filter(username__in=usernames)
-    }
-
-    for e in entregas:
-        rut_actual = _rut_desarrollador_actual(e)
-        e.nombre_desarrollador_actual = mapa_usuarios.get(rut_actual, rut_actual or '')
-        e.fecha_asignacion = _fecha_desarrollador_actual(e)
-        e.nombre_usuario_creador = e.nombre_usuario_creador or e.rutusercreador or ''
-        
-    context = {
-        'titulo': 'Entregas General',
-        'encabezado': 'Entregas General',
-        'submenu': 'Listado general de entregas',
-        'entregas': entregas,
-    }
-    return render(request, 'entregas_general.html', context)
-
-def _nombre_usuario_visible(codigo_usuario, mapa_usuarios):
-    if not codigo_usuario:
-        return ''
-    return mapa_usuarios.get(codigo_usuario, codigo_usuario)
+    return _listado_entregas(request, 'entregas_general.html', 'Entregas General', 'Entregas General',
+                             'Listado general de entregas')
 
 
-def _formatear_fecha_hora_local(fecha):
-    if not fecha:
-        return ''
-
-    if timezone.is_aware(fecha):
-        fecha = timezone.localtime(fecha)
-
-    return fecha.strftime('%d-%m-%Y %H:%M')
+@login_required
+def entregas_revision(request):
+    return _listado_entregas(request, 'entregas_revision.html', 'Entregas Revisión', 'Entregas en Revisión',
+                             'Listado entregas en revisión', [srv_entregas.ESTADO_REVISION],
+                             tipos_observacion=srv_entregas.tipos_observacion(),
+                             calificaciones=srv_entregas.calificaciones())
 
 
-def _mapa_nombres_usuarios(codigos):
-    codigos = [c for c in set(codigos) if c]
-    if not codigos:
-        return {}
+@login_required
+def entregas_desarrollo(request):
+    return _listado_entregas(request, 'entregas_desarrollo.html', 'Entregas Desarrollo', 'Entregas en Desarrollo',
+                             'Listado entregas en desarrollo',
+                             [srv_entregas.ESTADO_DESARROLLO, srv_entregas.ESTADO_CORRECCIONES])
 
-    usuarios = User.objects.filter(username__in=codigos)
-
-    return {
-        u.username: (u.get_full_name().strip() or u.username)
-        for u in usuarios
-    }
-
-
-def _construir_eventos_entrega(entrega, mapa_usuarios):
-    eventos = []
-
-    def agregar_evento(nombre_evento, origen, destino, fecha_evento):
-        if not fecha_evento:
-            return
-
-        eventos.append({
-            'evento': nombre_evento,
-            'origen': _nombre_usuario_visible(origen, mapa_usuarios),
-            'destino': _nombre_usuario_visible(destino, mapa_usuarios),
-            'fecha': _formatear_fecha_hora_local(fecha_evento),
-            '_orden': fecha_evento,
-        })
-
-    agregar_evento('A Desarrollo', entrega.rutusercreador, entrega.rutuserdesa1, entrega.fechaasigdesa1)
-    agregar_evento('A Revisión', entrega.rutuserdesa1, entrega.rutuserrev1, entrega.fechaasigrev1)
-
-    agregar_evento('A Desarrollo', entrega.rutuserrev1, entrega.rutuserdesa2, entrega.fechaasigdesa2)
-    agregar_evento('A Revisión', entrega.rutuserdesa2, entrega.rutuserrev2, entrega.fechaasigrev2)
-
-    agregar_evento('A Desarrollo', entrega.rutuserrev2, entrega.rutuserdesa3, entrega.fechaasigdesa3)
-    agregar_evento('A Revisión', entrega.rutuserdesa3, entrega.rutuserrev3, entrega.fechaasigrev3)
-
-    eventos.sort(key=lambda x: x['_orden'])
-
-    for e in eventos:
-        e.pop('_orden', None)
-
-    return eventos
-
-def _resolver_tipoevento(*alternativas):
-    for nombre in alternativas:
-        te = Tipoevento.objects.filter(nombre__iexact=nombre).first()
-        if te:
-            return te
-
-    for nombre in alternativas:
-        te = Tipoevento.objects.filter(nombre__icontains=nombre).first()
-        if te:
-            return te
-
-    return None
-
-def _registrar_evento(entrega, alternativas_tipoevento, origen='', destino=''):
-    tipoevento = _resolver_tipoevento(*alternativas_tipoevento)
-    if not tipoevento:
-        raise ValueError(
-            f"No existe Tipoevento para ninguna de estas opciones: {alternativas_tipoevento}"
-        )
-
-    evento = Entregaevento.objects.create(
-        entrega=entrega,
-        tipoevento=tipoevento,
-        rutorigen=origen or '',
-        rutdestino=destino or '',
-    )
-    return evento
-
-def _ultimo_desarrollador_asignado(entrega):
-    return (
-        entrega.rutuserdesa3
-        or entrega.rutuserdesa2
-        or entrega.rutuserdesa1
-        or ''
-    )
-
-def _set_asignacion_desarrollo_por_flujo(entrega, rut_destino, fecha_evento):
-    """
-    Flujo:
-    1 -> 2  => Desa1
-    4 -> 3  => Desa2, luego Desa3, y desde ahí seguir en Desa3
-    """
-    if entrega.idestadoentrega_id == ESTADO_ENTREGA_NUEVA:
-        entrega.rutuserdesa1 = rut_destino
-        entrega.fechaasigdesa1 = fecha_evento
-        return ['rutuserdesa1', 'fechaasigdesa1']
-
-    if entrega.idestadoentrega_id == ESTADO_ENTREGA_REVISION:
-        if not entrega.rutuserdesa2:
-            entrega.rutuserdesa2 = rut_destino
-            entrega.fechaasigdesa2 = fecha_evento
-            return ['rutuserdesa2', 'fechaasigdesa2']
-
-        if not entrega.rutuserdesa3:
-            entrega.rutuserdesa3 = rut_destino
-            entrega.fechaasigdesa3 = fecha_evento
-            return ['rutuserdesa3', 'fechaasigdesa3']
-
-        # Saturación: seguir iterando en Desa3
-        entrega.rutuserdesa3 = rut_destino
-        entrega.fechaasigdesa3 = fecha_evento
-        return ['rutuserdesa3', 'fechaasigdesa3']
-
-    raise ValueError('Flujo no válido para asignación a desarrollo.')
-
-
-def _set_asignacion_revision_por_flujo(entrega, rut_destino, fecha_evento):
-    """
-    Flujo:
-    2 -> 4  => Rev1
-    3 -> 4  => Rev2, luego Rev3, y desde ahí seguir en Rev3
-    """
-    if entrega.idestadoentrega_id == ESTADO_ENTREGA_DESARROLLO:
-        if not entrega.rutuserrev1:
-            entrega.rutuserrev1 = rut_destino
-            entrega.fechaasigrev1 = fecha_evento
-            return ['rutuserrev1', 'fechaasigrev1']
-
-        # si por algún motivo ya existe, lo vuelve a escribir
-        entrega.rutuserrev1 = rut_destino
-        entrega.fechaasigrev1 = fecha_evento
-        return ['rutuserrev1', 'fechaasigrev1']
-
-    if entrega.idestadoentrega_id == ESTADO_ENTREGA_CORRECCIONES:
-        if not entrega.rutuserrev2:
-            entrega.rutuserrev2 = rut_destino
-            entrega.fechaasigrev2 = fecha_evento
-            return ['rutuserrev2', 'fechaasigrev2']
-
-        if not entrega.rutuserrev3:
-            entrega.rutuserrev3 = rut_destino
-            entrega.fechaasigrev3 = fecha_evento
-            return ['rutuserrev3', 'fechaasigrev3']
-
-        # Saturación: seguir iterando en Rev3
-        entrega.rutuserrev3 = rut_destino
-        entrega.fechaasigrev3 = fecha_evento
-        return ['rutuserrev3', 'fechaasigrev3']
-
-    raise ValueError('Flujo no válido para asignación a revisión.')
 
 @login_required
 @require_POST
 def enviar_entrega_revision(request, identrega):
-    rut_user = request.user.username
+    payload = _json_payload(request)
+    if payload is None:
+        return _datos_invalidos()
+    return _respuesta_entrega(
+        lambda: srv_entregas.enviar_a_revision(identrega, request.user.username, payload.get('rut_usuario')),
+        'Entrega enviada a revisión correctamente.')
 
-    try:
-        payload = json.loads(request.body or '{}')
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Datos inválidos.'
-        }, status=400)
-
-    rut_revisor = payload.get('rut_usuario')
-    if not rut_revisor:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'Debes seleccionar un usuario.'
-        }, status=400)
-
-    usuario_revisor = User.objects.filter(
-        username=rut_revisor,
-        is_active=True
-    ).first()
-
-    if not usuario_revisor:
-        return JsonResponse({
-            'ok': False,
-            'mensaje': 'El usuario seleccionado no existe o está inactivo.'
-        }, status=400)
-
-    with transaction.atomic():
-        entrega = get_object_or_404(
-            EntregaProyecto.objects.select_for_update(),
-            pk=identrega
-        )
-
-        if entrega.idestadoentrega_id not in [ESTADO_ENTREGA_DESARROLLO, ESTADO_ENTREGA_CORRECCIONES]:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'Solo se puede enviar a revisión una entrega en desarrollo o correcciones.'
-            }, status=400)
-
-        evento = _registrar_evento(
-            entrega,
-            ['A Revisión', 'Enviar a Revisión'],
-            origen=rut_user,
-            destino=rut_revisor
-        )
-
-        campos_revision = _set_asignacion_revision_por_flujo(
-            entrega,
-            rut_revisor,
-            evento.fechahora
-        )
-
-        entrega.idestadoentrega_id = ESTADO_ENTREGA_REVISION
-        entrega.rutuserupdate = rut_user
-        entrega.fechaupdate = evento.fechahora
-
-        entrega.save(update_fields=[
-            'idestadoentrega',
-            'rutuserupdate',
-            'fechaupdate',
-            *campos_revision
-        ])
-
-    return JsonResponse({
-        'ok': True,
-        'mensaje': 'Entrega enviada a revisión correctamente.'
-    })
-    
-def _eventos_fallback_desde_entrega(entrega, mapa_usuarios):
-    """
-    Solo para entregas antiguas que todavía no tienen registros en EntregaEvento.
-    """
-    eventos = []
-
-    def agregar(nombre_evento, origen, destino, fecha_evento):
-        if not fecha_evento:
-            return
-        eventos.append({
-            'evento': nombre_evento,
-            'origen': _nombre_usuario_visible(origen, mapa_usuarios),
-            'destino': _nombre_usuario_visible(destino, mapa_usuarios),
-            'fecha': _formatear_fecha_hora_local(fecha_evento),
-            '_orden': fecha_evento,
-        })
-
-    agregar('A Desarrollo', entrega.rutusercreador, entrega.rutuserdesa1, entrega.fechaasigdesa1)
-    agregar('A Revisión', entrega.rutuserdesa1, entrega.rutuserrev1, entrega.fechaasigrev1)
-    agregar('A Desarrollo', entrega.rutuserrev1, entrega.rutuserdesa2, entrega.fechaasigdesa2)
-    agregar('A Revisión', entrega.rutuserdesa2, entrega.rutuserrev2, entrega.fechaasigrev2)
-    agregar('A Desarrollo', entrega.rutuserrev2, entrega.rutuserdesa3, entrega.fechaasigdesa3)
-    agregar('A Revisión', entrega.rutuserdesa3, entrega.rutuserrev3, entrega.fechaasigrev3)
-
-    eventos.sort(key=lambda x: x['_orden'])
-
-    for e in eventos:
-        e.pop('_orden', None)
-
-    return eventos
 
 @login_required
 def visor_entrega(request, identrega):
-    entrega = get_object_or_404(
-        EntregaProyecto.objects.select_related(
-            'idproyecto',
-            'idproyecto__idcotizacion',
-            'idtipoentrega',
-            'idestadoentrega',
-        ),
-        pk=identrega
-    )
+    try:
+        return JsonResponse(srv_entregas.visor(identrega))
+    except srv_entregas.NoEncontrado as e:
+        raise Http404(str(e))
 
-    observaciones_qs = (
-        Entregaobservacion.objects
-        .filter(entrega_id=identrega, estado=1)
-        .select_related(
-            'observacion',
-            'observacion__tipoobservacion',
-            'observacion__calificacion',
-        )
-        .order_by('id')
-    )
-
-    eventos_qs = (
-        Entregaevento.objects
-        .filter(entrega_id=identrega)
-        .select_related('tipoevento')
-        .order_by('fechahora', 'identregaevento')
-    )
-
-    codigos_usuarios = [
-        entrega.rutusercreador,
-        entrega.rutuserdesa1,
-        entrega.rutuserdesa2,
-        entrega.rutuserdesa3,
-        entrega.rutuserrev1,
-        entrega.rutuserrev2,
-        entrega.rutuserrev3,
-        entrega.rutuserupdate,
-        entrega.rutuseranula,
-    ]
-
-    for ev in eventos_qs:
-        codigos_usuarios.append(ev.rutorigen)
-        codigos_usuarios.append(ev.rutdestino)
-
-    mapa_usuarios = _mapa_nombres_usuarios(codigos_usuarios)
-
-    data = {
-        'ok': True,
-        'identrega': entrega.identrega,
-        'estadoentrega_id': entrega.idestadoentrega_id or 0,
-        'estadoentrega': entrega.idestadoentrega.descrip if entrega.idestadoentrega else '',
-        'idproyecto': str(entrega.idproyecto_id or ''),
-        'nombreproyecto': '',
-        'tipoentrega': '',
-        'fechaentrega': entrega.fechaentrega.strftime('%d-%m-%Y') if entrega.fechaentrega else '',
-        'observaciones': [],
-        'eventos': [],
-    }
-
-    if entrega.idproyecto and entrega.idproyecto.idcotizacion:
-        data['nombreproyecto'] = entrega.idproyecto.idcotizacion.nombreproyecto or ''
-
-    if entrega.idtipoentrega:
-        data['tipoentrega'] = entrega.idtipoentrega.descripcion or ''
-
-    for eo in observaciones_qs:
-        obs = eo.observacion
-        data['observaciones'].append({
-            'nro': obs.id if obs else '',
-            'tipo': obs.tipoobservacion.nombre if obs and obs.tipoobservacion else '',
-            'descripcion': obs.nombre if obs else '',
-            'calificacion': obs.calificacion.nombre if obs and obs.calificacion else '',
-            'estado': 'CORREGIDA',
-        })
-
-    if eventos_qs.exists():
-        for ev in eventos_qs:
-            data['eventos'].append({
-                'evento': ev.tipoevento.nombre if ev.tipoevento else '',
-                'origen': _nombre_usuario_visible(ev.rutorigen, mapa_usuarios),
-                'destino': _nombre_usuario_visible(ev.rutdestino, mapa_usuarios),
-                'fecha': _formatear_fecha_hora_local(ev.fechahora),
-            })
-    else:
-        # compatibilidad con entregas antiguas sin historial cargado
-        data['eventos'] = _eventos_fallback_desde_entrega(entrega, mapa_usuarios)
-
-    return JsonResponse(data)
-
-@login_required
-def entregas_revision(request):
-    observaciones_qs = (
-        Entregaobservacion.objects
-        .filter(entrega_id=OuterRef('pk'), estado=1)
-        .values('entrega_id')
-        .annotate(total=Count('id'))
-        .values('total')[:1]
-    )
-
-    creador_qs = (
-        tusuario.objects
-        .filter(idusuario=OuterRef('rutusercreador'))
-        .values('nombreusuario')[:1]
-    )
-
-    entregas = (
-        EntregaProyecto.objects
-        .filter(idestadoentrega_id=ESTADO_ENTREGA_REVISION)
-        .select_related(
-            'idproyecto',
-            'idproyecto__idcotizacion',
-            'idproyecto__idcliente',
-            'idproyecto__idtamano',
-            'idtipoentrega',
-            'idurgencia',
-            'idestadoentrega',
-        )
-        .annotate(
-            rut_cliente=F('idproyecto__idcliente__rut'),
-            fecha_adjudicacion=F('idproyecto__fechaadjudicacion'),
-            descripcion_urgencia=F('idurgencia__descrip'),
-            simbolo_urgencia=F('idurgencia__simbolo'),
-            nombre_usuario_creador=Subquery(
-                creador_qs,
-                output_field=CharField()
-            ),
-            nombre_proyecto=F('idproyecto__idcotizacion__nombreproyecto'),
-            descripcion_tipo_entrega=F('idtipoentrega__descripcion'),
-            descripcion_estado_entrega=F('idestadoentrega__descrip'),
-            estado_proyecto=F('idproyecto__estado'),
-            color_tipo_entrega=F('idtipoentrega__color'),
-            descripcion_tamanio_proyecto=F('idproyecto__idtamano__descripcion'),
-            observaciones=Coalesce(
-                Subquery(observaciones_qs, output_field=IntegerField()),
-                Value(0)
-            ),
-        )
-        .order_by('-fechacalendario', '-identrega')
-    )
-
-    usernames = set()
-    for e in entregas:
-        rut_actual = _rut_desarrollador_actual(e)
-        if rut_actual:
-            usernames.add(rut_actual)
-
-    mapa_usuarios = {
-        u.username: (u.get_full_name().strip() or u.username)
-        for u in User.objects.filter(username__in=usernames)
-    }
-
-    for e in entregas:
-        rut_actual = _rut_desarrollador_actual(e)
-        e.nombre_desarrollador_actual = mapa_usuarios.get(rut_actual, rut_actual or '')
-        e.fecha_asignacion = _fecha_desarrollador_actual(e)
-        e.nombre_usuario_creador = e.nombre_usuario_creador or e.rutusercreador or ''
-
-    context = {
-        'titulo': 'Entregas Revisión',
-        'encabezado': 'Entregas en Revisión',
-        'submenu': 'Listado entregas en revisión',
-        'entregas': entregas,
-        'tipos_observacion': Tipoobservacion.objects.order_by('nombre'),
-        'calificaciones': Calificacion.objects.order_by('nombre'),
-    }
-    return render(request, 'entregas_revision.html', context)
-
-@login_required
-def entregas_desarrollo(request):
-    observaciones_qs = (
-        Entregaobservacion.objects
-        .filter(entrega_id=OuterRef('pk'), estado=1)
-        .values('entrega_id')
-        .annotate(total=Count('id'))
-        .values('total')[:1]
-    )
-
-    creador_qs = (
-        tusuario.objects
-        .filter(idusuario=OuterRef('rutusercreador'))
-        .values('nombreusuario')[:1]
-    )
-
-    entregas = (
-        EntregaProyecto.objects
-        .filter(idestadoentrega_id__in=[ESTADO_ENTREGA_DESARROLLO, ESTADO_ENTREGA_CORRECCIONES])
-        .select_related(
-            'idproyecto',
-            'idproyecto__idcotizacion',
-            'idproyecto__idcliente',
-            'idproyecto__idtamano',
-            'idtipoentrega',
-            'idurgencia',
-            'idestadoentrega',
-        )
-        .annotate(
-            rut_cliente=F('idproyecto__idcliente__rut'),
-            fecha_adjudicacion=F('idproyecto__fechaadjudicacion'),
-            descripcion_urgencia=F('idurgencia__descrip'),
-            simbolo_urgencia=F('idurgencia__simbolo'),
-            nombre_usuario_creador=Subquery(
-                creador_qs,
-                output_field=CharField()
-            ),
-            nombre_proyecto=F('idproyecto__idcotizacion__nombreproyecto'),
-            descripcion_tipo_entrega=F('idtipoentrega__descripcion'),
-            descripcion_estado_entrega=F('idestadoentrega__descrip'),
-            estado_proyecto=F('idproyecto__estado'),
-            color_tipo_entrega=F('idtipoentrega__color'),
-            descripcion_tamanio_proyecto=F('idproyecto__idtamano__descripcion'),
-            observaciones=Coalesce(
-                Subquery(observaciones_qs, output_field=IntegerField()),
-                Value(0)
-            ),
-        )
-        .order_by('-fechacalendario', '-identrega')
-    )
-
-    usernames = set()
-    for e in entregas:
-        rut_actual = _rut_desarrollador_actual(e)
-        if rut_actual:
-            usernames.add(rut_actual)
-
-    mapa_usuarios = {
-        u.username: (u.get_full_name().strip() or u.username)
-        for u in User.objects.filter(username__in=usernames)
-    }
-
-    for e in entregas:
-        rut_actual = _rut_desarrollador_actual(e)
-        e.nombre_desarrollador_actual = mapa_usuarios.get(rut_actual, rut_actual or '')
-        e.fecha_asignacion = _fecha_desarrollador_actual(e)
-        e.nombre_usuario_creador = e.nombre_usuario_creador or e.rutusercreador or ''
-
-    context = {
-        'titulo': 'Entregas Desarrollo',
-        'encabezado': 'Entregas en Desarrollo',
-        'submenu': 'Listado entregas en desarrollo',
-        'entregas': entregas,
-    }
-    return render(request, 'entregas_desarrollo.html', context)
 
 @login_required
 @require_GET
 def listar_observaciones_catalogo(request):
-    observaciones = (
-        Observacion.objects
-        .select_related('tipoobservacion', 'calificacion')
-        .order_by('tipoobservacion__nombre', 'nombre')
-    )
-
-    data = []
-    for o in observaciones:
-        data.append({
-            'id': o.id,
-            'tipo': o.tipoobservacion.nombre if o.tipoobservacion else '',
-            'descripcion': o.nombre or '',
-            'calificacion': o.calificacion.nombre if o.calificacion else '',
-        })
-
-    return JsonResponse({'ok': True, 'observaciones': data})
+    return JsonResponse({'ok': True, 'observaciones': srv_entregas.observaciones_catalogo()})
 
 
 @login_required
 @require_POST
 def agregar_observacion_entrega(request, identrega):
-    idobservacion = request.POST.get('idobservacion')
-
-    if not idobservacion:
-        return JsonResponse({'ok': False, 'mensaje': 'Falta la observación.'}, status=400)
-
-    entrega = get_object_or_404(EntregaProyecto, pk=identrega)
-    observacion = get_object_or_404(Observacion, pk=idobservacion)
-
-    existe = Entregaobservacion.objects.filter(
-        entrega=entrega,
-        observacion=observacion,
-        estado=1
-    ).exists()
-
-    if existe:
-        return JsonResponse({
-            'ok': True,
-            'mensaje': 'La observación ya estaba agregada a esta entrega.'
-        })
-
-    Entregaobservacion.objects.create(
-        entrega=entrega,
-        observacion=observacion,
-        username=request.user,
-        estado=1
-    )
-
-    return JsonResponse({
-        'ok': True,
-        'mensaje': 'Observación agregada correctamente.'
-    })
+    try:
+        agregada = srv_entregas.agregar_observacion(identrega, request.POST.get('idobservacion'), request.user)
+    except srv_entregas.ErrorValidacion as e:
+        return JsonResponse({'ok': False, 'mensaje': str(e)}, status=400)
+    except srv_entregas.NoEncontrado as e:
+        raise Http404(str(e))
+    return JsonResponse({'ok': True, 'mensaje': 'Observación agregada correctamente.' if agregada
+                         else 'La observación ya estaba agregada a esta entrega.'})
 
 
 @login_required
 @require_POST
 def crear_observacion_catalogo(request, identrega):
-    idtipoobservacion = request.POST.get('idtipoobservacion')
-    idcalificacion = request.POST.get('idcalificacion')
-    descripcion = (request.POST.get('descripcion') or '').strip()
-
-    if not idtipoobservacion:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes seleccionar el tipo.'}, status=400)
-
-    if not idcalificacion:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes seleccionar la calificación.'}, status=400)
-
-    if not descripcion:
-        return JsonResponse({'ok': False, 'mensaje': 'Debes ingresar la descripción.'}, status=400)
-
-    entrega = get_object_or_404(EntregaProyecto, pk=identrega)
-    tipo = get_object_or_404(Tipoobservacion, pk=idtipoobservacion)
-    calificacion = get_object_or_404(Calificacion, pk=idcalificacion)
-
-    with transaction.atomic():
-        obs = Observacion.objects.create(
-            tipoobservacion=tipo,
-            nombre=descripcion,
-            calificacion=calificacion
-        )
-
-        Entregaobservacion.objects.create(
-            entrega=entrega,
-            observacion=obs,
-            username=request.user,
-            estado=1
-        )
-
-    return JsonResponse({
-        'ok': True,
-        'mensaje': 'Nueva observación creada y asignada a la entrega.',
-        'idobservacion': obs.id
-    })
+    return _respuesta_entrega(
+        lambda: srv_entregas.crear_observacion(identrega, request.POST.get('idtipoobservacion'),
+                                               request.POST.get('idcalificacion'),
+                                               (request.POST.get('descripcion') or '').strip(), request.user),
+        'Nueva observación creada y asignada a la entrega.', idobservacion=lambda o: o.id)
 
 
 @login_required
 @require_POST
 def entrega_revision_enviar_desarrollo(request, identrega):
-    rut_user = request.user.username
+    return _respuesta_entrega(lambda: srv_entregas.devolver_a_desarrollo(identrega, request.user.username),
+                              'Entrega enviada a correcciones correctamente.')
 
-    with transaction.atomic():
-        entrega = get_object_or_404(
-            EntregaProyecto.objects.select_for_update(),
-            pk=identrega
-        )
-
-        if entrega.idestadoentrega_id != ESTADO_ENTREGA_REVISION:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'Solo se puede enviar a desarrollo una entrega en revisión.'
-            }, status=400)
-
-        rut_destino = _ultimo_desarrollador_asignado(entrega)
-        if not rut_destino:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'No existe desarrollador previo para reenviar la entrega.'
-            }, status=400)
-
-        usuario_destino = User.objects.filter(
-            username=rut_destino,
-            is_active=True
-        ).first()
-
-        if not usuario_destino:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'El desarrollador asociado no existe o está inactivo.'
-            }, status=400)
-
-        evento = _registrar_evento(
-            entrega,
-            ['A Desarrollo', 'Enviar a Desarrollo'],
-            origen=rut_user,
-            destino=rut_destino
-        )
-
-        campos_desarrollo = _set_asignacion_desarrollo_por_flujo(
-            entrega,
-            rut_destino,
-            evento.fechahora
-        )
-
-        entrega.idestadoentrega_id = ESTADO_ENTREGA_CORRECCIONES
-        entrega.rutuserupdate = rut_user
-        entrega.fechaupdate = evento.fechahora
-
-        entrega.save(update_fields=[
-            'idestadoentrega',
-            'rutuserupdate',
-            'fechaupdate',
-            *campos_desarrollo
-        ])
-
-    return JsonResponse({
-        'ok': True,
-        'mensaje': 'Entrega enviada a correcciones correctamente.'
-    })
 
 @login_required
 @require_POST
 def entrega_revision_ok(request, identrega):
-    rut_user = request.user.username
-
-    with transaction.atomic():
-        entrega = get_object_or_404(
-            EntregaProyecto.objects.select_for_update(),
-            pk=identrega
-        )
-
-        if entrega.idestadoentrega_id != ESTADO_ENTREGA_REVISION:
-            return JsonResponse({
-                'ok': False,
-                'mensaje': 'Solo se puede marcar OK una entrega en revisión.'
-            }, status=400)
-
-        evento = _registrar_evento(
-            entrega,
-            ['Entrega OK', 'OK'],
-            origen=rut_user,
-            destino=''
-        )
-
-        entrega.idestadoentrega_id = ESTADO_ENTREGA_ENTREGADO
-        entrega.fechacalendario = evento.fechahora
-        entrega.rutuserupdate = rut_user
-        entrega.fechaupdate = evento.fechahora
-
-        entrega.save(update_fields=[
-            'idestadoentrega',
-            'fechacalendario',
-            'rutuserupdate',
-            'fechaupdate',
-        ])
-
-    return JsonResponse({
-        'ok': True,
-        'mensaje': 'Entrega marcada como OK correctamente.'
-    })
+    return _respuesta_entrega(lambda: srv_entregas.marcar_entregada(identrega, request.user.username),
+                              'Entrega marcada como OK correctamente.')
