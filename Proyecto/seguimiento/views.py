@@ -41,6 +41,7 @@ from .servicios import uf as srv_uf
 from .servicios import cotizaciones as srv_cotizaciones
 from .servicios import clientes as srv_clientes
 from .servicios import entregas as srv_entregas
+from .servicios import tablas as srv_tablas
 from django.http import Http404
 
 
@@ -150,10 +151,6 @@ def _direccion_mandante(cliente):
     if not cliente:
         return ''
     return cliente.direcfactura or cliente.direccion or ''
-
-
-def _sincronizar_uf_faltantes():
-    return srv_uf.sincronizar_faltantes()[0]
 
 
 User = get_user_model()
@@ -761,7 +758,7 @@ class ListaCategoria(LoginRequiredMixin,ListView):
     template_name = 'listacategoria.html'
 
     def get_queryset(self):
-        return self.model.objects.all().order_by('NombreCat').reverse()
+        return srv_tablas.categorias()
 
     def get(self, request, *args, **kwargs):
         contexto = {
@@ -1283,7 +1280,7 @@ class ListaTipoEntrega(LoginRequiredMixin,ListView):
     context_object_name = 'tipos_entrega'
 
     def get_queryset(self):
-        return self.model.objects.all().order_by('descripcion')
+        return srv_tablas.tipos_entrega()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1302,8 +1299,7 @@ class ListaValorUF(LoginRequiredMixin, ListView):
     context_object_name = 'valores_uf'
 
     def get_queryset(self):
-        _sincronizar_uf_faltantes()
-        return self.model.objects.all().order_by('-Fecha')
+        return srv_tablas.valores_uf()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1321,7 +1317,7 @@ def valor_uf_create(request):
     if request.method == 'POST':
         form = ValorUFForm(request.POST)
         if form.is_valid():
-            form.save()
+            srv_tablas.guardar(form)
             return redirect('lista-valor-uf')
     else:
         form = ValorUFForm()
@@ -1338,12 +1334,14 @@ def valor_uf_create(request):
 
 @login_required
 def valor_uf_update(request, pk):
-    valor_uf = get_object_or_404(tValorUF, pk=date.fromisoformat(pk))
+    valor_uf = srv_tablas.valor_uf(pk)
+    if valor_uf is None:
+        raise Http404('Valor UF no encontrado.')
 
     if request.method == 'POST':
         form = ValorUFForm(request.POST, instance=valor_uf)
         if form.is_valid():
-            form.save()
+            srv_tablas.guardar(form)
             return redirect('lista-valor-uf')
     else:
         form = ValorUFForm(instance=valor_uf)
@@ -1361,10 +1359,12 @@ def valor_uf_update(request, pk):
 
 @login_required
 def valor_uf_delete(request, pk):
-    valor_uf = get_object_or_404(tValorUF, pk=date.fromisoformat(pk))
+    valor_uf = srv_tablas.valor_uf(pk)
+    if valor_uf is None:
+        raise Http404('Valor UF no encontrado.')
 
     if request.method == 'POST':
-        valor_uf.delete()
+        srv_tablas.eliminar_valor_uf(valor_uf)
         return redirect('lista-valor-uf')
 
     context = {
@@ -1381,7 +1381,7 @@ def tipo_entrega_create(request):
     if request.method == 'POST':
         form = TipoEntregaForm(request.POST)
         if form.is_valid():
-            form.save()
+            srv_tablas.guardar(form)
             return redirect('lista-tipo-entrega')
     else:
         form = TipoEntregaForm()
@@ -1398,12 +1398,14 @@ def tipo_entrega_create(request):
 
 @login_required
 def tipo_entrega_update(request, pk):
-    tipo_entrega = get_object_or_404(TipoEntrega, pk=pk)
+    tipo_entrega = srv_tablas.tipo_entrega(pk)
+    if tipo_entrega is None:
+        raise Http404('Tipo de entrega no encontrado.')
 
     if request.method == 'POST':
         form = TipoEntregaForm(request.POST, instance=tipo_entrega)
         if form.is_valid():
-            form.save()
+            srv_tablas.guardar(form)
             return redirect('lista-tipo-entrega')
     else:
         form = TipoEntregaForm(instance=tipo_entrega)
@@ -1421,19 +1423,18 @@ def tipo_entrega_update(request, pk):
 
 @login_required
 def tipo_entrega_delete(request, pk):
-    tipo_entrega = get_object_or_404(TipoEntrega, pk=pk)
-    entregas_asociadas = EntregaProyecto.objects.filter(idtipoentrega=tipo_entrega).count()
+    tipo_entrega = srv_tablas.tipo_entrega(pk)
+    if tipo_entrega is None:
+        raise Http404('Tipo de entrega no encontrado.')
+    entregas_asociadas = srv_tablas.entregas_con_tipo(tipo_entrega)
     error_eliminacion = None
 
     if request.method == 'POST':
-        if entregas_asociadas:
-            error_eliminacion = 'No se puede eliminar el tipo de entrega porque tiene entregas asociadas.'
-        else:
-            try:
-                tipo_entrega.delete()
-                return redirect('lista-tipo-entrega')
-            except IntegrityError:
-                error_eliminacion = 'No se puede eliminar el tipo de entrega porque esta siendo utilizado por otros registros.'
+        try:
+            srv_tablas.eliminar_tipo_entrega(tipo_entrega)
+            return redirect('lista-tipo-entrega')
+        except srv_tablas.NoSePuedeEliminar as e:
+            error_eliminacion = str(e)
 
     context = {
         'titulo': 'Eliminar tipo de entrega',

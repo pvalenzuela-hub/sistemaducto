@@ -1,74 +1,26 @@
+"""Usuarios de la aplicación (solo Director). Datos y reglas en seguimiento.servicios.usuarios y .vacaciones."""
 from datetime import date
-from dateutil.relativedelta import relativedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.contrib.auth.models import Group, User
-from django.db import transaction, IntegrityError
-from django.db.models import Max, Sum
-from django.db import connection
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 
-from Vacation.models import Persona
+from seguimiento.servicios import usuarios as srv
+from seguimiento.servicios import vacaciones as srv_vacaciones
 
 
 def _es_administrador(user):
-    return user.is_authenticated and user.groups.filter(name='Director').exists()
-
-
-def _crear_persona_si_falta(usuario):
-    _asegurar_usuario_ducto(usuario)
-    if Persona.objects.filter(user_per=usuario).exists():
-        return
-
-    siguiente_id = (Persona.objects.aggregate(mx=Max('id'))['mx'] or 0) + 1
-    Persona.objects.create(
-        id=siguiente_id,
-        user_per=usuario,
-        feccon=date.today(),
-        suma_dias_vacaciones=0,
-    )
-
-
-def _asegurar_usuario_ducto(usuario):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT COUNT(*) FROM ducto.auth_user WHERE id = %s", [usuario.id])
-        existe = cursor.fetchone()[0]
-        if existe:
-            return
-
-        cursor.execute("SET IDENTITY_INSERT ducto.auth_user ON")
-        cursor.execute(
-            """
-            INSERT INTO ducto.auth_user
-            (id, password, last_login, is_superuser, username, first_name, last_name, email, is_staff, is_active, date_joined)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            [
-                usuario.id,
-                usuario.password,
-                usuario.last_login,
-                int(usuario.is_superuser),
-                usuario.username,
-                usuario.first_name or '',
-                usuario.last_name or '',
-                usuario.email or '',
-                int(usuario.is_staff),
-                int(usuario.is_active),
-                usuario.date_joined,
-            ],
-        )
-        cursor.execute("SET IDENTITY_INSERT ducto.auth_user OFF")
+    return srv.es_administrador(user)
 
 
 @login_required
 @user_passes_test(_es_administrador)
 def usuario_list(request):
-    usuarios = User.objects.filter(is_active=True).order_by('username')
     return render(request, 'accounts/usuario_list.html', {
         'titulo': 'Usuarios',
         'encabezado': 'Usuarios de la aplicación',
-        'usuarios': usuarios,
+        'usuarios': srv.activos(),
     })
 
 
@@ -76,40 +28,26 @@ def usuario_list(request):
 @user_passes_test(_es_administrador)
 @transaction.atomic
 def usuario_create(request):
-    grupos = Group.objects.all().order_by('name')
     if request.method == 'POST':
-        username = (request.POST.get('username') or '').strip()
-        email = (request.POST.get('email') or '').strip()
-        first_name = (request.POST.get('first_name') or '').strip()
-        last_name = (request.POST.get('last_name') or '').strip()
-        password = request.POST.get('password') or ''
-        grupo_id = request.POST.get('group_id') or ''
-
-        if not username or not password:
-            messages.error(request, 'Usuario y contraseña son obligatorios.')
-        elif User.objects.filter(username=username).exists():
-            messages.error(request, 'El nombre de usuario ya existe.')
-        else:
-            usuario = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
+        try:
+            srv.crear(
+                username=(request.POST.get('username') or '').strip(),
+                password=request.POST.get('password') or '',
+                email=(request.POST.get('email') or '').strip(),
+                first_name=(request.POST.get('first_name') or '').strip(),
+                last_name=(request.POST.get('last_name') or '').strip(),
+                grupo_id=request.POST.get('group_id') or None,
             )
-            usuario.is_staff = True
-            usuario.save(update_fields=['is_staff'])
-            if grupo_id:
-                usuario.groups.add(Group.objects.get(pk=grupo_id))
-            _asegurar_usuario_ducto(usuario)
-            _crear_persona_si_falta(usuario)
+        except srv.ErrorValidacion as e:
+            messages.error(request, str(e))
+        else:
             messages.success(request, 'Usuario creado correctamente.')
             return redirect('usuario_list')
 
     return render(request, 'accounts/usuario_form.html', {
         'titulo': 'Crear usuario',
         'encabezado': 'Crear usuario',
-        'grupos': grupos,
+        'grupos': srv.grupos(),
         'modo': 'crear',
     })
 
@@ -117,9 +55,9 @@ def usuario_create(request):
 @login_required
 @user_passes_test(_es_administrador)
 def usuario_delete(request, pk):
-    usuario = get_object_or_404(User, pk=pk)
+    usuario = get_object_or_404(srv.todos(), pk=pk)
     if request.method == 'POST':
-        usuario.delete()
+        srv.eliminar(usuario)
         messages.success(request, 'Usuario eliminado correctamente.')
         return redirect('usuario_list')
 
@@ -134,24 +72,15 @@ def usuario_delete(request, pk):
 @user_passes_test(_es_administrador)
 @transaction.atomic
 def usuario_crear_persona(request, pk):
-    usuario = get_object_or_404(User, pk=pk)
-    if Persona.objects.filter(user_per=usuario).exists():
+    usuario = get_object_or_404(srv.todos(), pk=pk)
+    if srv_vacaciones.ficha_de_usuario(usuario.id):
         messages.info(request, f'La ficha de vacaciones ya existía para {usuario.username}.')
         return redirect('usuario_list')
-
     try:
-        _asegurar_usuario_ducto(usuario)
-        siguiente_id = (Persona.objects.aggregate(mx=Max('id'))['mx'] or 0) + 1
-        Persona.objects.create(
-            id=siguiente_id,
-            user_per=usuario,
-            feccon=date.today(),
-            suma_dias_vacaciones=0,
-        )
+        srv.crear_ficha_vacaciones(usuario)
         messages.success(request, f'Se creó la ficha de vacaciones para {usuario.username}.')
     except IntegrityError:
         messages.error(request, 'La base de datos rechazó la creación de la ficha de vacaciones. Revise la restricción asociada al usuario.')
-
     return redirect('usuario_list')
 
 
@@ -159,17 +88,15 @@ def usuario_crear_persona(request, pk):
 @user_passes_test(_es_administrador)
 @transaction.atomic
 def usuario_quitar_persona(request, pk):
-    usuario = get_object_or_404(User, pk=pk)
-    persona = Persona.objects.filter(user_per=usuario).first()
+    usuario = get_object_or_404(srv.todos(), pk=pk)
+    persona = srv_vacaciones.ficha_de_usuario(usuario.id)
 
     if not persona:
         messages.info(request, f'El usuario {usuario.username} no tiene ficha de vacaciones.')
         return redirect('usuario_list')
 
     if request.method == 'POST':
-        persona.delete()
-        with connection.cursor() as cursor:
-            cursor.execute('DELETE FROM ducto.auth_user WHERE id = %s', [usuario.id])
+        srv.quitar_ficha_vacaciones(usuario, persona)
         messages.success(request, f'Se quitó la ficha de vacaciones de {usuario.username}.')
         return redirect('usuario_list')
 
@@ -185,41 +112,18 @@ def usuario_quitar_persona(request, pk):
 @user_passes_test(_es_administrador)
 @transaction.atomic
 def usuario_editar_persona(request, pk):
-    usuario = get_object_or_404(User, pk=pk)
-    persona = Persona.objects.filter(user_per_id=usuario.id).first()
+    usuario = get_object_or_404(srv.todos(), pk=pk)
+    persona = srv_vacaciones.ficha_de_usuario(usuario.id)
     if not persona:
-        _asegurar_usuario_ducto(usuario)
-        siguiente_id = (Persona.objects.aggregate(mx=Max('id'))['mx'] or 0) + 1
-        Persona.objects.create(
-            id=siguiente_id,
-            user_per_id=usuario.id,
-            feccon=date.today(),
-            suma_dias_vacaciones=0,
-        )
-        persona = Persona.objects.get(user_per_id=usuario.id)
+        srv.crear_ficha_vacaciones(usuario)
+        persona = srv_vacaciones.ficha_de_usuario(usuario.id)
 
     if request.method == 'POST':
         feccon = request.POST.get('feccon')
         if not feccon:
             messages.error(request, 'Debe indicar la fecha de contrato.')
         else:
-            feccon_dt = date.fromisoformat(feccon)
-            hoy = date.today()
-            diferencia = relativedelta(hoy, feccon_dt)
-            meses = diferencia.years * 12 + diferencia.months
-            if hoy.month == feccon_dt.month:
-                meses = meses + ((hoy.day - feccon_dt.day) / 30)
-
-            dias_totales = meses * 1.25
-            suma_vacaciones = persona.registrovac_set.aggregate(total=Sum('dias_vacaciones'))['total'] or 0
-            # Mantiene los campos consistentes sin depender del save del modelo.
-            Persona.objects.filter(pk=persona.pk).update(
-                feccon=feccon_dt,
-                suma_dias_vacaciones=suma_vacaciones,
-                dias_totales=dias_totales,
-                dias_pendientes=dias_totales - suma_vacaciones,
-                meses_totales=meses,
-            )
+            srv_vacaciones.cambiar_fecha_contrato(persona, date.fromisoformat(feccon))
             messages.success(request, f'Se actualizó la fecha de contrato de {usuario.username}.')
             return redirect('usuario_list')
 

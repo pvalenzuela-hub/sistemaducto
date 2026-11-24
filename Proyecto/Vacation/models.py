@@ -16,24 +16,14 @@ class Persona(models.Model):
     meses_totales = models.FloatField(null=True, blank=True)
 
     def calcular_dias_vacaciones(self):
-        total = self.registrovac_set.aggregate(total_vacaciones=Sum('dias_vacaciones'))['total_vacaciones']
-        self.suma_dias_vacaciones = total or 0
-        self.save()
+        from seguimiento.servicios import vacaciones
+        vacaciones.recalcular(self)
 
     def save(self, *args, **kwargs):
-        fecha = date.today()
-        #dias_totales = float(((fecha - self.feccon).days / 365.25) * 15) or 0
-        diferencia = relativedelta(fecha, self.feccon)
-        meses = diferencia.years * 12 + diferencia.months
-        if fecha.month == self.feccon.month:
-            meses = meses + ((fecha.day - self.feccon.day)/30)
-
-        dias_totales = meses * 1.25
-        suma_vacaciones = self.suma_dias_vacaciones or 0
-
-        self.dias_totales = dias_totales
-        self.dias_pendientes = dias_totales - suma_vacaciones
-        self.meses_totales = meses
+        # Días ganados y pendientes a hoy: regla en seguimiento.servicios.vacaciones.calculo
+        from seguimiento.servicios import vacaciones
+        self.meses_totales, self.dias_totales, self.dias_pendientes = vacaciones.calculo(
+            self.feccon, self.suma_dias_vacaciones or 0)
         super().save(*args, **kwargs)
 
     class Meta:
