@@ -54,6 +54,7 @@ MAX_ADJUNTOS_MB = 10      # por correo: sobre esto no se envía
 AVISO_ADJUNTOS_MB = 3     # sobre esto se advierte: más riesgo de spam y de agotar la cuota diaria
 # Respuestas del servidor que indican límite de envío: se detiene y se retoma después (sin duplicar)
 CODIGOS_LIMITE = {421, 450, 451, 452, 454}
+RECONECTAR_CADA = 50  # correos por conexión SMTP (Gmail expira sesiones largas con 421 4.7.0)
 
 
 class SmtpSimulado:
@@ -315,10 +316,24 @@ class Command(BaseCommand):
         try:
             for i, e in enumerate(lote, 1):
                 msg = self._mensaje(cfg['SMTP_USER'], e, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'], imagenes)
+                if i % RECONECTAR_CADA == 0:  # Gmail expira las sesiones largas: se renueva la conexión
+                    try:
+                        servidor.quit()
+                    except Exception:
+                        pass
+                    servidor = self._conectar(cfg)
                 try:
                     try:
                         rechazados = servidor.send_message(msg, from_addr=cfg['SMTP_USER'], to_addrs=e['emails'])
-                    except smtplib.SMTPServerDisconnected:
+                    except (smtplib.SMTPServerDisconnected, smtplib.SMTPResponseException) as err:
+                        # conexión caída o expirada (421 4.7.0): se reconecta y se reintenta una vez
+                        if isinstance(err, smtplib.SMTPResponseException) and not (
+                                err.smtp_code == 421 and b'expired' in (err.smtp_error or b'').lower()):
+                            raise
+                        try:
+                            servidor.close()
+                        except Exception:
+                            pass
                         servidor = self._conectar(cfg)
                         rechazados = servidor.send_message(msg, from_addr=cfg['SMTP_USER'], to_addrs=e['emails'])
                     rechazados = rechazados or {}
