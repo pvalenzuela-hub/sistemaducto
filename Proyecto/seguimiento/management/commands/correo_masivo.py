@@ -3,6 +3,7 @@
 Cada campaña vive en una carpeta (por defecto /srv/ducto/comunicados/<campania>/) con:
     asunto.txt       asunto del correo (una línea)                         <- contenido a entregar
     cuerpo.html      cuerpo HTML; admite {nombre} y {cliente}               <- contenido a entregar
+    adjuntos/        archivos que van adjuntos en cada correo (p. ej. un PDF)  <- opcional
     destinatarios.csv  lista generada con --listar (para revisar)
     enviados.jsonl   bitácora: una línea por correo enviado o fallido. Lo ya enviado no se vuelve a enviar,
                      así se puede detener y retomar sin duplicar.
@@ -11,7 +12,7 @@ Uso (en el VPS, desde /srv/sistemaducto/Proyecto):
     env/bin/python manage.py correo_masivo --campania NOMBRE --listar
     env/bin/python manage.py correo_masivo --campania NOMBRE --simular
     env/bin/python manage.py correo_masivo --campania NOMBRE --prueba alguien@ductoproyectos.cl
-    env/bin/python manage.py correo_masivo --campania NOMBRE --enviar --confirmar 1539
+    env/bin/python manage.py correo_masivo --campania NOMBRE --enviar --confirmar 1541
 
 Cada correo es un mensaje SMTP aparte con un solo destinatario en Para (sin CC ni CCO): nadie ve las direcciones
 de los demás. Entre correos hay una pausa y cada ejecución tiene un tope, para respetar los límites de Google
@@ -21,6 +22,7 @@ import csv
 import fcntl
 import html
 import json
+import mimetypes
 import os
 import re
 import smtplib
@@ -38,6 +40,8 @@ from seguimiento.servicios import clientes
 CARPETA_BASE = '/srv/ducto/comunicados'
 ENV_SMTP = '/srv/ducto/jobs/.env'
 REMITENTE = 'Ducto Proyectos'
+MAX_ADJUNTOS_MB = 10      # por correo: sobre esto no se envía (Gmail admite 25 MB, pero 1.500 copias pesadas son riesgo)
+AVISO_ADJUNTOS_MB = 3     # sobre esto se advierte: más probabilidad de caer en spam o de agotar la cuota diaria
 # Respuestas del servidor que indican límite de envío: se detiene y se retoma después (sin duplicar)
 CODIGOS_LIMITE = {421, 450, 451, 452, 454}
 
@@ -93,6 +97,22 @@ class Command(BaseCommand):
             raise CommandError('asunto.txt y cuerpo.html no pueden estar vacíos.')
         return asunto, cuerpo
 
+    def _adjuntos(self, carpeta):
+        """[(nombre, tipo, subtipo, bytes)] de los archivos en <carpeta>/adjuntos/ (orden alfabético)."""
+        adjuntos = []
+        dir_adj = carpeta / 'adjuntos'
+        if dir_adj.is_dir():
+            for f in sorted(dir_adj.iterdir()):
+                if not f.is_file() or f.name.startswith('.'):
+                    continue
+                tipo = mimetypes.guess_type(f.name)[0] or 'application/octet-stream'
+                principal, sub = tipo.split('/', 1)
+                adjuntos.append((f.name, principal, sub, f.read_bytes()))
+        total_mb = sum(len(a[3]) for a in adjuntos) / 1024 / 1024
+        if total_mb > MAX_ADJUNTOS_MB:
+            raise CommandError(f'Los adjuntos pesan {total_mb:.1f} MB; el máximo por correo es {MAX_ADJUNTOS_MB} MB.')
+        return adjuntos
+
     def _enviados(self, carpeta):
         """Correos ya enviados en esta campaña (según la bitácora)."""
         enviados = set()
@@ -130,7 +150,7 @@ class Command(BaseCommand):
         servidor.login(cfg['SMTP_USER'], cfg['SMTP_PASS'])
         return servidor
 
-    def _mensaje(self, remitente, destinatario, asunto, cuerpo, responder_a=None):
+    def _mensaje(self, remitente, destinatario, asunto, cuerpo, responder_a=None, adjuntos=()):
         """Un mensaje para UN destinatario: solo él en Para, sin CC ni CCO."""
         datos = {'nombre': html.escape(destinatario.get('nombre') or ''),
                  'cliente': html.escape(destinatario.get('cliente') or '')}
@@ -148,6 +168,8 @@ class Command(BaseCommand):
         msg['Message-ID'] = make_msgid(domain=remitente.split('@')[-1])
         msg.set_content(texto)
         msg.add_alternative(cuerpo_html, subtype='html')
+        for nombre, principal, sub, datos_archivo in adjuntos:
+            msg.add_attachment(datos_archivo, maintype=principal, subtype=sub, filename=nombre)
         return msg
 
     # ------------------------------------------------------------------ comando
@@ -172,12 +194,13 @@ class Command(BaseCommand):
             return
 
         asunto, cuerpo = self._contenido(carpeta)
+        adjuntos = self._adjuntos(carpeta)
 
         if o['prueba']:
             correo = o['prueba'].strip().lower()
             cfg = self._smtp_config(o['env'])
             msg = self._mensaje(cfg['SMTP_USER'], {'email': correo, 'nombre': 'Nombre de prueba', 'cliente': 'Cliente de prueba'},
-                                asunto, cuerpo, o['responder_a'])
+                                asunto, cuerpo, o['responder_a'], adjuntos)
             servidor = self._conectar(cfg)
             try:
                 servidor.send_message(msg, from_addr=cfg['SMTP_USER'], to_addrs=[correo])
@@ -191,14 +214,27 @@ class Command(BaseCommand):
             servidor = SmtpSimulado()
             remitente = 'remitente@ductoproyectos.cl'
             for d in lote:
-                msg = self._mensaje(remitente, d, asunto, cuerpo, o['responder_a'])
+                msg = self._mensaje(remitente, d, asunto, cuerpo, o['responder_a'], adjuntos)
                 servidor.send_message(msg, from_addr=remitente, to_addrs=[d['email']])
+            con_adjuntos = all(sorted(p.get_filename() for p in m.iter_attachments()) == sorted(a[0] for a in adjuntos)
+                               for m, _ in servidor.mensajes)
             uno_a_uno = all(len(to) == 1 and to[0] == m['To'] and not m['Cc'] and not m['Bcc'] for m, to in servidor.mensajes)
             unicos = len({to[0] for _, to in servidor.mensajes}) == len(servidor.mensajes)
             self.stdout.write(f'pendientes: {len(pendientes)} | en esta ejecución (tope {o["maximo"]}): {len(lote)}')
             self.stdout.write(f'mensajes armados: {len(servidor.mensajes)}')
             self.stdout.write(f'cada mensaje con un solo destinatario, sin CC/CCO: {"SI" if uno_a_uno else "NO"}')
             self.stdout.write(f'sin destinatarios repetidos: {"SI" if unicos else "NO"}')
+            if adjuntos:
+                mb = sum(len(a[3]) for a in adjuntos) / 1024 / 1024
+                self.stdout.write('adjuntos: ' + ', '.join(f'{a[0]} ({len(a[3]) / 1024:.0f} KB)' for a in adjuntos)
+                                  + f' | en todos los correos: {"SI" if con_adjuntos else "NO"}')
+                self.stdout.write(f'tamaño por correo ~{len(servidor.mensajes[0][0].as_bytes()) / 1024 / 1024:.2f} MB | '
+                                  f'volumen total ~{len(servidor.mensajes) * mb:.0f} MB')
+                if mb > AVISO_ADJUNTOS_MB:
+                    self.stdout.write(self.style.WARNING(f'Adjuntos sobre {AVISO_ADJUNTOS_MB} MB: conviene achicarlos '
+                                                         f'(más riesgo de spam y de llegar al límite diario).'))
+            else:
+                self.stdout.write('adjuntos: ninguno')
             self.stdout.write(f'tiempo estimado con pausa de {o["pausa"]:g}s: {len(lote) * o["pausa"] / 60:.0f} minutos')
             if servidor.mensajes:
                 m = servidor.mensajes[0][0]
@@ -221,7 +257,7 @@ class Command(BaseCommand):
         enviados_ahora = errores = 0
         try:
             for i, d in enumerate(lote, 1):
-                msg = self._mensaje(cfg['SMTP_USER'], d, asunto, cuerpo, o['responder_a'])
+                msg = self._mensaje(cfg['SMTP_USER'], d, asunto, cuerpo, o['responder_a'], adjuntos)
                 try:
                     try:
                         servidor.send_message(msg, from_addr=cfg['SMTP_USER'], to_addrs=[d['email']])
