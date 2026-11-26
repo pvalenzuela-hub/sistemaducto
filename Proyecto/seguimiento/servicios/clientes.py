@@ -15,7 +15,7 @@ from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
 from ..models import (AspNetUser, Cliente, ClienteAgenda, ClienteCategoria, Clientecontacto, ClienteSeg,
-                      Cotizacion, Testadocliente, tusuario)
+                      CorreoRebotado, Cotizacion, Testadocliente, tusuario)
 
 ESTADO_CLIENTE_ELIMINADO = 5  # tEstadoCliente: la eliminación es lógica
 FECHA_MINIMA = date(1900, 1, 1)
@@ -168,7 +168,8 @@ def correos_contactos():
 
     Un campo puede traer varios correos (separados por ; , / o espacios): se toman todos. Se normalizan a
     minúsculas y sin punto final. Se descartan los textos que no son correo ('-', 'no hay', ...), los correos
-    internos de Ducto y los que solo aparecen en clientes eliminados. Devuelve (lista ordenada de dicts con
+    internos de Ducto, los que solo aparecen en clientes eliminados y los marcados como inválidos por rebote
+    (tabla CorreoRebotado). Devuelve (lista ordenada de dicts con
     'email', 'nombre', 'cliente', 'contactos'; resumen con los conteos)."""
     por_correo = {}
     invalidos = 0
@@ -196,8 +197,9 @@ def correos_contactos():
                 datos['cliente'] = datos['cliente'] or (razon or '').strip()
     internos = [c for c in por_correo if c.endswith(DOMINIO_INTERNO)]
     solo_eliminados = [c for c, d in por_correo.items() if not d['activo']]
-    destinatarios = sorted((d for c, d in por_correo.items() if d['activo'] and not c.endswith(DOMINIO_INTERNO)),
-                           key=lambda d: d['email'])
+    rebotados = set(correos_invalidos())
+    activos_externos = {c for c, d in por_correo.items() if d['activo'] and not c.endswith(DOMINIO_INTERNO)}
+    destinatarios = sorted((por_correo[c] for c in activos_externos - rebotados), key=lambda d: d['email'])
     for d in destinatarios:
         d.pop('activo', None)
     resumen = {
@@ -207,9 +209,31 @@ def correos_contactos():
         'correos_unicos_validos': len(por_correo),
         'internos_excluidos': len(internos),
         'solo_clientes_eliminados_excluidos': len(solo_eliminados),
+        'rebotados_invalidos_excluidos': len(activos_externos & rebotados),
         'destinatarios': len(destinatarios),
     }
     return destinatarios, resumen
+
+
+def correos_invalidos():
+    """Direcciones marcadas como inválidas por rebote: no se usan en comunicados."""
+    return list(CorreoRebotado.objects.filter(estado=CorreoRebotado.INVALIDA).values_list('email', flat=True))
+
+
+def marcas_rebote(correos):
+    """{dirección: CorreoRebotado} de las direcciones dadas que tienen marca de rebote (en minúsculas)."""
+    correos = {(c or '').strip().lower() for c in correos if (c or '').strip()}
+    if not correos:
+        return {}
+    return {r.email: r for r in CorreoRebotado.objects.filter(email__in=correos)}
+
+
+def rebotes_por_texto(textos):
+    """{texto del campo eMail: [CorreoRebotado, ...]} para campos que traen una o varias direcciones."""
+    partes = {t: [p.strip().strip('<>').rstrip('.').lower() for p in re.split(r'[;,/\s]+', (t or '').strip()) if p.strip()]
+              for t in textos if (t or '').strip()}
+    marcas = marcas_rebote(c for lista in partes.values() for c in lista)
+    return {t: [marcas[c] for c in lista if c in marcas] for t, lista in partes.items()}
 
 
 def correos_por_cliente():

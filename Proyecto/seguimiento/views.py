@@ -1619,6 +1619,10 @@ def cliente_update(request, pk):
         form_nota = ClienteSeguimientoForm(prefix='nota')
 
     notas_cliente = srv_clientes.notas(cliente)
+    # Marca de rebote (correo inválido o bloqueado en un comunicado) junto al correo de cada contacto
+    rebotes = srv_clientes.rebotes_por_texto(f.initial.get('email') or f['email'].value() for f in formset_contactos.forms)
+    for f in formset_contactos.forms:
+        f.rebotes = rebotes.get(f.initial.get('email') or f['email'].value(), [])
 
     context = {
         'titulo': 'Modificar cliente',

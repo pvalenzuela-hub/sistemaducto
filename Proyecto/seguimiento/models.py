@@ -849,3 +849,25 @@ class Entregaevento(models.Model):
     class Meta:
         managed = False
         db_table = '[ducto].[EntregaEvento]'
+
+
+class CorreoRebotado(models.Model):
+    """Dirección de contacto que rebotó en un comunicado (tabla dbo.CorreoRebotado, ver sql/2026-11-26_CorreoRebotado.sql).
+    estado 'invalida': no existe, se excluye de los comunicados; 'bloqueada': el servidor rechazó el mensaje."""
+    INVALIDA = 'invalida'
+    BLOQUEADA = 'bloqueada'
+    id = models.AutoField(db_column='Id', primary_key=True)
+    email = models.CharField(db_column='Email', max_length=254, unique=True)
+    estado = models.CharField(db_column='Estado', max_length=20)
+    tipo = models.CharField(db_column='Tipo', max_length=100, null=True, blank=True)
+    motivo = models.CharField(db_column='Motivo', max_length=500, null=True, blank=True)
+    origen = models.CharField(db_column='Origen', max_length=100, null=True, blank=True)
+    fecha = models.DateTimeField(db_column='Fecha')
+    usuario = models.CharField(db_column='Usuario', max_length=50, null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'CorreoRebotado'
+
+    def __str__(self):
+        return f'{self.email} ({self.estado})'

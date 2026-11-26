@@ -286,6 +286,14 @@
 
                                         <td>
                                             {{ contacto_form.email }}
+                                            {% for r in contacto_form.rebotes %}
+                                                <div class="small mt-1 {% if r.estado == 'invalida' %}text-danger{% else %}text-warning-emphasis{% endif %}"
+                                                     title="{{ r.motivo }} — {{ r.origen }}">
+                                                    <i class="bi {% if r.estado == 'invalida' %}bi-x-octagon{% else %}bi-exclamation-triangle{% endif %}"></i>
+                                                    {% if r.estado == 'invalida' %}Correo inválido: rebotó{% else %}Rechazado por el servidor{% endif %}
+                                                    el {{ r.fecha|date:'d-m-Y' }}{% if contacto_form.rebotes|length > 1 %} ({{ r.email }}){% endif %}{% if r.estado == 'invalida' %}. No se usa en comunicados.{% endif %}
+                                                </div>
+                                            {% endfor %}
                                             {% if contacto_form.email.errors %}
                                                 <div class="text-danger small mt-1">
                                                     {{ contacto_form.email.errors }}
