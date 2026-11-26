@@ -4,6 +4,7 @@
 Cliente_Seg (notas) y Cliente_Agenda (agenda comercial). No usa procedimientos almacenados.
 Los formularios de Django (seguimiento.forms) validan los datos; aquí se graban.
 """
+import re
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from datetime import timezone as dt_timezone
@@ -152,6 +153,63 @@ def buscar_api(*, rut=None, q=''):
             cond |= Q(rut=int(digitos))
         qs = qs.filter(cond)
     return qs.order_by('razonsocial', 'idcliente')
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Correos de contactos (comunicados a todos los clientes)
+# ---------------------------------------------------------------------------------------------------------------
+
+_RE_CORREO = re.compile(r'^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$')
+DOMINIO_INTERNO = '@ductoproyectos.cl'
+
+
+def correos_contactos():
+    """Correos únicos y válidos de los contactos de clientes, para un comunicado a todos.
+
+    Un campo puede traer varios correos (separados por ; , / o espacios): se toman todos. Se normalizan a
+    minúsculas y sin punto final. Se descartan los textos que no son correo ('-', 'no hay', ...), los correos
+    internos de Ducto y los que solo aparecen en clientes eliminados. Devuelve (lista ordenada de dicts con
+    'email', 'nombre', 'cliente', 'contactos'; resumen con los conteos)."""
+    por_correo = {}
+    invalidos = 0
+    filas = Clientecontacto.objects.select_related('idcliente').values_list(
+        'email', 'nombrecontacto', 'idcliente__razonsocial', 'idcliente__idestadocliente_id')
+    total = con_texto = 0
+    for email, nombre, razon, estado in filas:
+        total += 1
+        if not (email or '').strip():
+            continue
+        con_texto += 1
+        for parte in re.split(r'[;,/\s]+', email.strip()):
+            correo = parte.strip().strip('<>').rstrip('.').lower()
+            if not correo:
+                continue
+            if not _RE_CORREO.match(correo):
+                invalidos += 1
+                continue
+            datos = por_correo.setdefault(correo, {'email': correo, 'nombre': '', 'cliente': '', 'contactos': 0,
+                                                   'activo': False})
+            datos['contactos'] += 1
+            if estado != ESTADO_CLIENTE_ELIMINADO:
+                datos['activo'] = True
+                datos['nombre'] = datos['nombre'] or (nombre or '').strip()
+                datos['cliente'] = datos['cliente'] or (razon or '').strip()
+    internos = [c for c in por_correo if c.endswith(DOMINIO_INTERNO)]
+    solo_eliminados = [c for c, d in por_correo.items() if not d['activo']]
+    destinatarios = sorted((d for c, d in por_correo.items() if d['activo'] and not c.endswith(DOMINIO_INTERNO)),
+                           key=lambda d: d['email'])
+    for d in destinatarios:
+        d.pop('activo', None)
+    resumen = {
+        'contactos': total,
+        'contactos_con_correo': con_texto,
+        'textos_invalidos': invalidos,
+        'correos_unicos_validos': len(por_correo),
+        'internos_excluidos': len(internos),
+        'solo_clientes_eliminados_excluidos': len(solo_eliminados),
+        'destinatarios': len(destinatarios),
+    }
+    return destinatarios, resumen
 
 
 # ---------------------------------------------------------------------------------------------------------------
