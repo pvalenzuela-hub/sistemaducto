@@ -212,6 +212,41 @@ def correos_contactos():
     return destinatarios, resumen
 
 
+def correos_por_cliente():
+    """Los mismos correos de correos_contactos(), agrupados por cliente (activo) para un correo por cliente.
+
+    Un correo que figura en varios clientes va solo en uno, para que nadie reciba el comunicado dos veces: el
+    cliente donde aparece en más contactos; si empatan, el de menor Id (el más antiguo). Devuelve (lista ordenada
+    por razón social de dicts con 'clave', 'idcliente', 'cliente', 'emails'; resumen con los conteos)."""
+    validos = {d['email'] for d in correos_contactos()[0]}
+    cuenta = defaultdict(lambda: defaultdict(int))  # email -> {idcliente: N° de contactos}
+    razon = {}
+    filas = Clientecontacto.objects.exclude(idcliente__idestadocliente_id=ESTADO_CLIENTE_ELIMINADO).values_list(
+        'email', 'idcliente_id', 'idcliente__razonsocial')
+    for email, idcliente, razonsocial in filas:
+        for parte in re.split(r'[;,/\s]+', (email or '').strip()):
+            correo = parte.strip().strip('<>').rstrip('.').lower()
+            if correo in validos:
+                cuenta[correo][idcliente] += 1
+                razon[idcliente] = (razonsocial or '').strip() or f'Cliente {idcliente}'
+    grupos = defaultdict(list)
+    en_varios = 0
+    for correo, por_cliente in cuenta.items():
+        if len(por_cliente) > 1:
+            en_varios += 1
+        elegido = min(por_cliente, key=lambda idc: (-por_cliente[idc], idc))
+        grupos[elegido].append(correo)
+    envios = sorted(({'clave': f'cliente-{idc}', 'idcliente': idc, 'cliente': razon[idc], 'emails': sorted(emails)}
+                     for idc, emails in grupos.items()), key=lambda e: (e['cliente'].lower(), e['idcliente']))
+    resumen = {
+        'clientes': len(envios),
+        'correos': sum(len(e['emails']) for e in envios),
+        'correos_en_varios_clientes_asignados_a_uno': en_varios,
+        'max_correos_en_un_cliente': max((len(e['emails']) for e in envios), default=0),
+    }
+    return envios, resumen
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Notas (Cliente_Seg)
 # ---------------------------------------------------------------------------------------------------------------
