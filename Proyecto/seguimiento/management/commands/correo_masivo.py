@@ -201,7 +201,8 @@ class Command(BaseCommand):
         cuerpo_html = cuerpo
         for k, v in valores.items():
             cuerpo_html = cuerpo_html.replace('{' + k + '}', v)
-        texto = re.sub(r'<br\s*/?>|</p>|</div>', '\n', cuerpo_html, flags=re.I)
+        texto = re.sub(r'<li[^>]*>', '- ', cuerpo_html, flags=re.I)  # viñetas en la versión de texto
+        texto = re.sub(r'<br\s*/?>|</p>|</div>|</li>', '\n', texto, flags=re.I)
         texto = html.unescape(re.sub(r'<[^>]+>', '', texto))
         texto = re.sub(r'\n{3,}', '\n\n', texto).strip()
         msg = EmailMessage()
