@@ -85,6 +85,8 @@ class Command(BaseCommand):
         parser.add_argument('--pausa', type=float, default=4.0, help='Segundos entre correos (por defecto 4).')
         parser.add_argument('--maximo', type=int, default=1500, help='Tope de correos en esta ejecución (por defecto 1500).')
         parser.add_argument('--responder-a', help='Dirección para Responder a (opcional).')
+        parser.add_argument('--nombre-remitente', default=REMITENTE,
+                            help=f'Nombre visible del remitente (por defecto "{REMITENTE}").')
         parser.add_argument('--env', default=ENV_SMTP, help=f'Archivo con SMTP_HOST/PORT/USER/PASS (por defecto {ENV_SMTP}).')
 
     # ------------------------------------------------------------------ campaña y contenido
@@ -191,7 +193,8 @@ class Command(BaseCommand):
         servidor.login(cfg['SMTP_USER'], cfg['SMTP_PASS'])
         return servidor
 
-    def _mensaje(self, remitente, envio, asunto, cuerpo, responder_a=None, adjuntos=(), ocultos=False):
+    def _mensaje(self, remitente, envio, asunto, cuerpo, responder_a=None, adjuntos=(), ocultos=False,
+                 nombre_remitente=REMITENTE):
         """Un mensaje por envío. Por contacto: solo esa persona en Para. Por cliente: sus contactos en Para, o en CCO
         (en Para queda la cuenta que envía y las direcciones van solo en el sobre SMTP, no en los encabezados)."""
         valores = {k: html.escape(envio.get(k) or '') for k in ('saludo', 'nombre', 'cliente')}
@@ -203,7 +206,7 @@ class Command(BaseCommand):
         texto = re.sub(r'\n{3,}', '\n\n', texto).strip()
         msg = EmailMessage()
         msg['Subject'] = asunto
-        msg['From'] = formataddr((REMITENTE, remitente))
+        msg['From'] = formataddr((nombre_remitente, remitente))
         msg['To'] = remitente if ocultos else ', '.join(envio['emails'])
         if responder_a:
             msg['Reply-To'] = responder_a
@@ -253,14 +256,14 @@ class Command(BaseCommand):
             muestra = envios[0] if envios else {'cliente': 'Cliente de prueba', 'nombre': 'Nombre de prueba',
                                                 'saludo': SALUDO_GRUPAL}
             muestra = {**muestra, 'clave': 'prueba', 'emails': [correo]}
-            msg = self._mensaje(cfg['SMTP_USER'], muestra, asunto, cuerpo, o['responder_a'], adjuntos, ocultos)
+            msg = self._mensaje(cfg['SMTP_USER'], muestra, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'])
             servidor = self._conectar(cfg)
             try:
                 servidor.send_message(msg, from_addr=cfg['SMTP_USER'], to_addrs=[correo])
             finally:
                 servidor.quit()
             self.stdout.write(self.style.SUCCESS(f'Correo de prueba ({forma}, datos de "{muestra["cliente"]}") '
-                                                 f'enviado solo a {correo}.'))
+                                                 f'enviado desde {cfg["SMTP_USER"]} solo a {correo}.'))
             return
 
         lote = pendientes[:o['maximo']]
@@ -286,7 +289,7 @@ class Command(BaseCommand):
         enviados = errores = 0
         try:
             for i, e in enumerate(lote, 1):
-                msg = self._mensaje(cfg['SMTP_USER'], e, asunto, cuerpo, o['responder_a'], adjuntos, ocultos)
+                msg = self._mensaje(cfg['SMTP_USER'], e, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'])
                 try:
                     try:
                         rechazados = servidor.send_message(msg, from_addr=cfg['SMTP_USER'], to_addrs=e['emails'])
@@ -325,7 +328,7 @@ class Command(BaseCommand):
         servidor = SmtpSimulado()
         remitente = 'remitente@ductoproyectos.cl'
         for e in lote:
-            msg = self._mensaje(remitente, e, asunto, cuerpo, o['responder_a'], adjuntos, ocultos)
+            msg = self._mensaje(remitente, e, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'])
             servidor.send_message(msg, from_addr=remitente, to_addrs=e['emails'])
         vistos = [m for _, to in servidor.mensajes for m in to]
         sin_cc = all(not m['Cc'] and not m['Bcc'] for m, _ in servidor.mensajes)
