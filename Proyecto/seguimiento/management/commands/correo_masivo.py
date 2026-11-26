@@ -11,6 +11,8 @@ Cada campaña vive en una carpeta (por defecto /srv/ducto/comunicados/<campania>
                        {saludo}  por cliente: "Estimados"; por contacto: "Estimado/a <nombre>" o "Estimados" si
                                  el contacto no tiene nombre
     adjuntos/        archivos que van adjuntos en cada correo (p. ej. un PDF)
+    imagenes/        imágenes incrustadas en el cuerpo (p. ej. el logo de la firma). En cuerpo.html se usan con
+                     <img src="cid:NOMBRE_DEL_ARCHIVO">; van dentro del correo, no se descargan de internet.
     destinatarios*.csv  lista generada con --listar, para revisar
     enviados.jsonl   bitácora: una línea por correo enviado o fallido. A una dirección ya enviada no se le vuelve
                      a enviar (en ningún modo), así se puede detener y retomar sin duplicar.
@@ -131,6 +133,22 @@ class Command(BaseCommand):
             raise CommandError(f'Los adjuntos pesan {total_mb:.1f} MB; el máximo por correo es {MAX_ADJUNTOS_MB} MB.')
         return adjuntos
 
+    def _imagenes(self, carpeta, cuerpo):
+        """[(nombre, subtipo, bytes)] de las imágenes en <carpeta>/imagenes/ que el cuerpo usa como cid:nombre."""
+        imagenes = []
+        dir_img = carpeta / 'imagenes'
+        if dir_img.is_dir():
+            for f in sorted(dir_img.iterdir()):
+                if f.is_file() and f'cid:{f.name}' in cuerpo:
+                    tipo = mimetypes.guess_type(f.name)[0] or ''
+                    if not tipo.startswith('image/'):
+                        raise CommandError(f'{f.name} no es una imagen.')
+                    imagenes.append((f.name, tipo.split('/', 1)[1], f.read_bytes()))
+        faltan = set(re.findall(r'cid:([^"\'>\s]+)', cuerpo)) - {i[0] for i in imagenes}
+        if faltan:
+            raise CommandError(f'El cuerpo usa imágenes que no están en {dir_img}: {", ".join(sorted(faltan))}')
+        return imagenes
+
     # ------------------------------------------------------------------ destinatarios y bitácora
 
     def _bitacora(self, carpeta):
@@ -194,7 +212,7 @@ class Command(BaseCommand):
         return servidor
 
     def _mensaje(self, remitente, envio, asunto, cuerpo, responder_a=None, adjuntos=(), ocultos=False,
-                 nombre_remitente=REMITENTE):
+                 nombre_remitente=REMITENTE, imagenes=()):
         """Un mensaje por envío. Por contacto: solo esa persona en Para. Por cliente: sus contactos en Para, o en CCO
         (en Para queda la cuenta que envía y las direcciones van solo en el sobre SMTP, no en los encabezados)."""
         valores = {k: html.escape(envio.get(k) or '') for k in ('saludo', 'nombre', 'cliente')}
@@ -215,6 +233,11 @@ class Command(BaseCommand):
         msg['Message-ID'] = make_msgid(domain=remitente.split('@')[-1])
         msg.set_content(texto)
         msg.add_alternative(cuerpo_html, subtype='html')
+        if imagenes:
+            parte_html = msg.get_body(('html',))
+            for nombre, sub, datos in imagenes:
+                parte_html.add_related(datos, maintype='image', subtype=sub, cid=f'<{nombre}>', filename=nombre,
+                                       disposition='inline')
         for nombre, principal, sub, datos in adjuntos:
             msg.add_attachment(datos, maintype=principal, subtype=sub, filename=nombre)
         return msg
@@ -250,6 +273,7 @@ class Command(BaseCommand):
 
         asunto, cuerpo = self._contenido(carpeta)
         adjuntos = self._adjuntos(carpeta)
+        imagenes = self._imagenes(carpeta, cuerpo)
 
         if o['prueba']:
             correo = o['prueba'].strip().lower()
@@ -257,7 +281,7 @@ class Command(BaseCommand):
             muestra = envios[0] if envios else {'cliente': 'Cliente de prueba', 'nombre': 'Nombre de prueba',
                                                 'saludo': SALUDO_GRUPAL}
             muestra = {**muestra, 'clave': 'prueba', 'emails': [correo]}
-            msg = self._mensaje(cfg['SMTP_USER'], muestra, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'])
+            msg = self._mensaje(cfg['SMTP_USER'], muestra, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'], imagenes)
             servidor = self._conectar(cfg)
             try:
                 servidor.send_message(msg, from_addr=cfg['SMTP_USER'], to_addrs=[correo])
@@ -269,7 +293,7 @@ class Command(BaseCommand):
 
         lote = pendientes[:o['maximo']]
         if o['simular']:
-            self._simular(forma, ocultos, pendientes, lote, asunto, cuerpo, adjuntos, o)
+            self._simular(forma, ocultos, pendientes, lote, asunto, cuerpo, adjuntos, o, imagenes)
             return
 
         # ---- envío real
@@ -290,7 +314,7 @@ class Command(BaseCommand):
         enviados = errores = 0
         try:
             for i, e in enumerate(lote, 1):
-                msg = self._mensaje(cfg['SMTP_USER'], e, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'])
+                msg = self._mensaje(cfg['SMTP_USER'], e, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'], imagenes)
                 try:
                     try:
                         rechazados = servidor.send_message(msg, from_addr=cfg['SMTP_USER'], to_addrs=e['emails'])
@@ -325,11 +349,11 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'Enviados en esta ejecución: {enviados}. Errores: {errores}. '
                                              f'Quedan pendientes: {len(pendientes) - enviados}.'))
 
-    def _simular(self, forma, ocultos, pendientes, lote, asunto, cuerpo, adjuntos, o):
+    def _simular(self, forma, ocultos, pendientes, lote, asunto, cuerpo, adjuntos, o, imagenes=()):
         servidor = SmtpSimulado()
         remitente = 'remitente@ductoproyectos.cl'
         for e in lote:
-            msg = self._mensaje(remitente, e, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'])
+            msg = self._mensaje(remitente, e, asunto, cuerpo, o['responder_a'], adjuntos, ocultos, o['nombre_remitente'], imagenes)
             servidor.send_message(msg, from_addr=remitente, to_addrs=e['emails'])
         vistos = [m for _, to in servidor.mensajes for m in to]
         sin_cc = all(not m['Cc'] and not m['Bcc'] for m, _ in servidor.mensajes)
@@ -353,6 +377,8 @@ class Command(BaseCommand):
         self.stdout.write(f'ninguna dirección repetida: {"SI" if len(set(vistos)) == len(vistos) else "NO"}')
         if saludo_ok is not None:
             self.stdout.write(f'todos comienzan con "{SALUDO_GRUPAL}": {"SI" if saludo_ok else "NO"}')
+        if imagenes:
+            self.stdout.write('imágenes incrustadas: ' + ', '.join(f'{i[0]} ({len(i[2]) / 1024:.0f} KB)' for i in imagenes))
         if adjuntos:
             mb = sum(len(a[3]) for a in adjuntos) / 1024 / 1024
             self.stdout.write('adjuntos: ' + ', '.join(f'{a[0]} ({len(a[3]) / 1024:.0f} KB)' for a in adjuntos)
