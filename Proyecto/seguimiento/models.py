@@ -871,3 +871,37 @@ class CorreoRebotado(models.Model):
 
     def __str__(self):
         return f'{self.email} ({self.estado})'
+
+
+class CorreoOmitido(models.Model):
+    """Dirección a la que un aviso automático del cron no llegó (tabla dbo.CorreoOmitido, ver
+    sql/2026-11-27_CorreoOmitido.sql). La escriben los workers del VPS (jobs/correos_omitidos.py).
+    motivo 'invalida': estaba marcada en CorreoRebotado y no se le escribió; 'rechazada': el servidor de correo la
+    rechazó al enviar. enviado: el aviso salió igual a otra dirección del cliente."""
+    INVALIDA = 'invalida'
+    RECHAZADA = 'rechazada'
+    PROCESOS = {
+        'cobranza_1': 'Cobranza 1',
+        'cobranza_2': 'Cobranza 2',
+        'aviso_pago': 'Aviso de pago recibido',
+        'seg_eepp': 'Solicitud de EEPP/HES',
+        'seg_entrega': 'Consulta entrega V00',
+    }
+    id = models.AutoField(db_column='Id', primary_key=True)
+    proceso = models.CharField(db_column='Proceso', max_length=30)
+    email = models.CharField(db_column='Email', max_length=254)
+    motivo = models.CharField(db_column='Motivo', max_length=20)
+    detalle = models.CharField(db_column='Detalle', max_length=500, null=True, blank=True)
+    idfactura = models.IntegerField(db_column='IdFactura', null=True, blank=True)
+    idproyecto = models.DecimalField(db_column='IdProyecto', max_digits=10, decimal_places=0, null=True, blank=True)
+    enviado = models.BooleanField(db_column='Enviado')
+    fecha = models.DateTimeField(db_column='Fecha')
+    ultimafecha = models.DateTimeField(db_column='UltimaFecha')
+    veces = models.IntegerField(db_column='Veces')
+
+    class Meta:
+        managed = False
+        db_table = 'CorreoOmitido'
+
+    def __str__(self):
+        return f'{self.email} ({self.proceso})'

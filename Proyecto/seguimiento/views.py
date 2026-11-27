@@ -1588,6 +1588,34 @@ def cliente_create(request):
 
 
 @login_required
+def correos_por_corregir(request):
+    """Contactos con correo inválido o rechazado y registro de los avisos automáticos que no llegaron."""
+    if request.method == 'POST':
+        accion = request.POST.get('accion')
+        email = request.POST.get('email') or ''
+        try:
+            if accion == 'quitar_marca':
+                correo = srv_clientes.quitar_marca_rebote(email)
+                messages.success(request, f'Se quitó la marca de {correo}: vuelve a recibir avisos y comunicados.')
+            elif accion == 'marcar_invalido':
+                correo = srv_clientes.marcar_correo_invalido(email, request.user.username or str(request.user),
+                                                            request.POST.get('motivo') or '')
+                messages.success(request, f'{correo} quedó marcado como inválido: no recibirá avisos ni comunicados.')
+        except (srv_clientes.ErrorValidacion, srv_clientes.NoEncontrado) as e:
+            messages.error(request, str(e))
+        return redirect('correos_por_corregir')
+
+    contactos = srv_clientes.correos_por_corregir()
+    return render(request, 'clientes/correos_por_corregir.html', {
+        'titulo': 'Correos por corregir',
+        'contactos': contactos,
+        'avisos': srv_clientes.avisos_no_entregados(),
+        'total_invalidos': sum(1 for c in contactos if c['estado'] == 'invalida'),
+        'total_con_facturas': sum(1 for c in contactos if c['estado'] == 'invalida' and c['facturas_por_cobrar']),
+    })
+
+
+@login_required
 @xframe_options_sameorigin
 @transaction.atomic
 def cliente_update(request, pk):

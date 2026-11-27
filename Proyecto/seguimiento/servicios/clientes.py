@@ -15,13 +15,14 @@ from django.db.models import Max, Prefetch, Q
 from django.utils import timezone
 
 from ..models import (AspNetUser, Cliente, ClienteAgenda, ClienteCategoria, Clientecontacto, ClienteSeg,
-                      CorreoRebotado, Cotizacion, Testadocliente, tusuario)
+                      CorreoOmitido, CorreoRebotado, Cotizacion, Factura, Proyecto, Testadocliente, tusuario)
 
 ESTADO_CLIENTE_ELIMINADO = 5  # tEstadoCliente: la eliminación es lógica
 FECHA_MINIMA = date(1900, 1, 1)
 DIAS_AGENDA_ATRAS = 30  # la agenda muestra desde hace 30 días
 HORA_AGENDA = time(hour=9, minute=0)
 TIPOS_CONTACTO = {'N': 'Normal', 'F': 'Facturación', 'C': 'Comercial'}
+ESTADO_FACTURA_POR_COBRAR = 3  # emitida y sin pago: la que reciben los avisos de cobranza del cron
 
 
 class ErrorValidacion(ValueError):
@@ -236,6 +237,133 @@ def rebotes_por_texto(textos):
     return {t: [marcas[c] for c in lista if c in marcas] for t, lista in partes.items()}
 
 
+def _partes_correo(texto):
+    """Direcciones de un campo eMail (puede traer varias), en minúsculas."""
+    partes = (p.strip().strip('<>').rstrip('.').lower() for p in re.split(r'[;,/\s]+', (texto or '').strip()))
+    return [p for p in partes if p]
+
+
+def _sin_zona(fecha):
+    """Estas tablas guardan la hora local del servidor; Django la lee como UTC. Se muestra tal como está grabada."""
+    return fecha.replace(tzinfo=None) if fecha else fecha
+
+
+def correos_por_corregir():
+    """Contactos de clientes no eliminados cuyo correo hay que revisar: está marcado como inválido por rebote
+    (CorreoRebotado) o un aviso automático no le llegó (CorreoOmitido). Las direcciones solo 'bloqueadas' en un
+    comunicado masivo existen y no se listan. Una fila por contacto y dirección, primero los que tienen facturas
+    por cobrar y avisos sin entregar. Cada fila: datos del contacto y del cliente, 'email', 'estado' ('invalida',
+    o 'rechazada' si no está marcada pero el servidor de correo la rechazó al enviar), 'motivo', 'fecha', 'origen',
+    'facturas_por_cobrar' (emitidas sin pago donde es contacto del proyecto o de facturación), 'avisos' (veces que
+    un aviso automático no le llegó) y 'ultimo_aviso'."""
+    marcas = {r.email: r for r in CorreoRebotado.objects.filter(estado=CorreoRebotado.INVALIDA)}
+    avisos = {}
+    for o in CorreoOmitido.objects.all():
+        d = avisos.setdefault(o.email, {'veces': 0, 'ultima': o.ultimafecha, 'detalle': o.detalle or ''})
+        d['veces'] += o.veces
+        if o.ultimafecha >= d['ultima']:
+            d['ultima'] = o.ultimafecha
+            d['detalle'] = o.detalle or d['detalle']
+    por_cobrar = defaultdict(set)  # idcontacto -> facturas emitidas sin pago
+    for idfactura, contacto_proyecto, contacto_fact in Factura.objects.filter(estado=ESTADO_FACTURA_POR_COBRAR).values_list(
+            'idfactura', 'idproyecto__idcotizacion__idcontacto_id', 'idproyecto__idcontactofacturacion_id'):
+        for idcontacto in (contacto_proyecto, contacto_fact):
+            if idcontacto:
+                por_cobrar[idcontacto].add(idfactura)
+    filas = []
+    contactos = (Clientecontacto.objects.exclude(idcliente__idestadocliente_id=ESTADO_CLIENTE_ELIMINADO)
+                 .exclude(email__isnull=True).exclude(email='').select_related('idcliente'))
+    for c in contactos:
+        for correo in dict.fromkeys(_partes_correo(c.email)):
+            marca, aviso = marcas.get(correo), avisos.get(correo)
+            if not marca and not aviso:
+                continue
+            filas.append({
+                'idcontacto': c.pk,
+                'idcliente': c.idcliente_id,
+                'cliente': (c.idcliente.razonsocial or '').strip(),
+                'contacto': (c.nombrecontacto or '').strip(),
+                'cargo': (c.cargo or '').strip(),
+                'telefono': (c.telefono or '').strip(),
+                'tipo': TIPOS_CONTACTO.get(c.tipocontacto, ''),
+                'email': correo,
+                'estado': marca.estado if marca else CorreoOmitido.RECHAZADA,
+                'motivo': (marca.motivo or marca.tipo or '') if marca else (aviso['detalle'] or 'Rechazado por el servidor de correo'),
+                'fecha': _sin_zona(marca.fecha if marca else aviso['ultima']),
+                'origen': (marca.origen or '') if marca else 'Aviso automático',
+                'facturas_por_cobrar': len(por_cobrar.get(c.pk, ())),
+                'avisos': aviso['veces'] if aviso else 0,
+                'ultimo_aviso': _sin_zona(aviso['ultima']) if aviso else None,
+            })
+    filas.sort(key=lambda f: (-f['facturas_por_cobrar'], -f['avisos'],
+                              f['cliente'].lower(), f['contacto'].lower()))
+    return filas
+
+
+def avisos_no_entregados(limite=500):
+    """Registro de CorreoOmitido, del más reciente al más antiguo, con el N° de factura, el nombre del proyecto y
+    'pendiente': la dirección sigue en algún contacto o como correo de facturación de un proyecto (si ya se
+    corrigió, False)."""
+    registros = list(CorreoOmitido.objects.order_by('-ultimafecha', '-id')[:limite])
+    facturas = {f[0]: f for f in Factura.objects.filter(idfactura__in={r.idfactura for r in registros if r.idfactura})
+                .values_list('idfactura', 'numfactura', 'idproyecto_id', 'idproyecto__idcotizacion__nombreproyecto')}
+    proyectos = dict(Proyecto.objects.filter(idproyecto__in={r.idproyecto for r in registros if r.idproyecto})
+                     .values_list('idproyecto', 'idcotizacion__nombreproyecto'))
+    correos = {r.email for r in registros}
+    en_uso = set()
+    if correos:
+        textos = list(Clientecontacto.objects.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True))
+        textos += list(Proyecto.objects.exclude(emailcontactofacturacion__isnull=True).exclude(emailcontactofacturacion='')
+                       .values_list('emailcontactofacturacion', flat=True))
+        for texto in textos:
+            en_uso.update(p for p in _partes_correo(texto) if p in correos)
+    filas = []
+    for r in registros:
+        factura = facturas.get(r.idfactura)
+        filas.append({
+            'fecha': _sin_zona(r.fecha),
+            'ultimafecha': _sin_zona(r.ultimafecha),
+            'veces': r.veces,
+            'proceso': CorreoOmitido.PROCESOS.get(r.proceso, r.proceso),
+            'email': r.email,
+            'motivo': r.motivo,
+            'detalle': r.detalle or '',
+            'enviado': r.enviado,
+            'numfactura': factura[1] if factura else None,
+            'proyecto': (factura[3] if factura else proyectos.get(r.idproyecto)) or '',
+            'pendiente': r.email in en_uso,
+        })
+    return filas
+
+
+def marcar_correo_invalido(email, usuario, motivo=''):
+    """Marca a mano una dirección como inválida (p. ej. llegó un rebote a la casilla): deja de usarse en los
+    comunicados y en los avisos automáticos hasta que se corrija el contacto."""
+    correo = (email or '').strip().strip('<>').rstrip('.').lower()
+    if not _RE_CORREO.match(correo):
+        raise ErrorValidacion('La dirección no tiene formato de correo.')
+    if correo.endswith(DOMINIO_INTERNO):
+        raise ErrorValidacion('No se marcan correos internos de Ducto.')
+    CorreoRebotado.objects.update_or_create(email=correo, defaults={
+        'estado': CorreoRebotado.INVALIDA,
+        'tipo': 'otro',
+        'motivo': (motivo or '').strip()[:500] or 'Marcado a mano como inválido',
+        'origen': 'Correos por corregir (web)',
+        'fecha': ahora(),
+        'usuario': (usuario or '')[:50],
+    })
+    return correo
+
+
+def quitar_marca_rebote(email):
+    """Quita la marca de rebote de una dirección que sí funciona: vuelve a usarse en comunicados y avisos."""
+    correo = (email or '').strip().lower()
+    borradas, _ = CorreoRebotado.objects.filter(email=correo).delete()
+    if not borradas:
+        raise NoEncontrado('Esa dirección no tiene marca de rebote.')
+    return correo
+
+
 def correos_por_cliente():
     """Los mismos correos de correos_contactos(), agrupados por cliente (activo) para un correo por cliente.
 
@@ -367,7 +495,13 @@ def guardar_ficha(form, formset_contactos, usuario, notas_nuevas=()):
             c.idcliente = cliente
             if not c.fecharegistro:
                 c.fecharegistro = ahora()
+            anterior = Clientecontacto.objects.filter(pk=c.pk).values_list('email', flat=True).first() if c.pk else None
             c.save()
+            # Los avisos de cobranza usan la copia del correo guardada en el proyecto (eMailContactoFacturacion):
+            # si se corrige el correo del contacto, se corrige también donde el proyecto tenía el anterior.
+            if (anterior or '').strip() and (anterior or '').strip() != (c.email or '').strip():
+                Proyecto.objects.filter(idcontactofacturacion_id=c.pk, emailcontactofacturacion=anterior).update(
+                    emailcontactofacturacion=(c.email or '').strip() or None)
         categorias = list(dict.fromkeys(form.cleaned_data.get('categorias', [])))
         ClienteCategoria.objects.filter(idcliente=cliente).delete()
         if categorias:

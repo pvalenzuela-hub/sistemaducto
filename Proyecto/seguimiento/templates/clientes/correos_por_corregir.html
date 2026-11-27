@@ -1,0 +1,157 @@
+{% extends "components/base.html" %}
+
+{% block title %}
+    {{ titulo }}
+{% endblock %}
+
+{% block body %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-2">Correos por corregir</h1>
+        <p class="text-muted mb-4">
+            Contactos cuyo correo rebotó o fue rechazado. A las direcciones inválidas no se les envían comunicados ni
+            los avisos automáticos (cobranza, aviso de pago, EEPP y entrega V00). Al corregir el correo en la ficha del
+            cliente, el contacto sale de esta lista y los avisos vuelven a salir.
+        </p>
+
+        <div class="card">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="mb-0">
+                    Contactos con correo inválido: {{ total_invalidos }}
+                    {% if total_con_facturas %}
+                        <span class="badge bg-danger ms-2">{{ total_con_facturas }} con facturas por cobrar</span>
+                    {% endif %}
+                </h5>
+                <form method="post" class="d-flex flex-wrap gap-2 align-items-center">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="marcar_invalido">
+                    <input type="email" name="email" class="form-control form-control-sm" style="width: 16rem"
+                           placeholder="correo que rebotó" required>
+                    <input type="text" name="motivo" class="form-control form-control-sm" style="width: 14rem"
+                           placeholder="motivo (opcional)" maxlength="200">
+                    <button type="submit" class="btn btn-outline-danger btn-sm text-nowrap">Marcar como inválido</button>
+                </form>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="tabla-correos" class="table table-bordered table-striped w-100">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Contacto</th>
+                                <th>Teléfono</th>
+                                <th>Correo</th>
+                                <th>Estado</th>
+                                <th>Motivo</th>
+                                <th>Fecha</th>
+                                <th>Facturas por cobrar</th>
+                                <th>Avisos no entregados</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in contactos %}
+<tr><td>{{ c.cliente }}</td><td>{{ c.contacto }}{% if c.cargo or c.tipo %}<div class="small text-muted">{{ c.cargo }}{% if c.cargo and c.tipo %} · {% endif %}{{ c.tipo }}</div>{% endif %}</td><td>{{ c.telefono }}</td><td>{{ c.email }}</td>
+<td>{% if c.estado == 'invalida' %}<span class="badge bg-danger">Inválido</span>{% else %}<span class="badge bg-warning text-dark">Rechazado al enviar</span>{% endif %}</td><td title="{{ c.origen }}">{{ c.motivo }}</td><td data-order="{{ c.fecha|date:'Y-m-d' }}">{{ c.fecha|date:'d-m-Y' }}</td>
+<td class="text-center">{% if c.facturas_por_cobrar %}<strong>{{ c.facturas_por_cobrar }}</strong>{% endif %}</td><td class="text-center" data-order="{{ c.avisos }}">{% if c.avisos %}{{ c.avisos }}<div class="small text-muted">último {{ c.ultimo_aviso|date:'d-m-Y' }}</div>{% endif %}</td>
+<td class="text-center text-nowrap"><a href="{% url 'cliente_update' c.idcliente %}" class="btn btn-warning btn-sm" title="Corregir el correo en la ficha del cliente"><i class="bi bi-pencil-square"></i> Corregir</a>
+{% if c.estado == 'rechazada' %}<button type="button" class="btn btn-outline-danger btn-sm js-accion" data-accion="marcar_invalido" data-email="{{ c.email }}" data-motivo="{{ c.motivo }}" title="Dejar de enviarle avisos hasta que se corrija">Marcar inválido</button>{% else %}<button type="button" class="btn btn-outline-secondary btn-sm js-accion" data-accion="quitar_marca" data-email="{{ c.email }}" title="El correo sí funciona: quitar la marca y volver a enviarle">El correo está bien</button>{% endif %}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <form method="post" id="form-accion" class="d-none">
+            {% csrf_token %}
+            <input type="hidden" name="accion">
+            <input type="hidden" name="email">
+            <input type="hidden" name="motivo">
+        </form>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Avisos automáticos que no llegaron</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table id="tabla-avisos" class="table table-bordered table-striped w-100">
+                        <thead>
+                            <tr>
+                                <th>Última vez</th>
+                                <th>Aviso</th>
+                                <th>Factura</th>
+                                <th>Proyecto</th>
+                                <th>Correo</th>
+                                <th>Motivo</th>
+                                <th>Resultado</th>
+                                <th>Veces</th>
+                                <th>Desde</th>
+                                <th>Situación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for a in avisos %}
+                            <tr>
+                                <td data-order="{{ a.ultimafecha|date:'Y-m-d H:i' }}">{{ a.ultimafecha|date:'d-m-Y H:i' }}</td>
+                                <td>{{ a.proceso }}</td>
+                                <td>{{ a.numfactura|default_if_none:'' }}</td>
+                                <td>{{ a.proyecto }}</td>
+                                <td>{{ a.email }}</td>
+                                <td title="{{ a.detalle }}">{% if a.motivo == 'invalida' %}Correo inválido{% else %}Rechazado al enviar{% endif %}</td>
+                                <td>{% if a.enviado %}Salió a otro correo del cliente{% else %}<strong class="text-danger">No se envió</strong>{% endif %}</td>
+                                <td class="text-center">{{ a.veces }}</td>
+                                <td data-order="{{ a.fecha|date:'Y-m-d' }}">{{ a.fecha|date:'d-m-Y' }}</td>
+                                <td>{% if a.pendiente %}<span class="badge bg-danger">Por corregir</span>{% else %}<span class="badge bg-success">Corregido</span>{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        var idioma = {
+            emptyTable: "No hay datos disponibles en la tabla",
+            info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+            infoEmpty: "Mostrando 0 a 0 de 0 registros",
+            infoFiltered: "(filtrado de _MAX_ registros totales)",
+            lengthMenu: "Mostrar _MENU_ registros",
+            search: "Buscar:",
+            zeroRecords: "No se encontraron resultados",
+            paginate: { first: "Primero", last: "Último", next: "Siguiente", previous: "Anterior" }
+        };
+        // Los botones de cada fila envían el formulario común (delegado: DataTables saca del DOM las otras páginas)
+        $('#tabla-correos').on('click', '.js-accion', function () {
+            var d = this.dataset, f = document.getElementById('form-accion');
+            if (d.accion === 'quitar_marca' && !confirm('¿Quitar la marca de ' + d.email + '? Volverá a recibir avisos y comunicados.')) return;
+            f.accion.value = d.accion;
+            f.email.value = d.email;
+            f.motivo.value = d.motivo || '';
+            f.submit();
+        });
+        $('#tabla-correos').DataTable({
+            pageLength: 25,
+            lengthMenu: [[25, 50, 100, -1], [25, 50, 100, "Todos"]],
+            order: [],
+            autoWidth: false,
+            columnDefs: [{ orderable: false, targets: 9 }],
+            language: idioma
+        });
+        $('#tabla-avisos').DataTable({
+            pageLength: 25,
+            lengthMenu: [[25, 50, 100, -1], [25, 50, 100, "Todos"]],
+            order: [],
+            autoWidth: false,
+            language: idioma
+        });
+    });
+</script>
+{% endblock %}

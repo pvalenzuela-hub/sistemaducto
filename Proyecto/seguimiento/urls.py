@@ -75,6 +75,7 @@ urlpatterns = [
     path('proyecto/reporte/', views.proyectos_totales, name='reporte_proyectos'),
     path('clientes/reporte/', views.reporte_clientes, name='reporte_clientes'),
     path('clientes/totales/', views.clientes_totales, name='clientes_totales'),
+    path('clientes/correos-por-corregir/', views.correos_por_corregir, name='correos_por_corregir'),
     path('clientes/crear/', views.cliente_create, name='cliente_create'),
     path('clientes/principales/modificar/<int:pk>/', views.cliente_principal_update, name='cliente_principal_update'),
     path('clientes/agenda/', views.agenda_clientes, name='agenda_clientes'),
