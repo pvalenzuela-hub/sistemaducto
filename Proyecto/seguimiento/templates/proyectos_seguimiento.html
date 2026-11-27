@@ -170,50 +170,10 @@
                 </tr>
             </thead>
             <tbody>
-                {% for c in proyecto %}
+                {% spaceless %}{% for c in proyecto %}
                 <tr class="estado-row" style="background-color: {{ c.estado_color|default:'#ffffff' }} !important; color: {{ c.estado_forcolor|default:'#000000' }} !important;">
                     <td class="text-center">
-                    <button type="button"
-                            class="btn btn-primary btn-sm btn-visor-proyecto"
-                            data-bs-toggle="modal"
-                            data-bs-target="#modalVisor"
-                            data-idproyecto="{{ c.idproyecto }}" data-fpe-iso="{{ c.fechaprimereenvio|date:'Y-m-d'|default:'' }}" data-ingseremi-iso="{{ c.fechaingresoseremi|date:'Y-m-d'|default:'' }}" data-aprobseremi-iso="{{ c.fechaaprobseremi|date:'Y-m-d'|default:'' }}"
-                            data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}"
-                            data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}"
-                            data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}"
-                            data-moneda="{{ c.moneda_texto|default:''|escape }}"
-                            data-valor="{{ c.valor_texto|default:''|escape }}"
-                            data-mandante="{{ c.mandante_texto|default:''|escape }}"
-                            data-mandante-notas="{{ c.mandante_comentario_texto|default:''|escape }}"
-                            data-contacto-mandante="{{ c.contacto_mandante_texto|default:''|escape }}"
-                            data-email-mandante="{{ c.email_mandante_texto|default:''|escape }}"
-                            data-telefono-mandante="{{ c.telefono_mandante_texto|default:''|escape }}"
-                            data-cliente="{{ c.cliente_texto|default:''|escape }}"
-                            data-rut="{{ c.rut_texto|default:''|escape }}"
-                            data-comentario-cliente="{{ c.comentario_cliente_texto|default:''|escape }}"
-                            data-contacto-fact="{{ c.cliente_factura_texto|default:''|escape }}"
-                            data-contacto-fact-nombre="{{ c.cliente_factura_texto|default:''|escape }}"
-                            data-cargo-fact="{{ c.cargo_factura_texto|default:''|escape }}"
-                            data-email-fact="{{ c.email_factura_texto|default:''|escape }}"
-                            data-telefono-fact="{{ c.telefono_factura_texto|default:''|escape }}"
-                            data-idcliente-fact="{{ c.idcliente_id|default:'' }}"
-                            data-fpago="{{ c.fpago_texto|default:''|escape }}"
-                            data-numconf="{{ c.numconf_texto|default:''|escape }}"
-                            data-medioconf="{{ c.medioconf_texto|default:''|escape }}"
-                            data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}"
-                            data-estadoproyecto-id="{{ c.estadoproyecto_id|default:'' }}"
-                            data-estadoproyecto-texto="{{ c.estado_texto|default:''|escape }}"
-                            data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}"
-                            data-fechaprimerenvio="{{ c.fechaprimereenvio|date:'d/m/Y'|default:'' }}"
-                            data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}"
-                            data-region="{{ c.region_texto|default:''|escape }}"
-                            data-conhes="{{ c.conhes_texto|default:''|escape }}"
-                            data-coneepp="{{ c.coneepp_texto|default:''|escape }}"
-                            data-conotro="{{ c.conotro_texto|default:''|escape }}"
-                            data-valorraw="{{ c.valor_raw }}"
-                            data-seguimiento="{{ c.seg_texto|default:''|escape }}"
-                            data-xfacturar="{{ c.x_facturar_texto|default:''|escape }}"
-                            data-facturacion-completa="{{ c.facturacion_lista|yesno:'1,0' }}">
+                    <button type="button" class="btn btn-primary btn-sm btn-visor-proyecto" data-bs-toggle="modal" data-bs-target="#modalVisor" data-idproyecto="{{ c.idproyecto }}" data-fpe-iso="{{ c.fechaprimereenvio|date:'Y-m-d'|default:'' }}" data-ingseremi-iso="{{ c.fechaingresoseremi|date:'Y-m-d'|default:'' }}" data-aprobseremi-iso="{{ c.fechaaprobseremi|date:'Y-m-d'|default:'' }}" data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}" data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}" data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}" data-moneda="{{ c.moneda_texto|default:''|escape }}" data-valor="{{ c.valor_texto|default:''|escape }}" data-mandante="{{ c.mandante_texto|default:''|escape }}" data-mandante-notas="{{ c.mandante_comentario_texto|default:''|escape }}" data-contacto-mandante="{{ c.contacto_mandante_texto|default:''|escape }}" data-email-mandante="{{ c.email_mandante_texto|default:''|escape }}" data-telefono-mandante="{{ c.telefono_mandante_texto|default:''|escape }}" data-cliente="{{ c.cliente_texto|default:''|escape }}" data-rut="{{ c.rut_texto|default:''|escape }}" data-comentario-cliente="{{ c.comentario_cliente_texto|default:''|escape }}" data-contacto-fact="{{ c.cliente_factura_texto|default:''|escape }}" data-contacto-fact-nombre="{{ c.cliente_factura_texto|default:''|escape }}" data-cargo-fact="{{ c.cargo_factura_texto|default:''|escape }}" data-email-fact="{{ c.email_factura_texto|default:''|escape }}" data-telefono-fact="{{ c.telefono_factura_texto|default:''|escape }}" data-idcliente-fact="{{ c.idcliente_id|default:'' }}" data-fpago="{{ c.fpago_texto|default:''|escape }}" data-numconf="{{ c.numconf_texto|default:''|escape }}" data-medioconf="{{ c.medioconf_texto|default:''|escape }}" data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}" data-estadoproyecto-id="{{ c.estadoproyecto_id|default:'' }}" data-estadoproyecto-texto="{{ c.estado_texto|default:''|escape }}" data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}" data-fechaprimerenvio="{{ c.fechaprimereenvio|date:'d/m/Y'|default:'' }}" data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}" data-region="{{ c.region_texto|default:''|escape }}" data-conhes="{{ c.conhes_texto|default:''|escape }}" data-coneepp="{{ c.coneepp_texto|default:''|escape }}" data-conotro="{{ c.conotro_texto|default:''|escape }}" data-valorraw="{{ c.valor_raw }}" data-xfacturar="{{ c.x_facturar_texto|default:''|escape }}" data-facturacion-completa="{{ c.facturacion_lista|yesno:'1,0' }}">
                             <i class="fa fa-address-card-o"></i>
                         </button>
                     </td>
@@ -223,7 +183,7 @@
                     <td class="mb-0 fs-12 fw-semibold col-formapago">{{ c.fpago_texto }}</td>
                     <td class="mb-0 fs-12 fw-semibold col-mandante">{{ c.mandante_texto }}</td>
                     <td class="mb-0 fs-12 fw-semibold col-ultimo-seg">
-                        <button type="button" class="btn btn-link p-0 btn-visor-proyecto" data-bs-toggle="modal" data-bs-target="#modalVisor" data-idproyecto="{{ c.idproyecto }}" data-fpe-iso="{{ c.fechaprimereenvio|date:'Y-m-d'|default:'' }}" data-ingseremi-iso="{{ c.fechaingresoseremi|date:'Y-m-d'|default:'' }}" data-aprobseremi-iso="{{ c.fechaaprobseremi|date:'Y-m-d'|default:'' }}" data-cotizacion="{{ c.cotizacion_texto|default:''|escape }}" data-fechacot="{{ c.fecha_cot_texto|default:''|escape }}" data-nombreproyecto="{{ c.nombreproyecto|default:''|escape }}" data-moneda="{{ c.moneda_texto|default:''|escape }}" data-valor="{{ c.valor_texto|default:''|escape }}" data-mandante="{{ c.mandante_texto|default:''|escape }}" data-contacto-mandante="{{ c.contacto_mandante_texto|default:''|escape }}" data-email-mandante="{{ c.email_mandante_texto|default:''|escape }}" data-telefono-mandante="{{ c.telefono_mandante_texto|default:''|escape }}" data-cliente="{{ c.cliente_texto|default:''|escape }}" data-rut="{{ c.rut_texto|default:''|escape }}" data-comentario-cliente="{{ c.comentario_cliente_texto|default:''|escape }}" data-contacto-fact-nombre="{{ c.cliente_factura_texto|default:''|escape }}" data-cargo-fact="{{ c.cargo_factura_texto|default:''|escape }}" data-email-fact="{{ c.email_factura_texto|default:''|escape }}" data-telefono-fact="{{ c.telefono_factura_texto|default:''|escape }}" data-fpago="{{ c.fpago_texto|default:''|escape }}" data-numconf="{{ c.numconf_texto|default:''|escape }}" data-medioconf="{{ c.medioconf_texto|default:''|escape }}" data-fechaconf="{{ c.fechaconf_texto|default:''|escape }}" data-estadoproyecto-id="{{ c.estadoproyecto_id|default:'' }}" data-estadoproyecto-texto="{{ c.estado_texto|default:''|escape }}" data-ultimoseg="{{ c.ultimoseg_texto|default:''|escape }}" data-ingreso-seremi="{{ c.fechaingresoseremi|date:'d/m/Y'|default:'' }}" data-region="{{ c.region_texto|default:''|escape }}" data-conhes="{{ c.conhes_texto|default:''|escape }}" data-coneepp="{{ c.coneepp_texto|default:''|escape }}" data-conotro="{{ c.conotro_texto|default:''|escape }}" data-seguimiento="{{ c.seg_texto|default:''|escape }}" data-xfacturar="{{ c.x_facturar_texto|default:''|escape }}" data-idcliente-fact="{{ c.idcliente_id|default:'' }}" data-valorraw="{{ c.valor_raw }}" data-facturacion-completa="{{ c.facturacion_lista|yesno:'1,0' }}">{{ c.ultimoseg_texto }}</button>
+                        <button type="button" class="btn btn-link p-0 btn-visor-proyecto" data-bs-toggle="modal" data-bs-target="#modalVisor">{{ c.ultimoseg_texto }}</button>
                     </td>
                     <td class="fs-11 fw-semibold col-estado">{{ c.estado_texto }}</td>
                     <td class="mb-0 fs-12 fw-semibold col-cliente">{{ c.cliente_texto }}</td>
@@ -233,7 +193,7 @@
                 <tr>
                     <td colspan="9" class="text-center text-muted">No hay proyectos para mostrar.</td>
                 </tr>
-                {% endfor %}
+                {% endfor %}{% endspaceless %}
             </tbody>
         </table>
     </div>
@@ -732,8 +692,25 @@ $(document).ready(function() {
         }
     });
 
+    // Seguimiento histórico del proyecto: se pide al abrir el visor (antes venía en la página para todos los proyectos)
+    let consultaHistorico = 0;
+    function cargarSeguimientoHistorico(idproyecto) {
+        const consulta = ++consultaHistorico;
+        const $hist = $('#visor_seguimiento_hist').val('').attr('placeholder', 'Cargando seguimiento...');
+        fetch("{% url 'proyecto_seguimiento_texto' 0 %}".replace('/0/', '/' + idproyecto + '/'), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(data => {
+                if (consulta !== consultaHistorico) return;
+                const texto = (data && data.texto) || '';
+                $hist.val(texto).attr('placeholder', '');
+                if (!$('#proj_notas_cliente').val()) $('#proj_notas_cliente').val(texto);
+            })
+            .catch(() => { if (consulta === consultaHistorico) $hist.attr('placeholder', 'No se pudo cargar el seguimiento.'); });
+    }
+
     $('#basic-datatable').on('click', '.btn-visor-proyecto', function() {
-        const btn = $(this);
+        // Los datos del proyecto están solo en el primer botón de la fila (el de la columna de fecha no los repite)
+        const btn = $(this).closest('tr').find('.btn-visor-proyecto').first();
         const numeroFila = btn.closest('tr').find('td').eq(1).text().trim();
         $('#visor_idproyecto').val(btn.data('idproyecto'));
         $('#factura_idproyecto').val(btn.data('idproyecto'));
@@ -783,7 +760,7 @@ $(document).ready(function() {
         mostrarFechaEstado();
         $('#visor_ultimoseg').val(btn.data('ultimoseg'));
         $('#visor_xfacturar').val(btn.data('xfacturar'));
-        $('#visor_seguimiento_hist').val(btn.data('seguimiento') || '');
+        cargarSeguimientoHistorico(btn.data('idproyecto'));
         $('#visor_comentario').val('');
         $('#proj_numero').val(numeroFila);
         $('#proj_estado').val(btn.data('estadoproyecto-texto'));
@@ -810,7 +787,8 @@ $(document).ready(function() {
         $('#proj_conotro').val(btn.data('conotro'));
         $('#proj_fpago').val(btn.data('fpago'));
         $('#proj_saldo_facturar').val(btn.data('xfacturar'));
-        $('#proj_notas_cliente').val(btn.attr('data-comentario-cliente') || btn.data('comentario-cliente') || btn.attr('data-seguimiento') || '');
+        // Notas del cliente; si no tiene, se muestra el seguimiento histórico (llega por AJAX, ver cargarSeguimientoHistorico)
+        $('#proj_notas_cliente').val(btn.attr('data-comentario-cliente') || btn.data('comentario-cliente') || '');
         $('#fact_idcliente_hidden').val(btn.data('idcliente-fact') || '');
         $('#fact_moneda_hidden').val(btn.data('moneda') || '');
         $('#fact_medioconf_hidden').val(btn.data('medioconf') || '');

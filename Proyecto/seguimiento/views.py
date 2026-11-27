@@ -861,7 +861,6 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         contactos_facturacion = srv_proyectos.contactos_facturacion()
 
         regiones = srv_proyectos.regiones()
-        seguimientos = srv_proyectos.textos_seguimiento([pro.idproyecto for pro in proyectos])
         ultimas_fechas_seg = srv_proyectos.ultimas_fechas_seguimiento([pro.idproyecto for pro in proyectos])
         saldos_por_facturar = srv_proyectos.saldos_por_facturar(pro.idproyecto for pro in proyectos)
 
@@ -912,7 +911,6 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
             pro.conhes_texto = pro.conhes or ''
             pro.coneepp_texto = pro.coneepp or ''
             pro.conotro_texto = pro.conotro or ''
-            pro.seg_texto = seguimientos.get(str(pro.idproyecto), '')
             pro.facturacion_lista = _facturacion_completa_proyecto(pro)
 
         contexto["proyecto"] = proyectos
@@ -986,6 +984,14 @@ def guardar_seguimiento_proyecto(request):
         return _redirigir_con_filtros(str(e), 'error')
 
     return _redirigir_con_filtros('Seguimiento guardado correctamente.')
+
+
+@login_required
+@require_GET
+def proyecto_seguimiento_texto(request, idproyecto):
+    """Seguimiento histórico del proyecto como texto (visor de Seguimiento de Proyectos)."""
+    get_object_or_404(srv_proyectos.todos(), pk=idproyecto)
+    return JsonResponse({'ok': True, 'texto': srv_proyectos.textos_seguimiento([idproyecto]).get(str(idproyecto), '')})
 
 
 @login_required
