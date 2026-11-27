@@ -30,6 +30,7 @@ urlpatterns = [
     path('proyectos/seguimiento/crear-factura/', views.crear_factura_proyecto, name='crear_factura_proyecto'),
     path('proyectos/<int:idproyecto>/comentarios/', views.proyecto_comentarios, name='proyecto_comentarios'),
     path('proyectos/<int:idproyecto>/seguimiento-texto/', views.proyecto_seguimiento_texto, name='proyecto_seguimiento_texto'),
+    path('proyectos/contactos-facturacion/', views.contactos_facturacion_json, name='contactos_facturacion_json'),
     path('proyectos/<int:idproyecto>/comentarios/<int:idreg>/editar/', views.proyecto_comentario_editar, name='proyecto_comentario_editar'),
     path('proyectos/<int:idproyecto>/comentarios/<int:idreg>/eliminar/', views.proyecto_comentario_eliminar, name='proyecto_comentario_eliminar'),
     path('proyectos/seguimiento/api/valor-uf/', views.api_valor_uf_por_fecha, name='api_valor_uf_por_fecha'),

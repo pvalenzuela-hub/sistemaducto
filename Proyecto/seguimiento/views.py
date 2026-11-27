@@ -858,7 +858,6 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         valores_uf = tValorUF.objects.order_by('-Fecha')
         mandantes = srv_proyectos.mandantes()
         clientes_proyecto = srv_proyectos.clientes()
-        contactos_facturacion = srv_proyectos.contactos_facturacion()
 
         regiones = srv_proyectos.regiones()
         ultimas_fechas_seg = srv_proyectos.ultimas_fechas_seguimiento([pro.idproyecto for pro in proyectos])
@@ -917,7 +916,6 @@ class VistaSeguimiento(LoginRequiredMixin,TemplateView):
         contexto["estados_proyecto"] = estados_proyecto
         contexto["mandantes"] = mandantes
         contexto["clientes"] = clientes_proyecto
-        contexto["contactos_facturacion"] = contactos_facturacion
         contexto["monedas"] = monedas
         contexto["formas_pago"] = formas_pago
         contexto["medios_conf"] = medios_conf
@@ -984,6 +982,15 @@ def guardar_seguimiento_proyecto(request):
         return _redirigir_con_filtros(str(e), 'error')
 
     return _redirigir_con_filtros('Seguimiento guardado correctamente.')
+
+
+@login_required
+@require_GET
+def contactos_facturacion_json(request):
+    """Contactos para el formulario de Datos de Facturación (se piden al abrir esa ventana)."""
+    return JsonResponse({'contactos': [
+        {'id': c.idcontacto, 'cliente': c.idcliente_id, 'email': c.email or '', 'nombre': c.nombrecontacto or ''}
+        for c in srv_proyectos.contactos_facturacion()]})
 
 
 @login_required
